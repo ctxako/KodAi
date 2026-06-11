@@ -310,6 +310,53 @@ final class ChatViewModel {
         saveModelContext(context)
     }
 
+    // MARK: – Task CRUD
+
+    @discardableResult
+    func createTask(
+        in project: KodaiProject,
+        title: String,
+        notes: String = "",
+        priority: TaskPriority = .medium,
+        context: ModelContext
+    ) -> KodaiTask {
+        let task = KodaiTask(title: title, notes: notes, priority: priority, project: project)
+        context.insert(task)
+        project.tasks.append(task)
+        project.updatedAt = .now
+        ledgerRecorder.recordActivity(kind: .taskChange, summary: "created: \(title)", context: context)
+        saveModelContext(context)
+        return task
+    }
+
+    func toggleTask(_ task: KodaiTask, context: ModelContext) {
+        let wasCompleted = task.isCompleted
+        task.isCompleted = !wasCompleted
+        task.completedAt = wasCompleted ? nil : .now
+        task.updatedAt = .now
+        ledgerRecorder.recordActivity(
+            kind: .taskChange,
+            summary: "\(wasCompleted ? "reopened" : "completed"): \(task.title)",
+            context: context
+        )
+        saveModelContext(context)
+    }
+
+    func deleteTask(_ task: KodaiTask, context: ModelContext) {
+        let title = task.title
+        context.delete(task)
+        ledgerRecorder.recordActivity(kind: .taskChange, summary: "deleted: \(title)", context: context)
+        saveModelContext(context)
+    }
+
+    func renameTask(_ task: KodaiTask, title: String, context: ModelContext) {
+        let clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return }
+        task.title = clean
+        task.updatedAt = .now
+        saveModelContext(context)
+    }
+
     // MARK: – Summary
 
     func triggerSessionSummary(context: ModelContext) {
@@ -847,6 +894,25 @@ final class ChatViewModel {
             ))
         }
 
+        // Active tasks — titles-only, ≤3 highest priority, injected when project has open tasks
+        if let project = selectedChat?.project {
+            let activeTitles = project.tasks
+                .filter { !$0.isCompleted }
+                .sorted { taskPriorityOrder($0.priority) < taskPriorityOrder($1.priority) }
+                .prefix(3)
+                .map { $0.title }
+            if !activeTitles.isEmpty {
+                let content = "Active tasks: " + activeTitles.joined(separator: ", ")
+                blocks.append(ContextBlock(
+                    kind: "active_tasks",
+                    content: content,
+                    tokenEstimate: TokenEstimator.estimate(content),
+                    priority: 4,
+                    sourceID: project.id
+                ))
+            }
+        }
+
         let (instructions, manifest) = contextAssembler.assemble(blocks: blocks)
         return (instructions, manifest)
     }
@@ -938,6 +1004,14 @@ final class ChatViewModel {
         }
 
         return max(1, Int(ceil(Double(cleanText.count) / 4.0)))
+    }
+
+    private func taskPriorityOrder(_ p: TaskPriority) -> Int {
+        switch p {
+        case .high: return 0
+        case .medium: return 1
+        case .low: return 2
+        }
     }
 
     private func recentConversationHistory(limit: Int = 10) -> String {

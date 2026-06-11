@@ -24,6 +24,7 @@ struct kodai_macosApp: App {
             KodaiChatMessage.self,
             KodaiStream.self,
             KodaiProject.self,
+            KodaiTask.self,
             KodaiSummary.self,
             TurnRecord.self,
             ActivityEvent.self,

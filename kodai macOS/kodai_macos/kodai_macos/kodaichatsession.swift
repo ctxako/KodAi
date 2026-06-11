@@ -110,6 +110,9 @@ final class KodaiProject {
     @Relationship(deleteRule: .cascade, inverse: \KodaiChatSession.project)
     var sessions: [KodaiChatSession]
 
+    @Relationship(deleteRule: .cascade, inverse: \KodaiTask.project)
+    var tasks: [KodaiTask]
+
     init(
         id: UUID = UUID(),
         title: String = "New project",
@@ -119,7 +122,8 @@ final class KodaiProject {
         summaryUpdatedAt: Date? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now,
-        sessions: [KodaiChatSession] = []
+        sessions: [KodaiChatSession] = [],
+        tasks: [KodaiTask] = []
     ) {
         self.id = id
         self.title = title
@@ -130,6 +134,42 @@ final class KodaiProject {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.sessions = sessions
+        self.tasks = tasks
+    }
+}
+
+@Model
+final class KodaiTask {
+    @Attribute(.unique) var id: UUID
+    var title: String
+    var notes: String
+    var priority: TaskPriority
+    var isCompleted: Bool
+    var completedAt: Date?
+    var createdAt: Date
+    var updatedAt: Date
+    var project: KodaiProject?
+
+    init(
+        id: UUID = UUID(),
+        title: String,
+        notes: String = "",
+        priority: TaskPriority = .medium,
+        isCompleted: Bool = false,
+        completedAt: Date? = nil,
+        createdAt: Date = .now,
+        updatedAt: Date = .now,
+        project: KodaiProject? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.notes = notes
+        self.priority = priority
+        self.isCompleted = isCompleted
+        self.completedAt = completedAt
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.project = project
     }
 }
 
