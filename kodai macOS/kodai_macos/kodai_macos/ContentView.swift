@@ -105,9 +105,7 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .frame(minWidth: 950, minHeight: 650)
         .onAppear {
-            if viewModel.selectedChat == nil, let newest = allChatSessions.first {
-                viewModel.selectChat(newest)
-            }
+            viewModel.createNewChat(context: modelContext)
             viewModel.refreshContextEstimate()
         }
         .onChange(of: allChatSessions.map { $0.id }) {

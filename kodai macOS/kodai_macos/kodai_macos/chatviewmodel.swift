@@ -318,9 +318,10 @@ final class ChatViewModel {
         title: String,
         notes: String = "",
         priority: TaskPriority = .medium,
+        dueDate: Date? = nil,
         context: ModelContext
     ) -> KodaiTask {
-        let task = KodaiTask(title: title, notes: notes, priority: priority, project: project)
+        let task = KodaiTask(title: title, notes: notes, priority: priority, dueDate: dueDate, project: project)
         context.insert(task)
         project.tasks.append(task)
         project.updatedAt = .now

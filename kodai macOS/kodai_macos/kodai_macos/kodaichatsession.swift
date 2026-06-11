@@ -104,6 +104,7 @@ final class KodaiProject {
     var status: ProjectStatus
     var summary: String?
     var summaryUpdatedAt: Date?
+    var deadline: Date?
     var createdAt: Date
     var updatedAt: Date
 
@@ -120,6 +121,7 @@ final class KodaiProject {
         status: ProjectStatus = .active,
         summary: String? = nil,
         summaryUpdatedAt: Date? = nil,
+        deadline: Date? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now,
         sessions: [KodaiChatSession] = [],
@@ -131,6 +133,7 @@ final class KodaiProject {
         self.status = status
         self.summary = summary
         self.summaryUpdatedAt = summaryUpdatedAt
+        self.deadline = deadline
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.sessions = sessions
@@ -146,6 +149,7 @@ final class KodaiTask {
     var priority: TaskPriority
     var isCompleted: Bool
     var completedAt: Date?
+    var dueDate: Date?
     var createdAt: Date
     var updatedAt: Date
     var project: KodaiProject?
@@ -157,6 +161,7 @@ final class KodaiTask {
         priority: TaskPriority = .medium,
         isCompleted: Bool = false,
         completedAt: Date? = nil,
+        dueDate: Date? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now,
         project: KodaiProject? = nil
@@ -167,6 +172,7 @@ final class KodaiTask {
         self.priority = priority
         self.isCompleted = isCompleted
         self.completedAt = completedAt
+        self.dueDate = dueDate
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.project = project
