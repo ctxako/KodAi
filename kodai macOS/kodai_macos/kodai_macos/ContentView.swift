@@ -11,8 +11,9 @@ import SwiftData
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
 
+    // Loose chats: no project, no stream
     @Query(
-        filter: #Predicate<KodaiChatSession> { $0.stream == nil },
+        filter: #Predicate<KodaiChatSession> { $0.project == nil && $0.stream == nil },
         sort: \KodaiChatSession.updatedAt,
         order: .reverse
     )
@@ -20,6 +21,13 @@ struct ContentView: View {
 
     @Query(sort: \KodaiStream.updatedAt, order: .reverse)
     private var streams: [KodaiStream]
+
+    @Query(sort: \KodaiProject.updatedAt, order: .reverse)
+    private var projects: [KodaiProject]
+
+    // Used for auto-select on appear when all chats are in projects
+    @Query(sort: \KodaiChatSession.updatedAt, order: .reverse)
+    private var allChatSessions: [KodaiChatSession]
 
     @State private var viewModel = ChatViewModel()
     @State private var sidebarOpen = true
@@ -37,11 +45,25 @@ struct ContentView: View {
             + sidebarContentGap
     }
 
+    private var activeProject: KodaiProject? {
+        viewModel.selectedChat?.project
+    }
+
     var body: some View {
         ZStack(alignment: .leading) {
             KodaiBackground()
 
             VStack(spacing: 0) {
+                if let project = activeProject {
+                    KodaiProjectHeader(
+                        project: project,
+                        session: viewModel.selectedChat,
+                        onUpdateSummary: { summary in
+                            viewModel.updateProjectSummary(project, summary: summary, context: modelContext)
+                        }
+                    )
+                }
+
                 ChatScrollView(messages: viewModel.messages, turnRecords: viewModel.turnRecords)
 
                 ComposerView(
@@ -66,14 +88,14 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .frame(minWidth: 950, minHeight: 650)
         .onAppear {
-            if viewModel.selectedChat == nil, let newestChat = chatSessions.first {
-                viewModel.selectChat(newestChat)
+            if viewModel.selectedChat == nil, let newest = allChatSessions.first {
+                viewModel.selectChat(newest)
             }
             viewModel.refreshContextEstimate()
         }
-        .onChange(of: chatSessions.map { $0.id }) {
-            if viewModel.selectedChat == nil, let newestChat = chatSessions.first {
-                viewModel.selectChat(newestChat)
+        .onChange(of: allChatSessions.map { $0.id }) {
+            if viewModel.selectedChat == nil, let newest = allChatSessions.first {
+                viewModel.selectChat(newest)
             }
         }
         .onChange(of: viewModel.inputText) {
@@ -93,6 +115,7 @@ struct ContentView: View {
             estimatedContextPercent: viewModel.estimatedContextPercent,
             chatSessions: chatSessions,
             streams: streams,
+            projects: projects,
             selectedChatID: viewModel.selectedChat?.id,
             telemetryStore: viewModel.telemetryStore,
             onRenameChat: { session, newTitle in
@@ -101,12 +124,12 @@ struct ContentView: View {
             onDeleteChat: { session in
                 viewModel.deleteChat(
                     session,
-                    fallback: chatSessions.first { $0.id != session.id },
+                    fallback: allChatSessions.first { $0.id != session.id },
                     context: modelContext
                 )
             },
-            onNewSession: {
-                viewModel.createNewChat(context: modelContext)
+            onNewSession: { project in
+                viewModel.createNewChat(context: modelContext, project: project)
             },
             onSelectChat: { session in
                 viewModel.selectChat(session)
@@ -125,6 +148,24 @@ struct ContentView: View {
             },
             onAssignChat: { session, stream in
                 viewModel.assignChat(session, to: stream, context: modelContext)
+            },
+            onCreateProject: {
+                viewModel.createProject(context: modelContext)
+            },
+            onRenameProject: { project, title, details in
+                viewModel.renameProject(project, title: title, details: details, context: modelContext)
+            },
+            onArchiveProject: { project in
+                viewModel.archiveProject(project, context: modelContext)
+            },
+            onUnarchiveProject: { project in
+                viewModel.unarchiveProject(project, context: modelContext)
+            },
+            onDeleteProject: { project in
+                viewModel.deleteProject(project, context: modelContext)
+            },
+            onAssignChatToProject: { session, project in
+                viewModel.assignChatToProject(session, project: project, context: modelContext)
             }
         )
     }

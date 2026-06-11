@@ -113,14 +113,14 @@ final class ChatViewModel {
     }
 
     @discardableResult
-    func createNewChat(context: ModelContext) -> KodaiChatSession {
+    func createNewChat(context: ModelContext, project: KodaiProject? = nil) -> KodaiChatSession {
         if isLoading {
             stopGeneration()
         }
 
         backend.reset()
 
-        let session = makeStoredChatSession(context: context)
+        let session = makeStoredChatSession(context: context, project: project)
         selectedChat = session
 
         messages = [
@@ -239,6 +239,66 @@ final class ChatViewModel {
     func assignChat(_ session: KodaiChatSession, to stream: KodaiStream?, context: ModelContext) {
         session.stream = stream
         stream?.updatedAt = .now
+        saveModelContext(context)
+    }
+
+    // MARK: – Project CRUD
+
+    @discardableResult
+    func createProject(title: String = "New project", details: String = "", context: ModelContext) -> KodaiProject {
+        let project = KodaiProject(title: title, details: details)
+        context.insert(project)
+        saveModelContext(context)
+        return project
+    }
+
+    func renameProject(_ project: KodaiProject, title: String, details: String, context: ModelContext) {
+        let clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return }
+        project.title = String(clean.prefix(60))
+        project.details = details
+        project.updatedAt = .now
+        saveModelContext(context)
+    }
+
+    func archiveProject(_ project: KodaiProject, context: ModelContext) {
+        project.status = .archived
+        project.updatedAt = .now
+        saveModelContext(context)
+    }
+
+    func unarchiveProject(_ project: KodaiProject, context: ModelContext) {
+        project.status = .active
+        project.updatedAt = .now
+        saveModelContext(context)
+    }
+
+    func deleteProject(_ project: KodaiProject, context: ModelContext) {
+        let wasSelectedInProject = project.sessions.contains { $0.id == selectedChat?.id }
+        for session in project.sessions {
+            backend.evictSession(for: session.id)
+        }
+        context.delete(project)
+        saveModelContext(context)
+        if wasSelectedInProject {
+            selectedChat = nil
+            backend.reset()
+            messages = [ChatMessage(role: .assistant, text: "What are we building today?")]
+            inputText = ""
+            estimatedContextPercent = 0
+        }
+    }
+
+    func updateProjectSummary(_ project: KodaiProject, summary: String, context: ModelContext) {
+        project.summary = summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : summary
+        project.summaryUpdatedAt = .now
+        project.updatedAt = .now
+        saveModelContext(context)
+    }
+
+    func assignChatToProject(_ session: KodaiChatSession, project: KodaiProject?, context: ModelContext) {
+        session.project = project
+        project?.updatedAt = .now
         saveModelContext(context)
     }
 
@@ -462,8 +522,8 @@ final class ChatViewModel {
         return session
     }
 
-    private func makeStoredChatSession(context: ModelContext) -> KodaiChatSession {
-        let session = KodaiChatSession()
+    private func makeStoredChatSession(context: ModelContext, project: KodaiProject? = nil) -> KodaiChatSession {
+        let session = KodaiChatSession(project: project)
         context.insert(session)
         return session
     }

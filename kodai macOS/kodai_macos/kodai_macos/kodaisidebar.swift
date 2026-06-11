@@ -7,6 +7,7 @@
 
 
 import SwiftUI
+import KodaiCore
 
 struct KodaiSidebar: View {
     @Binding var sidebarOpen: Bool
@@ -17,6 +18,7 @@ struct KodaiSidebar: View {
 
     let chatSessions: [KodaiChatSession]
     let streams: [KodaiStream]
+    let projects: [KodaiProject]
     let selectedChatID: UUID?
     let telemetryStore: TelemetryStore
 
@@ -30,15 +32,33 @@ struct KodaiSidebar: View {
     @State private var draftStreamTitle = ""
     @State private var streamPendingDelete: KodaiStream?
 
+    @State private var projectsExpanded = true
+    @State private var expandedProjectIDs: Set<UUID> = []
+    @State private var editingProject: KodaiProject?
+    @State private var draftProjectTitle = ""
+    @State private var draftProjectDetails = ""
+    @State private var projectPendingDelete: KodaiProject?
+
     let onRenameChat: (KodaiChatSession, String) -> Void
     let onDeleteChat: (KodaiChatSession) -> Void
-    let onNewSession: () -> Void
+    let onNewSession: (KodaiProject?) -> Void
     let onSelectChat: (KodaiChatSession) -> Void
     let onResetSession: () -> Void
     let onCreateStream: () -> Void
     let onRenameStream: (KodaiStream, String) -> Void
     let onDeleteStream: (KodaiStream, Bool) -> Void
     let onAssignChat: (KodaiChatSession, KodaiStream?) -> Void
+    let onCreateProject: () -> Void
+    let onRenameProject: (KodaiProject, String, String) -> Void
+    let onArchiveProject: (KodaiProject) -> Void
+    let onUnarchiveProject: (KodaiProject) -> Void
+    let onDeleteProject: (KodaiProject) -> Void
+    let onAssignChatToProject: (KodaiChatSession, KodaiProject?) -> Void
+
+    private var activeProject: KodaiProject? {
+        guard let id = selectedChatID else { return nil }
+        return projects.first { $0.sessions.contains { $0.id == id } }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -55,10 +75,11 @@ struct KodaiSidebar: View {
             }
 
             sidebarRow("New thread", icon: "plus") {
-                onNewSession()
+                onNewSession(activeProject)
             }
 
             if sidebarOpen {
+                projectsSection
                 streamsSection
                 chatHistorySection
             }
@@ -88,21 +109,273 @@ struct KodaiSidebar: View {
             titleVisibility: .visible
         ) {
             Button("Keep threads") {
-                if let stream = streamPendingDelete {
-                    onDeleteStream(stream, true)
-                }
+                if let stream = streamPendingDelete { onDeleteStream(stream, true) }
                 streamPendingDelete = nil
             }
             Button("Delete everything", role: .destructive) {
-                if let stream = streamPendingDelete {
-                    onDeleteStream(stream, false)
-                }
+                if let stream = streamPendingDelete { onDeleteStream(stream, false) }
                 streamPendingDelete = nil
             }
-            Button("Cancel", role: .cancel) {
-                streamPendingDelete = nil
+            Button("Cancel", role: .cancel) { streamPendingDelete = nil }
+        }
+        .confirmationDialog(
+            "Delete \"\(projectPendingDelete?.title ?? "project")\"?",
+            isPresented: Binding(
+                get: { projectPendingDelete != nil },
+                set: { if !$0 { projectPendingDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete project and all chats", role: .destructive) {
+                if let project = projectPendingDelete { onDeleteProject(project) }
+                projectPendingDelete = nil
+            }
+            Button("Cancel", role: .cancel) { projectPendingDelete = nil }
+        }
+    }
+
+    // MARK: – Projects
+
+    private var projectsSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Divider()
+                .opacity(0.25)
+                .padding(.vertical, 6)
+
+            HStack(spacing: 4) {
+                Text("Projects")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button {
+                    onCreateProject()
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                        projectsExpanded.toggle()
+                    }
+                } label: {
+                    Image(systemName: projectsExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 8)
+
+            if projectsExpanded {
+                let active = projects.filter { $0.status != .archived }
+                let archived = projects.filter { $0.status == .archived }
+
+                if projects.isEmpty {
+                    Text("No projects yet")
+                        .font(.system(size: 13, weight: .regular, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .padding(.horizontal, 8)
+                        .frame(height: 30)
+                } else {
+                    ScrollView(showsIndicators: false) {
+                        LazyVStack(alignment: .leading, spacing: 2) {
+                            ForEach(active, id: \.id) { project in
+                                projectRow(project)
+                            }
+                            if !archived.isEmpty {
+                                ForEach(archived, id: \.id) { project in
+                                    projectRow(project)
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 200)
+                }
             }
         }
+    }
+
+    private func projectRow(_ project: KodaiProject) -> some View {
+        let isExpanded = expandedProjectIDs.contains(project.id)
+        let hasActiveChat = project.sessions.contains { $0.id == selectedChatID }
+
+        return VStack(alignment: .leading, spacing: 2) {
+            // Project header row
+            HStack(spacing: 8) {
+                Image(systemName: hasActiveChat ? "folder.fill" : "folder")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(hasActiveChat ? .white.opacity(0.9) : .white.opacity(0.55))
+                    .frame(width: 16)
+
+                Text(project.title)
+                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .foregroundStyle(hasActiveChat ? .white.opacity(0.92) : .white.opacity(0.68))
+                    .lineLimit(1)
+
+                if project.status == .archived {
+                    Text("archived")
+                        .font(.system(size: 9, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.3))
+                }
+
+                Spacer()
+
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.3))
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 30)
+            .background(hasActiveChat ? .white.opacity(0.08) : .clear)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                    if expandedProjectIDs.contains(project.id) {
+                        expandedProjectIDs.remove(project.id)
+                    } else {
+                        expandedProjectIDs.insert(project.id)
+                    }
+                }
+                let sorted = project.sessions.sorted { $0.updatedAt > $1.updatedAt }
+                if let latest = sorted.first {
+                    onSelectChat(latest)
+                }
+            }
+            .simultaneousGesture(
+                TapGesture(count: 2).onEnded {
+                    beginEditingProject(project)
+                }
+            )
+            .contextMenu {
+                Button("Rename") { beginEditingProject(project) }
+                Button("New chat in project") { onNewSession(project) }
+                Divider()
+                if project.status == .archived {
+                    Button("Unarchive") { onUnarchiveProject(project) }
+                } else {
+                    Button("Archive") { onArchiveProject(project) }
+                }
+                Button(role: .destructive) {
+                    projectPendingDelete = project
+                } label: {
+                    Text("Delete")
+                }
+            }
+            .popover(isPresented: projectEditPopoverBinding(for: project)) {
+                projectEditPopover(for: project)
+            }
+
+            // Expanded chats list
+            if isExpanded {
+                let sorted = project.sessions.sorted { $0.updatedAt > $1.updatedAt }
+                ForEach(sorted, id: \.id) { session in
+                    projectChatRow(session)
+                        .padding(.leading, 16)
+                }
+            }
+        }
+    }
+
+    private func projectChatRow(_ session: KodaiChatSession) -> some View {
+        let isActive = selectedChatID == session.id
+        return HStack(spacing: 8) {
+            Circle()
+                .fill(isActive ? .white.opacity(0.72) : .clear)
+                .stroke(.white.opacity(0.2), lineWidth: 1)
+                .frame(width: 5, height: 5)
+
+            Text(session.title)
+                .font(.system(size: 12, weight: .regular, design: .rounded))
+                .foregroundStyle(isActive ? .white.opacity(0.92) : .white.opacity(0.6))
+                .lineLimit(1)
+
+            Spacer()
+        }
+        .padding(.horizontal, 8)
+        .frame(height: 26)
+        .background(isActive ? .white.opacity(0.06) : .clear)
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .contentShape(Rectangle())
+        .onTapGesture { onSelectChat(session) }
+        .contextMenu {
+            Button("Rename") { beginEditing(session) }
+            Button(role: .destructive) { onDeleteChat(session) } label: { Text("Delete") }
+        }
+        .popover(isPresented: editPopoverBinding(for: session)) {
+            chatEditPopover(for: session)
+        }
+    }
+
+    private func beginEditingProject(_ project: KodaiProject) {
+        editingProject = project
+        draftProjectTitle = project.title
+        draftProjectDetails = project.details
+    }
+
+    private func closeEditingProject() {
+        editingProject = nil
+        draftProjectTitle = ""
+        draftProjectDetails = ""
+    }
+
+    private func projectEditPopoverBinding(for project: KodaiProject) -> Binding<Bool> {
+        Binding(
+            get: { editingProject?.id == project.id },
+            set: { if !$0 { closeEditingProject() } }
+        )
+    }
+
+    private func projectEditPopover(for project: KodaiProject) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Edit project")
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+
+            TextField("Project name", text: $draftProjectTitle)
+                .textFieldStyle(.roundedBorder)
+
+            TextField("Details (optional)", text: $draftProjectDetails, axis: .vertical)
+                .textFieldStyle(.roundedBorder)
+                .lineLimit(3)
+
+            HStack {
+                Button("Cancel") { closeEditingProject() }
+                Spacer()
+                Button("Save") {
+                    onRenameProject(project, draftProjectTitle, draftProjectDetails)
+                    closeEditingProject()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+
+            Divider()
+
+            if project.status == .archived {
+                Button { onUnarchiveProject(project); closeEditingProject() } label: {
+                    Label("Unarchive", systemImage: "arrow.uturn.backward")
+                }
+            } else {
+                Button { onArchiveProject(project); closeEditingProject() } label: {
+                    Label("Archive", systemImage: "archivebox")
+                }
+            }
+
+            Button(role: .destructive) {
+                closeEditingProject()
+                projectPendingDelete = project
+            } label: {
+                Label("Delete project", systemImage: "trash")
+            }
+        }
+        .padding(14)
+        .frame(width: 260)
     }
 
     // MARK: – Streams
@@ -217,14 +490,8 @@ struct KodaiSidebar: View {
             return true
         }
         .contextMenu {
-            Button("Rename") {
-                beginEditingStream(stream)
-            }
-            Button(role: .destructive) {
-                streamPendingDelete = stream
-            } label: {
-                Text("Delete")
-            }
+            Button("Rename") { beginEditingStream(stream) }
+            Button(role: .destructive) { streamPendingDelete = stream } label: { Text("Delete") }
         }
         .popover(isPresented: streamEditPopoverBinding(for: stream)) {
             streamEditPopover(for: stream)
@@ -257,12 +524,8 @@ struct KodaiSidebar: View {
                 .textFieldStyle(.roundedBorder)
 
             HStack {
-                Button("Cancel") {
-                    closeEditingStream()
-                }
-
+                Button("Cancel") { closeEditingStream() }
                 Spacer()
-
                 Button("Rename") {
                     onRenameStream(stream, draftStreamTitle)
                     closeEditingStream()
@@ -283,7 +546,7 @@ struct KodaiSidebar: View {
         .frame(width: 250)
     }
 
-    // MARK: – Threads
+    // MARK: – Loose Chats
 
     private var chatHistorySection: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -291,13 +554,13 @@ struct KodaiSidebar: View {
                 .opacity(0.25)
                 .padding(.vertical, 6)
 
-            Text("Threads")
+            Text("Loose Chats")
                 .font(.system(size: 12, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 8)
 
             if chatSessions.isEmpty {
-                Text("No chats yet")
+                Text("No loose chats")
                     .font(.system(size: 13, weight: .regular, design: .rounded))
                     .foregroundStyle(.white.opacity(0.45))
                     .padding(.horizontal, 8)
@@ -440,12 +703,8 @@ struct KodaiSidebar: View {
                 .textFieldStyle(.roundedBorder)
 
             HStack {
-                Button("Cancel") {
-                    closeEditing()
-                }
-
+                Button("Cancel") { closeEditing() }
                 Spacer()
-
                 Button("Rename") {
                     onRenameChat(session, draftChatTitle)
                     closeEditing()
@@ -528,25 +787,25 @@ struct KodaiSidebar: View {
             }
         )
         .contextMenu {
-            Button("Rename") {
-                beginEditing(session)
-            }
+            Button("Rename") { beginEditing(session) }
 
             if !streams.isEmpty {
                 Menu("Move to Stream") {
                     ForEach(streams, id: \.id) { stream in
-                        Button(stream.title) {
-                            onAssignChat(session, stream)
-                        }
+                        Button(stream.title) { onAssignChat(session, stream) }
                     }
                 }
             }
 
-            Button(role: .destructive) {
-                onDeleteChat(session)
-            } label: {
-                Text("Delete")
+            if !projects.isEmpty {
+                Menu("Assign to Project") {
+                    ForEach(projects.filter { $0.status != .archived }, id: \.id) { project in
+                        Button(project.title) { onAssignChatToProject(session, project) }
+                    }
+                }
             }
+
+            Button(role: .destructive) { onDeleteChat(session) } label: { Text("Delete") }
         }
         .popover(isPresented: editPopoverBinding(for: session)) {
             chatEditPopover(for: session)
@@ -561,16 +820,11 @@ struct KodaiSidebar: View {
 
     private func modeIcon(for mode: OutputMode) -> String {
         switch mode {
-        case .chat:
-            return "bubble.left.and.bubble.right"
-        case .organize:
-            return "tray.full"
-        case .summarize:
-            return "text.alignleft"
-        case .checklist:
-            return "checklist"
-        case .debug:
-            return "ladybug"
+        case .chat:       return "bubble.left.and.bubble.right"
+        case .organize:   return "tray.full"
+        case .summarize:  return "text.alignleft"
+        case .checklist:  return "checklist"
+        case .debug:      return "ladybug"
         }
     }
 }
