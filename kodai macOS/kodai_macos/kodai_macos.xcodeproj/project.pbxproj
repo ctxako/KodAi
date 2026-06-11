@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		3C44A7172FDA8FCE00E5EA04 /* KodaiCore in Frameworks */ = {isa = PBXBuildFile; productRef = 3C44A7162FDA8FCE00E5EA04 /* KodaiCore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		3CB1232F2FD7EFA70085A424 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3C44A7172FDA8FCE00E5EA04 /* KodaiCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +117,7 @@
 			);
 			name = kodai_macos;
 			packageProductDependencies = (
+				3C44A7162FDA8FCE00E5EA04 /* KodaiCore */,
 			);
 			productName = kodai_macos;
 			productReference = 3CB1231F2FD7EFA60085A424 /* kodai_macos.app */;
@@ -195,6 +201,9 @@
 			);
 			mainGroup = 3CB123162FD7EFA60085A424;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				3C44A7152FDA8FCE00E5EA04 /* XCLocalSwiftPackageReference "KodaiCore" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3CB123202FD7EFA60085A424 /* Products */;
 			projectDirPath = "";
@@ -573,6 +582,20 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		3C44A7152FDA8FCE00E5EA04 /* XCLocalSwiftPackageReference "KodaiCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = KodaiCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		3C44A7162FDA8FCE00E5EA04 /* KodaiCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KodaiCore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 3CB123172FD7EFA60085A424 /* Project object */;
 }
