@@ -44,6 +44,7 @@ final class ChatViewModel {
 
     private let backend = FoundationModelsBackend()
     let telemetryStore = TelemetryStore()
+    let ledgerRecorder = LedgerRecorder()
 
     private var responseTask: Task<Void, Never>?
     private var metricsTask: Task<Void, Never>?
@@ -329,6 +330,7 @@ final class ChatViewModel {
         // Consume the inference stream.
         var finalText = ""
         var wasCancelled = false
+        var completedResult: InferenceResult?
 
         for await event in backend.stream(prompt: cleanInput, instructions: buildInstructions()) {
             switch event {
@@ -354,6 +356,7 @@ final class ChatViewModel {
 
             case .completed(let result):
                 finalText = result.fullText
+                completedResult = result
 
             case .cancelled:
                 wasCancelled = true
@@ -408,7 +411,19 @@ final class ChatViewModel {
         }
 
         if let index = messages.firstIndex(where: { $0.id == assistantID }) {
-            saveStoredMessage(role: .assistant, content: messages[index].text, in: currentSession, context: context)
+            let assistantText = messages[index].text
+            saveStoredMessage(role: .assistant, content: assistantText, in: currentSession, context: context)
+
+            if !assistantText.isEmpty, !wasCancelled, !Task.isCancelled {
+                recordTurnLedger(
+                    userText: cleanInput,
+                    assistantText: assistantText,
+                    startedAt: startedAt,
+                    completedResult: completedResult,
+                    sessionID: currentSession.id,
+                    context: context
+                )
+            }
         }
 
         isLoading = false
@@ -610,6 +625,53 @@ final class ChatViewModel {
         ]
 
         return lines.joined(separator: "\n")
+    }
+
+    private func recordTurnLedger(
+        userText: String,
+        assistantText: String,
+        startedAt: Date,
+        completedResult: InferenceResult?,
+        sessionID: UUID,
+        context: ModelContext
+    ) {
+        let personaTokens = estimatedTokenCount(userProfile)
+        let modeTokens = estimatedTokenCount(selectedMode.systemPrompt)
+        let historyTokens = estimatedTokenCount(recentConversationHistory(limit: 10))
+        let userTokens = estimatedTokenCount(userText)
+
+        let blocks: [ContextBlockRecord] = [
+            ContextBlockRecord(kind: "persona", tokenEstimate: personaTokens, status: .included),
+            ContextBlockRecord(kind: "mode_prompt", tokenEstimate: modeTokens, status: .included),
+            ContextBlockRecord(kind: "history", tokenEstimate: historyTokens, status: .included),
+            ContextBlockRecord(kind: "user_turn", tokenEstimate: userTokens, status: .included),
+        ]
+        let totalTokens = blocks.reduce(0) { $0 + $1.tokenEstimate }
+        let manifest = ContextManifest(
+            blocks: blocks,
+            totalTokens: totalTokens,
+            budgetLimit: FoundationModelsBackend.contextWindowTokenLimit
+        )
+
+        let latencyMs = completedResult.map { $0.duration * 1000 }
+            ?? max(Date().timeIntervalSince(startedAt), 0) * 1000
+        let inputTokens = completedResult?.promptTokensEst ?? activePromptTokens
+        let outputTokens = completedResult?.outputTokensEst ?? estimatedTokenCount(assistantText)
+
+        ledgerRecorder.recordTurn(
+            userText: userText,
+            assistantText: assistantText,
+            systemPrompt: buildInstructions(),
+            sessionID: sessionID,
+            manifest: manifest,
+            backend: "FoundationModels",
+            modelName: "SystemLanguageModel.default",
+            latencyMs: latencyMs,
+            inputTokens: inputTokens,
+            outputTokens: outputTokens,
+            contextPercent: estimatedContextPercent,
+            context: context
+        )
     }
 
     private func estimatedCurrentContextPercent(pendingInput: String = "") -> Int {

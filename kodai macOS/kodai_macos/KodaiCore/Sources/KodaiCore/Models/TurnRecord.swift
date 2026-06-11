@@ -16,7 +16,10 @@ public final class TurnRecord {
     public var latencyMs: Double
     public var createdAt: Date
 
-    public var session: KodaiChatSession?
+    // Loose reference — avoids a formal relationship to the app-target's KodaiChatSession.
+    public var sessionID: UUID?
+    // JSON-encoded ContextManifest describing what was in context for this turn.
+    public var contextManifestJSON: Data?
 
     @Relationship(deleteRule: .cascade, inverse: \ToolCall.turn)
     public var toolCalls: [ToolCall]
@@ -38,7 +41,8 @@ public final class TurnRecord {
         outputTokenEstimate: Int? = nil,
         latencyMs: Double = 0,
         createdAt: Date = .now,
-        session: KodaiChatSession? = nil,
+        sessionID: UUID? = nil,
+        contextManifestJSON: Data? = nil,
         toolCalls: [ToolCall] = [],
         activityEvents: [ActivityEvent] = [],
         performanceMetric: ModelPerformanceMetric? = nil
@@ -53,7 +57,8 @@ public final class TurnRecord {
         self.outputTokenEstimate = outputTokenEstimate ?? TokenEstimator.estimate(assistantMessage)
         self.latencyMs = latencyMs
         self.createdAt = createdAt
-        self.session = session
+        self.sessionID = sessionID
+        self.contextManifestJSON = contextManifestJSON
         self.toolCalls = toolCalls
         self.activityEvents = activityEvents
         self.performanceMetric = performanceMetric

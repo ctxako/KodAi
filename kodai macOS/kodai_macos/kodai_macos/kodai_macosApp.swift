@@ -9,6 +9,7 @@
 import FoundationModels
 import SwiftUI
 import SwiftData
+import KodaiCore
 
 @main
 struct kodai_macosApp: App {
@@ -21,7 +22,11 @@ struct kodai_macosApp: App {
         .modelContainer(for: [
             KodaiChatSession.self,
             KodaiChatMessage.self,
-            KodaiStream.self
+            KodaiStream.self,
+            TurnRecord.self,
+            ActivityEvent.self,
+            ModelPerformanceMetric.self,
+            ToolCall.self,
         ])
     }
 }

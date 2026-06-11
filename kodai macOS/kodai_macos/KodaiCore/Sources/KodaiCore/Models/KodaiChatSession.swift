@@ -15,9 +15,6 @@ public final class KodaiChatSession {
     @Relationship(deleteRule: .cascade, inverse: \KodaiChatMessage.session)
     public var messages: [KodaiChatMessage]
 
-    @Relationship(deleteRule: .cascade, inverse: \TurnRecord.session)
-    public var turns: [TurnRecord]
-
     @Relationship(deleteRule: .nullify, inverse: \Summary.session)
     public var summaries: [Summary]
 
@@ -36,7 +33,6 @@ public final class KodaiChatSession {
         updatedAt: Date = .now,
         project: KodaiProject? = nil,
         messages: [KodaiChatMessage] = [],
-        turns: [TurnRecord] = [],
         summaries: [Summary] = [],
         sessionMemories: [MemoryEntry] = [],
         fileReferences: [FileReference] = []
@@ -49,7 +45,6 @@ public final class KodaiChatSession {
         self.updatedAt = updatedAt
         self.project = project
         self.messages = messages
-        self.turns = turns
         self.summaries = summaries
         self.sessionMemories = sessionMemories
         self.fileReferences = fileReferences
