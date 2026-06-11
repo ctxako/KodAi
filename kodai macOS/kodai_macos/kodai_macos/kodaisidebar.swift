@@ -358,6 +358,10 @@ struct KodaiSidebar: View {
     private func projectRow(_ project: KodaiProject) -> some View {
         let isExpanded = expandedProjectIDs.contains(project.id)
         let hasActiveChat = project.sessions.contains { $0.id == selectedChatID }
+        let startOfToday = Calendar.current.startOfDay(for: Date())
+        let overdueCount = project.tasks.filter {
+            !$0.isCompleted && ($0.dueDate.map { $0 < startOfToday } ?? false)
+        }.count
 
         return VStack(alignment: .leading, spacing: 2) {
             // Project header row
@@ -376,6 +380,16 @@ struct KodaiSidebar: View {
                     Text("archived")
                         .font(.system(size: 9, weight: .medium, design: .rounded))
                         .foregroundStyle(.white.opacity(0.3))
+                }
+
+                if overdueCount > 0 {
+                    Text("\(overdueCount) overdue")
+                        .font(.system(size: 9, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.red.opacity(0.75))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Color.red.opacity(0.12))
+                        .clipShape(Capsule())
                 }
 
                 Spacer()

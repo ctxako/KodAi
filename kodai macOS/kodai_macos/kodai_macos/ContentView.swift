@@ -79,6 +79,9 @@ struct ContentView: View {
                         },
                         onUpdateTaskDueDate: { task, dueDate in
                             viewModel.updateTaskDueDate(task, dueDate: dueDate, context: modelContext)
+                        },
+                        onUpdateProjectDeadline: { deadline in
+                            viewModel.updateProjectDeadline(project, deadline: deadline, context: modelContext)
                         }
                     )
                 }

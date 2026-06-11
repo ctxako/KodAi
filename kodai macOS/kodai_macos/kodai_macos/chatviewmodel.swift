@@ -326,7 +326,8 @@ final class ChatViewModel {
         context.insert(task)
         project.tasks.append(task)
         project.updatedAt = .now
-        ledgerRecorder.recordActivity(kind: .taskChange, summary: "created: \(title)", context: context)
+        let dueSuffix = dueDate.map { " (due \(shortDateString($0)))" } ?? ""
+        ledgerRecorder.recordActivity(kind: .taskChange, summary: "created: \(title)\(dueSuffix)", context: context)
         saveModelContext(context)
         return task
     }
@@ -362,6 +363,26 @@ final class ChatViewModel {
     func updateTaskDueDate(_ task: KodaiTask, dueDate: Date?, context: ModelContext) {
         task.dueDate = dueDate
         task.updatedAt = .now
+        let summary: String
+        if let date = dueDate {
+            summary = "rescheduled: \(task.title) → \(shortDateString(date))"
+        } else {
+            summary = "cleared due date: \(task.title)"
+        }
+        ledgerRecorder.recordActivity(kind: .taskChange, summary: summary, context: context)
+        saveModelContext(context)
+    }
+
+    func updateProjectDeadline(_ project: KodaiProject, deadline: Date?, context: ModelContext) {
+        project.deadline = deadline
+        project.updatedAt = .now
+        let summary: String
+        if let date = deadline {
+            summary = "deadline set: \(project.title) → \(shortDateString(date))"
+        } else {
+            summary = "deadline cleared: \(project.title)"
+        }
+        ledgerRecorder.recordActivity(kind: .taskChange, summary: summary, context: context)
         saveModelContext(context)
     }
 
@@ -1089,6 +1110,12 @@ final class ChatViewModel {
         }
 
         return max(1, Int(ceil(Double(cleanText.count) / 4.0)))
+    }
+
+    private func shortDateString(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
+        return f.string(from: date)
     }
 
     private func taskPriorityOrder(_ p: TaskPriority) -> Int {

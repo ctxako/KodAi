@@ -17,6 +17,7 @@ struct KodaiProjectHeader: View {
     let onDeleteTask: (KodaiTask) -> Void
     let onRenameTask: (KodaiTask, String) -> Void
     let onUpdateTaskDueDate: (KodaiTask, Date?) -> Void
+    let onUpdateProjectDeadline: (Date?) -> Void
 
     @State private var editingSummary = false
     @State private var summaryDraft = ""
@@ -32,6 +33,7 @@ struct KodaiProjectHeader: View {
     @State private var editingTaskID: UUID? = nil
     @State private var editingTaskTitle = ""
     @State private var dueDatePopoverTaskID: UUID? = nil
+    @State private var deadlinePopoverShowing = false
     @FocusState private var addTaskFocused: Bool
     @FocusState private var renameTaskFocused: Bool
 
@@ -166,11 +168,7 @@ struct KodaiProjectHeader: View {
                 .lineLimit(1)
 
             statusBadge
-
-            if let deadline = project.deadline {
-                deadlineBadge(deadline)
-            }
-
+            deadlineControl
             Spacer()
 
             Text(Self.dateFormatter.string(from: lastActivity))
@@ -537,6 +535,73 @@ struct KodaiProjectHeader: View {
                 }
                 Button("Done") {
                     dueDatePopoverTaskID = nil
+                }
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .frame(minWidth: 260)
+    }
+
+    // MARK: – Deadline control
+
+    @ViewBuilder
+    private var deadlineControl: some View {
+        if let deadline = project.deadline {
+            deadlineBadge(deadline)
+                .contentShape(Rectangle())
+                .onTapGesture { deadlinePopoverShowing = true }
+                .popover(isPresented: $deadlinePopoverShowing, arrowEdge: .bottom) {
+                    deadlinePopoverContent
+                }
+        } else {
+            Button {
+                deadlinePopoverShowing = true
+            } label: {
+                Image(systemName: "flag")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.22))
+            }
+            .buttonStyle(.plain)
+            .help("Set project deadline")
+            .popover(isPresented: $deadlinePopoverShowing, arrowEdge: .bottom) {
+                deadlinePopoverContent
+            }
+        }
+    }
+
+    private var deadlinePopoverContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Project deadline")
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            DatePicker(
+                "",
+                selection: Binding(
+                    get: { project.deadline ?? Calendar.current.startOfDay(for: Date()) },
+                    set: { onUpdateProjectDeadline($0) }
+                ),
+                displayedComponents: .date
+            )
+            .datePickerStyle(.graphical)
+            .labelsHidden()
+            .frame(maxWidth: 260)
+
+            HStack {
+                Spacer()
+                if project.deadline != nil {
+                    Button("Clear") {
+                        onUpdateProjectDeadline(nil)
+                        deadlinePopoverShowing = false
+                    }
+                    .font(.system(size: 11, weight: .regular, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .buttonStyle(.plain)
+                }
+                Button("Done") {
+                    deadlinePopoverShowing = false
                 }
                 .font(.system(size: 11, weight: .medium, design: .rounded))
                 .buttonStyle(.plain)
