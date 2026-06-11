@@ -172,24 +172,24 @@ struct RelationshipTests {
         #expect(session.messages.first?.content == "Hello")
     }
 
-    @Test func turnRecordLinksToSession() throws {
+    @Test func turnRecordLinksToSessionViaSessionID() throws {
         let container = try makeContainer()
         let context = ModelContext(container)
 
         let session = KodaiChatSession(title: "Chat")
+        context.insert(session)
+        try context.save()
+
         let turn = TurnRecord(
             userMessage: "Ping",
             assistantMessage: "Pong",
-            systemPrompt: "Be helpful"
+            systemPrompt: "Be helpful",
+            sessionID: session.id
         )
-        session.turns.append(turn)
-        turn.session = session
-        context.insert(session)
         context.insert(turn)
         try context.save()
 
-        #expect(session.turns.count == 1)
-        #expect(turn.session?.title == "Chat")
+        #expect(turn.sessionID == session.id)
     }
 
     @Test func toolCallLinksToTurn() throws {
