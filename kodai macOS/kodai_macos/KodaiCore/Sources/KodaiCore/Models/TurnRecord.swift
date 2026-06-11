@@ -14,6 +14,9 @@ public final class TurnRecord {
     public var inputTokenEstimate: Int
     public var outputTokenEstimate: Int
     public var latencyMs: Double
+    public var timeToFirstTokenMs: Double?
+    public var backend: String?
+    public var modelName: String?
     public var createdAt: Date
 
     // Loose reference — avoids a formal relationship to the app-target's KodaiChatSession.
@@ -40,6 +43,9 @@ public final class TurnRecord {
         inputTokenEstimate: Int? = nil,
         outputTokenEstimate: Int? = nil,
         latencyMs: Double = 0,
+        timeToFirstTokenMs: Double? = nil,
+        backend: String? = nil,
+        modelName: String? = nil,
         createdAt: Date = .now,
         sessionID: UUID? = nil,
         contextManifestJSON: Data? = nil,
@@ -56,6 +62,9 @@ public final class TurnRecord {
         self.inputTokenEstimate = inputTokenEstimate ?? TokenEstimator.estimate(userMessage + systemPrompt)
         self.outputTokenEstimate = outputTokenEstimate ?? TokenEstimator.estimate(assistantMessage)
         self.latencyMs = latencyMs
+        self.timeToFirstTokenMs = timeToFirstTokenMs
+        self.backend = backend
+        self.modelName = modelName
         self.createdAt = createdAt
         self.sessionID = sessionID
         self.contextManifestJSON = contextManifestJSON

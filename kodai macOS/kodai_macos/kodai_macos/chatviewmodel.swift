@@ -41,10 +41,14 @@ final class ChatViewModel {
         }
     }
     var estimatedContextPercent: Int = 0
+    var turnRecords: [UUID: TurnRecord] = [:]
 
     private let backend = FoundationModelsBackend()
     let telemetryStore = TelemetryStore()
     let ledgerRecorder = LedgerRecorder()
+    private let contextAssembler = ContextAssembler(
+        budget: TokenBudget(total: FoundationModelsBackend.contextWindowTokenLimit)
+    )
 
     private var responseTask: Task<Void, Never>?
     private var metricsTask: Task<Void, Never>?
@@ -122,6 +126,7 @@ final class ChatViewModel {
         messages = [
             ChatMessage(role: .assistant, text: "Fresh chat. What are we building today?")
         ]
+        turnRecords = [:]
 
         inputText = ""
         selectedMode = .chat
@@ -139,6 +144,7 @@ final class ChatViewModel {
 
         selectedChat = session
         messages = messagesForSession(session)
+        turnRecords = [:]
         inputText = ""
         backend.switchToChat(session.id, instructions: buildInstructions())
         estimatedContextPercent = estimatedCurrentContextPercent()
@@ -296,8 +302,10 @@ final class ChatViewModel {
         activeFirstTokenAt = nil
         activeLastTokenAt = startedAt
 
-        activePromptTokens = estimatedTokenCount(selectedMode.systemPrompt)
-            + estimatedTokenCount(cleanInput)
+        // Assemble context blocks + manifest before streaming.
+        // History excluded here — LanguageModelSession owns conversational continuity.
+        let (assembledInstructions, turnManifest) = assembleContext(userMessage: cleanInput)
+        activePromptTokens = turnManifest.totalTokens + TokenEstimator.estimate(cleanInput)
         telemetryStore.emit(.promptCounted, to: reqID)
 
         let userMessage = ChatMessage(role: .user, text: cleanInput)
@@ -332,7 +340,7 @@ final class ChatViewModel {
         var wasCancelled = false
         var completedResult: InferenceResult?
 
-        for await event in backend.stream(prompt: cleanInput, instructions: buildInstructions()) {
+        for await event in backend.stream(prompt: cleanInput, instructions: assembledInstructions) {
             switch event {
             case .phase(_):
                 break
@@ -415,14 +423,19 @@ final class ChatViewModel {
             saveStoredMessage(role: .assistant, content: assistantText, in: currentSession, context: context)
 
             if !assistantText.isEmpty, !wasCancelled, !Task.isCancelled {
-                recordTurnLedger(
+                let ttftMs = activeFirstTokenAt.map { $0.timeIntervalSince(startedAt) * 1000 }
+                let turn = recordTurnLedger(
                     userText: cleanInput,
                     assistantText: assistantText,
+                    systemPrompt: assembledInstructions,
                     startedAt: startedAt,
+                    timeToFirstTokenMs: ttftMs,
                     completedResult: completedResult,
+                    manifest: turnManifest,
                     sessionID: currentSession.id,
                     context: context
                 )
+                turnRecords[assistantID] = turn
             }
         }
 
@@ -627,46 +640,82 @@ final class ChatViewModel {
         return lines.joined(separator: "\n")
     }
 
+    /// Build system instructions + context manifest for one turn.
+    /// History is intentionally excluded: LanguageModelSession owns conversational continuity.
+    private func assembleContext(userMessage: String) -> (instructions: String, manifest: ContextManifest) {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "EEEE, MMMM d, yyyy 'at' h:mm a"
+        let dateString = dateFormatter.string(from: Date())
+
+        let personaContent = userProfile
+        let timeContent = "Date/time: \(dateString)"
+        let modeContent = "Current mode: \(selectedMode.rawValue)\nMode instructions:\n\(selectedMode.systemPrompt)"
+
+        var blocks: [ContextBlock] = [
+            ContextBlock(
+                kind: "persona",
+                content: personaContent,
+                tokenEstimate: TokenEstimator.estimate(personaContent),
+                priority: 0
+            ),
+            ContextBlock(
+                kind: "time",
+                content: timeContent,
+                tokenEstimate: TokenEstimator.estimate(timeContent),
+                priority: 1
+            ),
+            ContextBlock(
+                kind: "mode",
+                content: modeContent,
+                tokenEstimate: TokenEstimator.estimate(modeContent),
+                priority: 5
+            ),
+        ]
+
+        var metaLines: [String] = []
+        if let chatTitle = selectedChat?.title { metaLines.append("Current conversation: \(chatTitle)") }
+        if let streamTitle = selectedChat?.stream?.title { metaLines.append("Project stream: \(streamTitle)") }
+        if !metaLines.isEmpty {
+            let metaContent = metaLines.joined(separator: "\n")
+            blocks.append(ContextBlock(
+                kind: "meta",
+                content: metaContent,
+                tokenEstimate: TokenEstimator.estimate(metaContent),
+                priority: 3
+            ))
+        }
+
+        let (instructions, manifest) = contextAssembler.assemble(blocks: blocks)
+        return (instructions, manifest)
+    }
+
+    @discardableResult
     private func recordTurnLedger(
         userText: String,
         assistantText: String,
+        systemPrompt: String,
         startedAt: Date,
+        timeToFirstTokenMs: Double?,
         completedResult: InferenceResult?,
+        manifest: ContextManifest,
         sessionID: UUID,
         context: ModelContext
-    ) {
-        let personaTokens = estimatedTokenCount(userProfile)
-        let modeTokens = estimatedTokenCount(selectedMode.systemPrompt)
-        let historyTokens = estimatedTokenCount(recentConversationHistory(limit: 10))
-        let userTokens = estimatedTokenCount(userText)
-
-        let blocks: [ContextBlockRecord] = [
-            ContextBlockRecord(kind: "persona", tokenEstimate: personaTokens, status: .included),
-            ContextBlockRecord(kind: "mode_prompt", tokenEstimate: modeTokens, status: .included),
-            ContextBlockRecord(kind: "history", tokenEstimate: historyTokens, status: .included),
-            ContextBlockRecord(kind: "user_turn", tokenEstimate: userTokens, status: .included),
-        ]
-        let totalTokens = blocks.reduce(0) { $0 + $1.tokenEstimate }
-        let manifest = ContextManifest(
-            blocks: blocks,
-            totalTokens: totalTokens,
-            budgetLimit: FoundationModelsBackend.contextWindowTokenLimit
-        )
-
+    ) -> TurnRecord {
         let latencyMs = completedResult.map { $0.duration * 1000 }
             ?? max(Date().timeIntervalSince(startedAt), 0) * 1000
         let inputTokens = completedResult?.promptTokensEst ?? activePromptTokens
-        let outputTokens = completedResult?.outputTokensEst ?? estimatedTokenCount(assistantText)
+        let outputTokens = completedResult?.outputTokensEst ?? TokenEstimator.estimate(assistantText)
 
-        ledgerRecorder.recordTurn(
+        return ledgerRecorder.recordTurn(
             userText: userText,
             assistantText: assistantText,
-            systemPrompt: buildInstructions(),
+            systemPrompt: systemPrompt,
             sessionID: sessionID,
             manifest: manifest,
             backend: "FoundationModels",
             modelName: "SystemLanguageModel.default",
             latencyMs: latencyMs,
+            timeToFirstTokenMs: timeToFirstTokenMs,
             inputTokens: inputTokens,
             outputTokens: outputTokens,
             contextPercent: estimatedContextPercent,

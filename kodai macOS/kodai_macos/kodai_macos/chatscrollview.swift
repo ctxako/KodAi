@@ -4,16 +4,18 @@
 //
 
 import SwiftUI
+import KodaiCore
 
 struct ChatScrollView: View {
     let messages: [ChatMessage]
+    var turnRecords: [UUID: TurnRecord] = [:]
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 12) {
                     ForEach(messages) { message in
-                        ChatBubble(message: message)
+                        ChatBubble(message: message, turnRecord: turnRecords[message.id])
                             .id(message.id)
                     }
                 }

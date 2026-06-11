@@ -22,6 +22,7 @@ public final class LedgerRecorder {
         backend: String,
         modelName: String,
         latencyMs: Double,
+        timeToFirstTokenMs: Double? = nil,
         inputTokens: Int,
         outputTokens: Int,
         contextPercent: Int,
@@ -44,6 +45,9 @@ public final class LedgerRecorder {
             inputTokenEstimate: inputTokens,
             outputTokenEstimate: outputTokens,
             latencyMs: latencyMs,
+            timeToFirstTokenMs: timeToFirstTokenMs,
+            backend: backend,
+            modelName: modelName,
             sessionID: sessionID,
             contextManifestJSON: manifestData,
             performanceMetric: metric

@@ -42,7 +42,7 @@ struct ContentView: View {
             KodaiBackground()
 
             VStack(spacing: 0) {
-                ChatScrollView(messages: viewModel.messages)
+                ChatScrollView(messages: viewModel.messages, turnRecords: viewModel.turnRecords)
 
                 ComposerView(
                     inputText: $viewModel.inputText,
