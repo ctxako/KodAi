@@ -331,13 +331,6 @@ struct KodaiSidebar: View {
             .buttonStyle(.plain)
 
             Spacer()
-
-            if sidebarOpen {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 34, height: 34)
-            }
         }
         .padding(.top, 8)
     }

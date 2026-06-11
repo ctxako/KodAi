@@ -10,11 +10,11 @@
 //
 
 import Foundation
-import Combine
 import FoundationModels
 
 @MainActor
-final class KodaiModel: ObservableObject {
+@Observable
+final class KodaiModel {
     private let model = SystemLanguageModel.default
     private var session: LanguageModelSession?
     private var currentInstructions = ""
