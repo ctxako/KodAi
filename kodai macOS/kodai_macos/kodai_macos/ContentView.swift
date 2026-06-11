@@ -58,8 +58,12 @@ struct ContentView: View {
                     KodaiProjectHeader(
                         project: project,
                         session: viewModel.selectedChat,
+                        isGenerating: viewModel.isSummarizing,
                         onUpdateSummary: { summary in
                             viewModel.updateProjectSummary(project, summary: summary, context: modelContext)
+                        },
+                        onGenerateSummary: {
+                            viewModel.generateProjectSummary(project, context: modelContext)
                         }
                     )
                 }
@@ -71,6 +75,7 @@ struct ContentView: View {
                     selectedMode: $viewModel.selectedMode,
                     composerFocused: $composerFocused,
                     isLoading: viewModel.isLoading,
+                    isSummarizing: viewModel.isSummarizing,
                     telemetry: viewModel.chatTelemetry,
                     onSend: {
                         viewModel.send(context: modelContext)

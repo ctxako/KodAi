@@ -42,8 +42,10 @@ final class ChatViewModel {
     }
     var estimatedContextPercent: Int = 0
     var turnRecords: [UUID: TurnRecord] = [:]
+    var isSummarizing = false
 
     private let backend = FoundationModelsBackend()
+    private let summaryEngine = SummaryEngine()
     let telemetryStore = TelemetryStore()
     let ledgerRecorder = LedgerRecorder()
     private let contextAssembler = ContextAssembler(
@@ -103,6 +105,12 @@ final class ChatViewModel {
     }
 
     func send(context: ModelContext) {
+        let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.lowercased() == "/summary" {
+            inputText = ""
+            triggerSessionSummary(context: context)
+            return
+        }
         responseTask = Task {
             await runModel(context: context)
         }
@@ -300,6 +308,75 @@ final class ChatViewModel {
         session.project = project
         project?.updatedAt = .now
         saveModelContext(context)
+    }
+
+    // MARK: – Summary
+
+    func triggerSessionSummary(context: ModelContext) {
+        guard let session = selectedChat else { return }
+        guard !isSummarizing, !isLoading else { return }
+
+        let sortedMessages = session.messages.sorted { $0.createdAt < $1.createdAt }
+        guard !sortedMessages.isEmpty else { return }
+
+        let existingSummary = session.summaries
+            .sorted { $0.createdAt > $1.createdAt }
+            .first?.content
+        let lastMsgID = sortedMessages.last?.id
+
+        isSummarizing = true
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.isSummarizing = false }
+            do {
+                let content = try await self.summaryEngine.generateSessionSummary(
+                    messages: sortedMessages,
+                    existingSummary: existingSummary
+                )
+                guard !content.isEmpty else { return }
+                let summary = KodaiSummary(
+                    kind: .session,
+                    content: content,
+                    previousContent: existingSummary,
+                    session: session
+                )
+                context.insert(summary)
+                if let lastMsgID { session.summarizedThroughMessageID = lastMsgID }
+                self.saveModelContext(context)
+            } catch {
+                // Silent — background operation
+            }
+        }
+    }
+
+    func generateProjectSummary(_ project: KodaiProject, context: ModelContext) {
+        guard !isSummarizing else { return }
+
+        let title = project.title
+        let existing = project.summary
+        let sessionSummaries = project.sessions
+            .flatMap { $0.summaries }
+            .sorted { $0.createdAt < $1.createdAt }
+            .map { $0.content }
+
+        isSummarizing = true
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.isSummarizing = false }
+            do {
+                let content = try await self.summaryEngine.generateProjectSummary(
+                    title: title,
+                    existingSummary: existing,
+                    sessionSummaries: sessionSummaries
+                )
+                guard !content.isEmpty else { return }
+                self.updateProjectSummary(project, summary: content, context: context)
+            } catch {
+                // Silent — background operation
+            }
+        }
     }
 
     func copyToClipboard(_ text: String) {
@@ -507,6 +584,7 @@ final class ChatViewModel {
         activeLastTokenAt = nil
         activePromptTokens = 0
         estimatedContextPercent = estimatedCurrentContextPercent()
+        checkAndAutoSummarize(context: context)
     }
 
     @discardableResult
@@ -745,6 +823,30 @@ final class ChatViewModel {
             ))
         }
 
+        // Session summary — injected when chat was previously summarized
+        if let session = selectedChat {
+            if let latest = session.summaries.sorted(by: { $0.createdAt > $1.createdAt }).first {
+                let content = "Session context:\n\(latest.content)"
+                blocks.append(ContextBlock(
+                    kind: "session_summary",
+                    content: content,
+                    tokenEstimate: TokenEstimator.estimate(content),
+                    priority: 2
+                ))
+            }
+        }
+
+        // Project summary — injected for every turn in a project chat
+        if let project = selectedChat?.project, let projSummary = project.summary, !projSummary.isEmpty {
+            let content = "Project (\(project.title)):\n\(projSummary)"
+            blocks.append(ContextBlock(
+                kind: "project_summary",
+                content: content,
+                tokenEstimate: TokenEstimator.estimate(content),
+                priority: 3
+            ))
+        }
+
         let (instructions, manifest) = contextAssembler.assemble(blocks: blocks)
         return (instructions, manifest)
     }
@@ -781,6 +883,31 @@ final class ChatViewModel {
             contextPercent: estimatedContextPercent,
             context: context
         )
+    }
+
+    private func checkAndAutoSummarize(context: ModelContext) {
+        guard !isSummarizing, !isLoading else { return }
+        guard let session = selectedChat else { return }
+
+        let allMessages = session.messages
+        let total = allMessages.count
+        guard total > 0 else { return }
+
+        let unsummarized: Int
+        if let throughID = session.summarizedThroughMessageID {
+            let sorted = allMessages.sorted { $0.createdAt < $1.createdAt }
+            if let idx = sorted.firstIndex(where: { $0.id == throughID }) {
+                unsummarized = total - (idx + 1)
+            } else {
+                unsummarized = total
+            }
+        } else {
+            unsummarized = total
+        }
+
+        if unsummarized >= 20 || estimatedContextPercent >= 70 {
+            triggerSessionSummary(context: context)
+        }
     }
 
     private func estimatedCurrentContextPercent(pendingInput: String = "") -> Int {

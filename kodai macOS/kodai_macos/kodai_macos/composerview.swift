@@ -11,6 +11,7 @@ struct ComposerView: View {
     @FocusState.Binding var composerFocused: Bool
 
     let isLoading: Bool
+    let isSummarizing: Bool
     let telemetry: ChatTelemetry
 
     let onSend: () -> Void
@@ -24,6 +25,18 @@ struct ComposerView: View {
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.6))
                         .lineLimit(1)
+
+                    if isSummarizing {
+                        HStack(spacing: 4) {
+                            ProgressView()
+                                .controlSize(.mini)
+                                .tint(.white.opacity(0.45))
+                            Text("summarizing")
+                                .font(.system(size: 10, weight: .regular, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.4))
+                        }
+                        .transition(.opacity)
+                    }
 
                     Spacer(minLength: 4)
 

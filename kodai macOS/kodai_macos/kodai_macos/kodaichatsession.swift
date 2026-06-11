@@ -40,9 +40,13 @@ final class KodaiChatSession {
     var updatedAt: Date
     var stream: KodaiStream?
     var project: KodaiProject?
+    var summarizedThroughMessageID: UUID?
 
     @Relationship(deleteRule: .cascade, inverse: \KodaiChatMessage.session)
     var messages: [KodaiChatMessage]
+
+    @Relationship(deleteRule: .cascade, inverse: \KodaiSummary.session)
+    var summaries: [KodaiSummary]
 
     init(
         id: UUID = UUID(),
@@ -51,7 +55,9 @@ final class KodaiChatSession {
         updatedAt: Date = .now,
         stream: KodaiStream? = nil,
         project: KodaiProject? = nil,
-        messages: [KodaiChatMessage] = []
+        messages: [KodaiChatMessage] = [],
+        summarizedThroughMessageID: UUID? = nil,
+        summaries: [KodaiSummary] = []
     ) {
         self.id = id
         self.title = title
@@ -60,6 +66,8 @@ final class KodaiChatSession {
         self.stream = stream
         self.project = project
         self.messages = messages
+        self.summarizedThroughMessageID = summarizedThroughMessageID
+        self.summaries = summaries
     }
 }
 
@@ -122,5 +130,36 @@ final class KodaiProject {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.sessions = sessions
+    }
+}
+
+@Model
+final class KodaiSummary {
+    @Attribute(.unique) var id: UUID
+    var kind: SummaryKind
+    var content: String
+    var previousContent: String?
+    var tokenCount: Int
+    var createdAt: Date
+    var session: KodaiChatSession?
+    var project: KodaiProject?
+
+    init(
+        id: UUID = UUID(),
+        kind: SummaryKind,
+        content: String,
+        previousContent: String? = nil,
+        createdAt: Date = .now,
+        session: KodaiChatSession? = nil,
+        project: KodaiProject? = nil
+    ) {
+        self.id = id
+        self.kind = kind
+        self.content = content
+        self.previousContent = previousContent
+        self.tokenCount = max(1, Int(ceil(Double(content.count) / 4.0)))
+        self.createdAt = createdAt
+        self.session = session
+        self.project = project
     }
 }

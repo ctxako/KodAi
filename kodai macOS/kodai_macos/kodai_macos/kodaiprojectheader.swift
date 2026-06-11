@@ -9,7 +9,9 @@ import KodaiCore
 struct KodaiProjectHeader: View {
     let project: KodaiProject
     let session: KodaiChatSession?
+    let isGenerating: Bool
     let onUpdateSummary: (String) -> Void
+    let onGenerateSummary: () -> Void
 
     @State private var editingSummary = false
     @State private var summaryDraft = ""
@@ -101,6 +103,23 @@ struct KodaiProjectHeader: View {
                             .foregroundStyle(.orange.opacity(0.8))
                             .labelStyle(.titleAndIcon)
                     }
+
+                    Button {
+                        onGenerateSummary()
+                    } label: {
+                        if isGenerating {
+                            ProgressView()
+                                .controlSize(.mini)
+                                .tint(.white.opacity(0.45))
+                        } else {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.45))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isGenerating)
+                    .help("Generate project summary with AI")
                 }
             }
         }
