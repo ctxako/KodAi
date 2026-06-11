@@ -124,15 +124,20 @@ private struct BlockRow: View {
 
     private var icon: String {
         switch block.kind {
-        case "persona":  return "person.fill"
-        case "time":     return "clock.fill"
-        case "mode":     return "slider.horizontal.3"
-        case "meta":     return "info.circle.fill"
-        case "history":  return "clock.arrow.circlepath"
-        case "memory":   return "brain.head.profile"
-        case "task":     return "checklist"
-        case "summary":  return "doc.text"
-        default:         return "square.grid.2x2"
+        case "persona":           return "person.fill"
+        case "time":              return "clock.fill"
+        case "mode":              return "slider.horizontal.3"
+        case "meta":              return "info.circle.fill"
+        case "history":           return "clock.arrow.circlepath"
+        case "memory":            return "brain.head.profile"
+        case "task":              return "checklist"
+        case "summary":           return "doc.text"
+        case "session_summary":   return "doc.text"
+        case "project_summary":   return "folder.fill"
+        case "active_tasks":      return "checklist"
+        case "today_tasks":       return "calendar.badge.exclamationmark"
+        case "project_deadline":  return "flag.fill"
+        default:                  return "square.grid.2x2"
         }
     }
 

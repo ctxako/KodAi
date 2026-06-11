@@ -43,6 +43,7 @@ final class ChatViewModel {
     var estimatedContextPercent: Int = 0
     var turnRecords: [UUID: TurnRecord] = [:]
     var isSummarizing = false
+    var allProjects: [KodaiProject] = []
 
     private let backend = FoundationModelsBackend()
     private let summaryEngine = SummaryEngine()
@@ -832,6 +833,57 @@ final class ChatViewModel {
         return lines.joined(separator: "\n")
     }
 
+    // MARK: – Today's tasks helpers
+
+    func todaysTasks(from projects: [KodaiProject]) -> [KodaiTask] {
+        let endOfToday = Calendar.current.startOfDay(for: Date()).addingTimeInterval(86400)
+        return projects
+            .filter { $0.status == .active }
+            .flatMap { $0.tasks }
+            .filter { task in
+                guard !task.isCompleted, let due = task.dueDate else { return false }
+                return due < endOfToday
+            }
+            .sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) }
+    }
+
+    private func formattedTodayTasksContext(_ tasks: [KodaiTask]) -> String {
+        let now = Date()
+        let startOfToday = Calendar.current.startOfDay(for: now)
+        let cap = 10
+        let capped = Array(tasks.prefix(cap))
+
+        let overdueCount = capped.filter { ($0.dueDate ?? now) < startOfToday }.count
+        var header = "Today's tasks (\(tasks.count) total"
+        if overdueCount > 0 { header += ", \(overdueCount) overdue" }
+        header += "):"
+
+        let lines = capped.map { task -> String in
+            let due = task.dueDate ?? now
+            let label: String
+            if due < startOfToday {
+                let days = Calendar.current.dateComponents([.day], from: due, to: startOfToday).day ?? 0
+                label = days > 0 ? "overdue \(days)d" : "overdue"
+            } else {
+                label = "due today"
+            }
+            let project = task.project?.title ?? "—"
+            return "• [\(label)] \(task.title) — Project: \(project)"
+        }
+        return ([header] + lines).joined(separator: "\n")
+    }
+
+    private func formattedProjectDeadlineContext(_ project: KodaiProject) -> String {
+        guard let deadline = project.deadline else { return "" }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        let dateString = formatter.string(from: deadline)
+        let past = deadline < Date()
+        let status = past ? " (overdue)" : ""
+        return "Project deadline: \(project.title) — \(dateString)\(status)"
+    }
+
     /// Build system instructions + context manifest for one turn.
     /// History is intentionally excluded: LanguageModelSession owns conversational continuity.
     private func assembleContext(userMessage: String) -> (instructions: String, manifest: ContextManifest) {
@@ -915,6 +967,32 @@ final class ChatViewModel {
                     content: content,
                     tokenEstimate: TokenEstimator.estimate(content),
                     priority: 4,
+                    sourceID: project.id
+                ))
+            }
+        }
+
+        // Today's tasks — cross-project due/overdue tasks
+        let dueTasks = todaysTasks(from: allProjects)
+        if !dueTasks.isEmpty {
+            let content = formattedTodayTasksContext(dueTasks)
+            blocks.append(ContextBlock(
+                kind: "today_tasks",
+                content: content,
+                tokenEstimate: TokenEstimator.estimate(content),
+                priority: 3
+            ))
+        }
+
+        // Project deadline — shown when current project has a deadline
+        if let project = selectedChat?.project, project.deadline != nil {
+            let content = formattedProjectDeadlineContext(project)
+            if !content.isEmpty {
+                blocks.append(ContextBlock(
+                    kind: "project_deadline",
+                    content: content,
+                    tokenEstimate: TokenEstimator.estimate(content),
+                    priority: 3,
                     sourceID: project.id
                 ))
             }
