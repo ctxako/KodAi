@@ -1,0 +1,4 @@
+.DerivedData/
+DerivedData/
+*.xcuserdatad/
+*.gguf

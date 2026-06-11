@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>kodAi — Data Model Map</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #07070A;
+    color: #E4E4EE;
+    font-family: 'Outfit', sans-serif;
+    min-height: 100vh;
+    overflow-x: auto;
+  }
+
+  .page {
+    padding: 40px 32px 80px;
+    min-width: 1100px;
+    max-width: 1300px;
+    margin: 0 auto;
+    position: relative;
+  }
+
+  /* Header */
+  .header {
+    margin-bottom: 40px;
+    position: relative;
+    z-index: 2;
+  }
+  .header .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: #635BFF;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .header h1 {
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    margin-bottom: 6px;
+  }
+  .header p {
+    font-size: 13px;
+    color: #5a5a74;
+    font-weight: 300;
+  }
+
+  /* SVG connectors layer */
+  .connectors {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .connectors line, .connectors path {
+    stroke: #252535;
+    stroke-width: 1.5;
+    fill: none;
+  }
+  .connectors .rel-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    fill: #4a4a64;
+    letter-spacing: 1px;
+  }
+
+  /* Grid layout */
+  .diagram {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: auto auto auto auto;
+    gap: 24px 40px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Entity card base */
+  .entity {
+    background: #0d0d11;
+    border: 1px solid #1e1e2e;
+    border-radius: 14px;
+    overflow: hidden;
+    position: relative;
+    transition: border-color 0.2s;
+  }
+  .entity:hover {
+    border-color: #333348;
+  }
+  .entity-header {
+    padding: 14px 18px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #161622;
+  }
+  .entity-name {
+    font-weight: 600;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .entity-type {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.04);
+    color: #5a5a74;
+  }
+
+  .fields {
+    padding: 12px 18px 16px;
+  }
+  .field {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 12.5px;
+  }
+  .field-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: #B8B8D0;
+    min-width: 0;
+  }
+  .field-type {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #4a4a64;
+    flex-shrink: 0;
+  }
+  .field-key {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: #635BFF;
+    background: rgba(99,91,255,0.1);
+    padding: 1px 5px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .field-fk {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: #F59E0B;
+    background: rgba(245,158,11,0.1);
+    padding: 1px 5px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .field-new {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: #10B981;
+    background: rgba(16,185,129,0.1);
+    padding: 1px 5px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .field-sep {
+    border-top: 1px dashed #1a1a28;
+    margin: 6px 0;
+  }
+
+  /* Section label for field groups */
+  .field-group-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #3a3a50;
+    margin-top: 8px;
+    margin-bottom: 4px;
+  }
+
+  /* Accent bars on entities */
+  .entity.core .entity-header { border-left: 3px solid #635BFF; }
+  .entity.join .entity-header { border-left: 3px solid #F59E0B; }
+  .entity.system .entity-header { border-left: 3px solid #3A3A50; }
+  .entity.new-props .entity-header { border-left: 3px solid #10B981; }
+
+  /* Span helpers */
+  .span-2 { grid-column: span 2; }
+  .span-3 { grid-column: span 3; }
+
+  /* Relationship legend */
+  .rel-legend {
+    display: flex;
+    gap: 28px;
+    flex-wrap: wrap;
+    margin-bottom: 28px;
+    padding: 14px 20px;
+    background: #0a0a0e;
+    border: 1px solid #161622;
+    border-radius: 10px;
+  }
+  .rel-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: #7C7C96;
+  }
+  .rel-line {
+    width: 32px;
+    height: 2px;
+    border-radius: 1px;
+  }
+  .rel-line.one-many { background: #635BFF; }
+  .rel-line.one-one { background: #F59E0B; }
+  .rel-line.optional {
+    background: repeating-linear-gradient(90deg, #7C7C96 0px, #7C7C96 4px, transparent 4px, transparent 8px);
+  }
+  .badge-pk {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: #635BFF;
+    background: rgba(99,91,255,0.1);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .badge-fk {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: #F59E0B;
+    background: rgba(245,158,11,0.1);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .badge-new {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: #10B981;
+    background: rgba(16,185,129,0.1);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  /* Relationship annotations between cards */
+  .rel-annotations {
+    margin-top: 16px;
+    margin-bottom: 8px;
+  }
+  .rel-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    font-size: 12px;
+  }
+  .rel-from, .rel-to {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #B8B8D0;
+    background: #111116;
+    padding: 3px 10px;
+    border-radius: 6px;
+    border: 1px solid #1e1e2e;
+  }
+  .rel-arrow {
+    color: #3a3a50;
+    font-size: 13px;
+  }
+  .rel-desc {
+    font-size: 11px;
+    color: #5a5a74;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .rel-card {
+    font-size: 11px;
+    color: #635BFF;
+  }
+
+  /* Section dividers */
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: #4a4a64;
+    text-transform: uppercase;
+    margin-top: 40px;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #131320;
+    grid-column: span 3;
+  }
+
+  /* Behavior note cards */
+  .behavior-note {
+    background: #0a0a0e;
+    border: 1px dashed #1e1e2e;
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 12px;
+    color: #5a5a74;
+    line-height: 1.6;
+  }
+  .behavior-note strong {
+    color: #7C7C96;
+    font-weight: 500;
+  }
+  .behavior-note .note-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #3a3a50;
+    margin-bottom: 6px;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="eyebrow">kodAi · Data Architecture</div>
+    <h1>Entity Relationship Map</h1>
+    <p>All data types, their fields, and how they connect. Green-tagged fields are new additions from the task system redesign.</p>
+  </div>
+
+  <!-- Legend -->
+  <div class="rel-legend">
+    <div class="rel-legend-item"><span class="badge-pk">PK</span> Primary key</div>
+    <div class="rel-legend-item"><span class="badge-fk">FK</span> Foreign key</div>
+    <div class="rel-legend-item"><span class="badge-new">NEW</span> Added in redesign</div>
+    <div class="rel-legend-item"><div class="rel-line one-many"></div> One → Many</div>
+    <div class="rel-legend-item"><div class="rel-line optional"></div> Optional link</div>
+  </div>
+
+  <!-- Diagram grid -->
+  <div class="diagram">
+
+    <!-- ═══════════ ROW 1: Core entities ═══════════ -->
+    <div class="section-label">Core Entities</div>
+
+    <!-- HABIT -->
+    <div class="entity core" id="habit">
+      <div class="entity-header">
+        <div class="entity-name">🔁 Habit</div>
+        <div class="entity-type">Persistent</div>
+      </div>
+      <div class="fields">
+        <div class="field"><span class="field-name">id</span><span class="field-type">UUID</span><span class="field-key">PK</span></div>
+        <div class="field"><span class="field-name">name</span><span class="field-type">String</span></div>
+        <div class="field"><span class="field-name">icon</span><span class="field-type">String (emoji)</span></div>
+        <div class="field"><span class="field-name">createdAt</span><span class="field-type">Date</span></div>
+        <div class="field"><span class="field-name">sortOrder</span><span class="field-type">Int</span></div>
+      </div>
+    </div>
+
+    <!-- PROJECT -->
+    <div class="entity core" id="project">
+      <div class="entity-header">
+        <div class="entity-name">📁 Project</div>
+        <div class="entity-type">Container</div>
+      </div>
+      <div class="fields">
+        <div class="field"><span class="field-name">id</span><span class="field-type">UUID</span><span class="field-key">PK</span></div>
+        <div class="field"><span class="field-name">name</span><span class="field-type">String</span></div>
+        <div class="field"><span class="field-name">color</span><span class="field-type">String (hex)</span></div>
+        <div class="field"><span class="field-name">habitId</span><span class="field-type">UUID?</span><span class="field-fk">FK → Habit</span></div>
+        <div class="field"><span class="field-name">createdAt</span><span class="field-type">Date</span></div>
+        <div class="field"><span class="field-name">sortOrder</span><span class="field-type">Int</span></div>
+      </div>
+    </div>
+
+    <!-- TASK (the big one) -->
+    <div class="entity core" id="task" style="grid-row: span 2;">
+      <div class="entity-header">
+        <div class="entity-name">✅ Task</div>
+        <div class="entity-type">Universal Unit</div>
+      </div>
+      <div class="fields">
+        <div class="field"><span class="field-name">id</span><span class="field-type">UUID</span><span class="field-key">PK</span></div>
+        <div class="field"><span class="field-name">text</span><span class="field-type">String</span></div>
+        <div class="field"><span class="field-name">projectId</span><span class="field-type">UUID</span><span class="field-fk">FK → Project</span></div>
+        <div class="field"><span class="field-name">done</span><span class="field-type">Bool</span></div>
+        <div class="field"><span class="field-name">stars</span><span class="field-type">Int 0–5</span></div>
+        <div class="field"><span class="field-name">recurring</span><span class="field-type">Bool</span></div>
+        <div class="field"><span class="field-name">draft</span><span class="field-type">Bool</span></div>
+        <div class="field"><span class="field-name">createdAt</span><span class="field-type">Date</span></div>
+        <div class="field"><span class="field-name">completedAt</span><span class="field-type">Date?</span></div>
+
+        <div class="field-sep"></div>
+        <div class="field-group-label">Anchor properties</div>
+        <div class="field"><span class="field-name">anchored</span><span class="field-type">Bool</span><span class="field-new">NEW</span></div>
+        <div class="field"><span class="field-name">deadlineTime</span><span class="field-type">Int? (hour)</span><span class="field-new">NEW</span></div>
+        <div class="field"><span class="field-name">tracksDuration</span><span class="field-type">Bool</span><span class="field-new">NEW</span></div>
+        <div class="field"><span class="field-name">url</span><span class="field-type">String?</span><span class="field-new">NEW</span></div>
+
+        <div class="field-sep"></div>
+        <div class="field-group-label">Challenge properties</div>
+        <div class="field"><span class="field-name">challengeTarget</span><span class="field-type">Int?</span><span class="field-new">NEW</span></div>
+        <div class="field"><span class="field-name">challengeTimeframe</span><span class="field-type">Enum?</span><span class="field-new">NEW</span></div>
+        <div class="field"><span class="field-name">challengeStartDate</span><span class="field-type">Date?</span><span class="field-new">NEW</span></div>
+
+        <div class="field-sep"></div>
+        <div class="field-group-label">Hierarchy</div>
+        <div class="field"><span class="field-name">parentTaskId</span><span class="field-type">UUID?</span><span class="field-new">NEW</span><span class="field-fk">FK → Task</span></div>
+      </div>
+    </div>
+
+    <!-- ═══════════ ROW 2: Join / tracking tables ═══════════ -->
+    <div class="section-label">Join & Tracking Records</div>
+
+    <!-- HABIT COMPLETION -->
+    <div class="entity join" id="habit-completion">
+      <div class="entity-header">
+        <div class="entity-name">✓ Habit Completion</div>
+        <div class="entity-type">Join</div>
+      </div>
+      <div class="fields">
+        <div class="field"><span class="field-name">habitId</span><span class="field-type">UUID</span><span class="field-fk">FK → Habit</span></div>
+        <div class="field"><span class="field-name">date</span><span class="field-type">Date (no time)</span></div>
+        <div class="field"><span class="field-name">timestamp</span><span class="field-type">DateTime</span></div>
+      </div>
+    </div>
+
+    <!-- DAILY TASK COMPLETION -->
+    <div class="entity join" id="daily-task-completion">
+      <div class="entity-header">
+        <div class="entity-name">✓ Daily Task Completion</div>
+        <div class="entity-type">Join</div>
+      </div>
+      <div class="fields">
+        <div class="field"><span class="field-name">taskId</span><span class="field-type">UUID</span><span class="field-fk">FK → Task</span></div>
+        <div class="field"><span class="field-name">date</span><span class="field-type">Date (no time)</span></div>
+        <div class="field"><span class="field-name">timestamp</span><span class="field-type">DateTime</span></div>
+        <div class="field-sep"></div>
+        <div class="field"><span class="field-name">duration</span><span class="field-type">Int? (minutes)</span><span class="field-new">NEW</span></div>
+      </div>
+    </div>
+
+    <!-- SUBTASK note -->
+    <div class="entity new-props" id="subtask-note">
+      <div class="entity-header">
+        <div class="entity-name">☑️ Subtask</div>
+        <div class="entity-type">Self-referencing</div>
+      </div>
+      <div class="fields">
+        <div class="behavior-note">
+          <div class="note-title">Not a separate entity</div>
+          Subtasks are just <strong>Task</strong> records with <strong>parentTaskId</strong> set. They render as inline checkboxes under their parent. Subtasks themselves don't get the full edit sheet — just text and a checkbox. They inherit the parent's project.
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ ROW 3: Schedule & stats ═══════════ -->
+    <div class="section-label">Schedule & Analytics</div>
+
+    <!-- TIME BLOCK -->
+    <div class="entity core" id="time-block">
+      <div class="entity-header">
+        <div class="entity-name">📅 Time Block</div>
+        <div class="entity-type">Standalone</div>
+      </div>
+      <div class="fields">
+        <div class="field"><span class="field-name">id</span><span class="field-type">UUID</span><span class="field-key">PK</span></div>
+        <div class="field"><span class="field-name">label</span><span class="field-type">String</span></div>
+        <div class="field"><span class="field-name">date</span><span class="field-type">Date (no time)</span></div>
+        <div class="field"><span class="field-name">startHour</span><span class="field-type">Int 0–23</span></div>
+        <div class="field"><span class="field-name">endHour</span><span class="field-type">Int 0–23</span></div>
+        <div class="field"><span class="field-name">color</span><span class="field-type">String (hex)</span></div>
+        <div class="field"><span class="field-name">done</span><span class="field-type">Bool</span></div>
+      </div>
+    </div>
+
+    <!-- WEEKLY SNAPSHOT -->
+    <div class="entity system" id="weekly-snapshot">
+      <div class="entity-header">
+        <div class="entity-name">📊 Weekly Snapshot</div>
+        <div class="entity-type">Computed</div>
+      </div>
+      <div class="fields">
+        <div class="field"><span class="field-name">weekId</span><span class="field-type">Date (Monday)</span><span class="field-key">PK</span></div>
+        <div class="field"><span class="field-name">totalHabitSlots</span><span class="field-type">Int</span></div>
+        <div class="field"><span class="field-name">habitsCompleted</span><span class="field-type">Int</span></div>
+        <div class="field"><span class="field-name">totalTasks</span><span class="field-type">Int</span></div>
+        <div class="field"><span class="field-name">tasksCompleted</span><span class="field-type">Int</span></div>
+        <div class="field"><span class="field-name">totalBlocks</span><span class="field-type">Int</span></div>
+        <div class="field"><span class="field-name">blocksCompleted</span><span class="field-type">Int</span></div>
+        <div class="field"><span class="field-name">pomodoroSessions</span><span class="field-type">Int</span></div>
+        <div class="field-sep"></div>
+        <div class="field"><span class="field-name">challengesActive</span><span class="field-type">Int</span><span class="field-new">NEW</span></div>
+        <div class="field"><span class="field-name">challengesMet</span><span class="field-type">Int</span><span class="field-new">NEW</span></div>
+        <div class="field"><span class="field-name">totalDuration</span><span class="field-type">Int (min)</span><span class="field-new">NEW</span></div>
+      </div>
+    </div>
+
+    <!-- APP SETTINGS -->
+    <div class="entity system" id="app-settings">
+      <div class="entity-header">
+        <div class="entity-name">⚙️ App Settings</div>
+        <div class="entity-type">Singleton</div>
+      </div>
+      <div class="fields">
+        <div class="field"><span class="field-name">lastActiveDate</span><span class="field-type">Date</span></div>
+        <div class="field"><span class="field-name">lifetimePomodoros</span><span class="field-type">Int</span></div>
+      </div>
+    </div>
+
+    <!-- ═══════════ RELATIONSHIPS ═══════════ -->
+    <div class="section-label">Relationships</div>
+
+    <div class="span-3">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div class="rel-row">
+            <span class="rel-from">Habit</span>
+            <span class="rel-arrow">1 →  ∞</span>
+            <span class="rel-to">Habit Completion</span>
+          </div>
+          <div class="rel-row">
+            <span class="rel-from">Habit</span>
+            <span class="rel-arrow">1 → ∞?</span>
+            <span class="rel-to">Project</span>
+            <span class="rel-desc">optional link</span>
+          </div>
+          <div class="rel-row">
+            <span class="rel-from">Project</span>
+            <span class="rel-arrow">1 →  ∞</span>
+            <span class="rel-to">Task</span>
+          </div>
+          <div class="rel-row">
+            <span class="rel-from">Task</span>
+            <span class="rel-arrow">1 →  ∞</span>
+            <span class="rel-to">Daily Task Completion</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div class="rel-row">
+            <span class="rel-from">Task</span>
+            <span class="rel-arrow">1 →  ∞?</span>
+            <span class="rel-to">Task (subtasks)</span>
+            <span class="rel-desc">self-ref via parentTaskId</span>
+          </div>
+
+          <div style="margin-top: 12px;" class="behavior-note">
+            <div class="note-title">Cascade rules</div>
+            <strong>Delete Habit →</strong> deletes its Completions. Projects become unlinked (habitId = null), tasks fall to "General" group.<br>
+            <strong>Delete Project →</strong> deletes all Tasks in that project and their Daily Task Completions.<br>
+            <strong>Delete Task →</strong> deletes its Daily Task Completions and any subtasks (child Tasks).
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══════════ BEHAVIORAL OVERLAYS ═══════════ -->
+    <div class="section-label">Behavioral Overlays — Same Task, Different Toggles</div>
+
+    <!-- Default -->
+    <div class="entity" style="border-color: #252535;">
+      <div class="entity-header" style="border-left: 3px solid #E4E4EE;">
+        <div class="entity-name">Default Task</div>
+        <div class="entity-type">No toggles</div>
+      </div>
+      <div class="fields">
+        <div class="behavior-note">
+          <div class="note-title">Active fields</div>
+          text · project · stars · recurring · draft<br><br>
+          <strong>Rendering:</strong> Project group on Today feed. Checked off = done. Recurring resets daily. Draft = muted at bottom.
+        </div>
+      </div>
+    </div>
+
+    <!-- Anchor -->
+    <div class="entity" style="border-color: rgba(245,158,11,0.3);">
+      <div class="entity-header" style="border-left: 3px solid #F59E0B;">
+        <div class="entity-name">⚓ Anchor</div>
+        <div class="entity-type">anchored = true</div>
+      </div>
+      <div class="fields">
+        <div class="behavior-note">
+          <div class="note-title">Auto-set</div>
+          recurring → true · anchored → true<br>
+          draft → disabled<br><br>
+          <div class="note-title">Unlocked fields</div>
+          deadlineTime · tracksDuration · url<br><br>
+          <strong>Rendering:</strong> Pinned "Anchored" section at bottom of Today. Shows deadline badge. On completion, prompts duration if tracksDuration is on. URL shows tap-to-open icon.
+        </div>
+      </div>
+    </div>
+
+    <!-- Challenge -->
+    <div class="entity" style="border-color: rgba(99,91,255,0.3);">
+      <div class="entity-header" style="border-left: 3px solid #635BFF;">
+        <div class="entity-name">⚡ Challenge</div>
+        <div class="entity-type">challengeTarget ≠ null</div>
+      </div>
+      <div class="fields">
+        <div class="behavior-note">
+          <div class="note-title">Exclusive fields</div>
+          challengeTarget · challengeTimeframe · challengeStartDate<br><br>
+          <div class="note-title">Progress tracking</div>
+          Count of DailyTaskCompletion records within the timeframe window vs. challengeTarget.<br><br>
+          <strong>Rendering:</strong> Normal position in project group (or anchored section if also anchored). Shows progress ring or "3/5" fraction. Can coexist with anchor toggle.
+        </div>
+      </div>
+    </div>
+
+    <!-- Challenge timeframe enum -->
+    <div class="span-3">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 8px;">
+        <div class="behavior-note">
+          <div class="note-title">challengeTimeframe enum values</div>
+          <strong>daily</strong> — reset every day (e.g. "read 3 chapters today")<br>
+          <strong>weekly</strong> — Monday to Sunday window (e.g. "meditate 5x this week")<br>
+          <strong>monthly</strong> — calendar month (e.g. "run 20x this month")<br>
+          <strong>custom</strong> — fixed duration from challengeStartDate (future consideration)
+        </div>
+        <div class="behavior-note">
+          <div class="note-title">Duration tracking flow</div>
+          When <strong>tracksDuration = true</strong> and a task is completed:<br>
+          1. Completion card appears (same as current spec)<br>
+          2. Below the follow-up input, a duration prompt: "How long?" with quick-pick buttons (5m, 15m, 30m, 1h) or manual entry<br>
+          3. Duration saved to the <strong>DailyTaskCompletion.duration</strong> field<br>
+          4. Aggregated into Weekly Snapshot's totalDuration
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end diagram -->
+
+</div>
+</body>
+</html>
