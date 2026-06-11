@@ -6,6 +6,7 @@
 import Foundation
 import SwiftData
 import Observation
+import KodaiCore
 
 #if os(iOS)
 import UIKit
@@ -35,13 +36,13 @@ final class ChatViewModel {
     var selectedMode: OutputMode = .chat {
         didSet {
             if selectedMode != oldValue {
-                kodai.configure(instructions: buildInstructions(), chatID: selectedChat?.id)
+                backend.configure(instructions: buildInstructions(), chatID: selectedChat?.id)
             }
         }
     }
     var estimatedContextPercent: Int = 0
 
-    private let kodai = KodaiModel()
+    private let backend = FoundationModelsBackend()
     let telemetryStore = TelemetryStore()
 
     private var responseTask: Task<Void, Never>?
@@ -58,7 +59,7 @@ final class ChatViewModel {
     }
 
     var chatTelemetry: ChatTelemetry {
-        let activeTokens = Int(Double(estimatedContextPercent) / 100.0 * Double(KodaiModel.contextWindowTokenLimit))
+        let activeTokens = Int(Double(estimatedContextPercent) / 100.0 * Double(FoundationModelsBackend.contextWindowTokenLimit))
         let summaryAge = max(0, messages.count - 1)
 
         let allMetrics = messages.compactMap { $0.metrics }
@@ -85,7 +86,7 @@ final class ChatViewModel {
         return ChatTelemetry(
             contextPercent: estimatedContextPercent,
             activeTokens: activeTokens,
-            contextWindowSize: KodaiModel.contextWindowTokenLimit,
+            contextWindowSize: FoundationModelsBackend.contextWindowTokenLimit,
             messageCount: messages.count,
             summaryAge: summaryAge,
             failureCount: allMetrics.filter { $0.phase == "No response" }.count,
@@ -112,7 +113,7 @@ final class ChatViewModel {
             stopGeneration()
         }
 
-        kodai.reset()
+        backend.reset()
 
         let session = makeStoredChatSession(context: context)
         selectedChat = session
@@ -123,7 +124,7 @@ final class ChatViewModel {
 
         inputText = ""
         selectedMode = .chat
-        kodai.configure(instructions: buildInstructions(), chatID: session.id)
+        backend.configure(instructions: buildInstructions(), chatID: session.id)
         estimatedContextPercent = estimatedCurrentContextPercent()
         saveModelContext(context)
 
@@ -138,7 +139,7 @@ final class ChatViewModel {
         selectedChat = session
         messages = messagesForSession(session)
         inputText = ""
-        kodai.switchToChat(session.id, instructions: buildInstructions())
+        backend.switchToChat(session.id, instructions: buildInstructions())
         estimatedContextPercent = estimatedCurrentContextPercent()
     }
 
@@ -168,7 +169,7 @@ final class ChatViewModel {
 
         let wasSelected = selectedChat?.id == session.id
 
-        kodai.evictSession(for: session.id)
+        backend.evictSession(for: session.id)
         context.delete(session)
         saveModelContext(context)
 
@@ -177,7 +178,7 @@ final class ChatViewModel {
                 selectChat(fallbackChat)
             } else {
                 selectedChat = nil
-                kodai.reset()
+                backend.reset()
                 messages = [
                     ChatMessage(role: .assistant, text: "What are we building today?")
                 ]
@@ -211,12 +212,12 @@ final class ChatViewModel {
         } else {
             let wasSelectedInStream = stream.sessions.contains { $0.id == selectedChat?.id }
             for session in stream.sessions {
-                kodai.evictSession(for: session.id)
+                backend.evictSession(for: session.id)
                 context.delete(session)
             }
             if wasSelectedInStream {
                 selectedChat = nil
-                kodai.reset()
+                backend.reset()
                 messages = [
                     ChatMessage(role: .assistant, text: "What are we building today?")
                 ]
@@ -244,13 +245,14 @@ final class ChatViewModel {
     }
 
     func resetSession() {
-        kodai.configure(instructions: buildInstructions(), chatID: selectedChat?.id)
+        backend.configure(instructions: buildInstructions(), chatID: selectedChat?.id)
         estimatedContextPercent = estimatedCurrentContextPercent()
     }
 
     func stopGeneration() {
         responseTask?.cancel()
         responseTask = nil
+        backend.cancel()
         metricsTask?.cancel()
         metricsTask = nil
 
@@ -320,45 +322,55 @@ final class ChatViewModel {
         estimatedContextPercent = estimatedCurrentContextPercent()
         telemetryStore.emit(.contextChecked, to: reqID)
 
-        startMetricsTicker(
-            assistantID: assistantID,
-            startedAt: startedAt
-        )
+        startMetricsTicker(assistantID: assistantID, startedAt: startedAt)
 
         telemetryStore.emit(.modelPrefillStarted, to: reqID)
 
-        let finalText = await kodai.streamResponse(
-            to: cleanInput
-        ) { [weak self] partialText in
-            guard let self else { return }
+        // Consume the inference stream.
+        var finalText = ""
+        var wasCancelled = false
 
-            let now = Date()
-            if self.activeFirstTokenAt == nil && !partialText.isEmpty {
-                self.activeFirstTokenAt = now
-                self.telemetryStore.emit(.firstTokenReceived, to: reqID)
+        for await event in backend.stream(prompt: cleanInput, instructions: buildInstructions()) {
+            switch event {
+            case .phase(_):
+                break
+
+            case .token(let text):
+                let now = Date()
+                if activeFirstTokenAt == nil && !text.isEmpty {
+                    activeFirstTokenAt = now
+                    telemetryStore.emit(.firstTokenReceived, to: reqID)
+                }
+                if !text.isEmpty {
+                    activeLastTokenAt = now
+                    telemetryStore.emit(.tokenReceived, to: reqID)
+                }
+
+                let phase = text.isEmpty ? "Thinking" : "Generating"
+                if let index = messages.firstIndex(where: { $0.id == assistantID }) {
+                    messages[index].text = text
+                }
+                updateMessageMetrics(assistantID: assistantID, phase: phase, startedAt: startedAt)
+
+            case .completed(let result):
+                finalText = result.fullText
+
+            case .cancelled:
+                wasCancelled = true
+
+            case .error(let err):
+                let message = "Kodai model error: \(err.localizedDescription)"
+                if let index = messages.firstIndex(where: { $0.id == assistantID }),
+                   messages[index].text.isEmpty {
+                    messages[index].text = message
+                }
             }
-            if !partialText.isEmpty {
-                self.activeLastTokenAt = now
-                self.telemetryStore.emit(.tokenReceived, to: reqID)
-            }
-
-            let phase = partialText.isEmpty ? "Thinking" : "Generating"
-
-            if let index = self.messages.firstIndex(where: { $0.id == assistantID }) {
-                self.messages[index].text = partialText
-            }
-
-            self.updateMessageMetrics(
-                assistantID: assistantID,
-                phase: phase,
-                startedAt: startedAt
-            )
         }
 
         metricsTask?.cancel()
         metricsTask = nil
 
-        if Task.isCancelled {
+        if Task.isCancelled || wasCancelled {
             finishStoppedMessage(assistantID: assistantID, startedAt: startedAt)
         } else if finalText.isEmpty {
             if let index = messages.firstIndex(where: { $0.id == assistantID }),
@@ -366,11 +378,7 @@ final class ChatViewModel {
                 messages[index].text = "No response."
             }
 
-            updateMessageMetrics(
-                assistantID: assistantID,
-                phase: "No response",
-                startedAt: startedAt
-            )
+            updateMessageMetrics(assistantID: assistantID, phase: "No response", startedAt: startedAt)
             telemetryStore.emit(.responseFailed, to: reqID)
             if let idx = messages.firstIndex(where: { $0.id == assistantID }),
                let m = messages[idx].metrics {
@@ -386,11 +394,7 @@ final class ChatViewModel {
                 messages[index].text = finalText
             }
 
-            updateMessageMetrics(
-                assistantID: assistantID,
-                phase: "Generated",
-                startedAt: startedAt
-            )
+            updateMessageMetrics(assistantID: assistantID, phase: "Generated", startedAt: startedAt)
             telemetryStore.emit(.responseFinished, to: reqID)
             if let idx = messages.firstIndex(where: { $0.id == assistantID }),
                let m = messages[idx].metrics {
@@ -425,7 +429,7 @@ final class ChatViewModel {
 
         let session = makeStoredChatSession(context: context)
         selectedChat = session
-        kodai.bindChatID(session.id)
+        backend.bindChatID(session.id)
         saveModelContext(context)
         return session
     }
@@ -623,7 +627,7 @@ final class ChatViewModel {
         }
 
         let contextTokens = estimatedTokenCount(contextText)
-        let percent = (Double(contextTokens) / Double(KodaiModel.contextWindowTokenLimit)) * 100.0
+        let percent = (Double(contextTokens) / Double(FoundationModelsBackend.contextWindowTokenLimit)) * 100.0
 
         return min(100, max(0, Int(percent.rounded())))
     }
