@@ -358,6 +358,12 @@ final class ChatViewModel {
         saveModelContext(context)
     }
 
+    func updateTaskDueDate(_ task: KodaiTask, dueDate: Date?, context: ModelContext) {
+        task.dueDate = dueDate
+        task.updatedAt = .now
+        saveModelContext(context)
+    }
+
     // MARK: – Summary
 
     func triggerSessionSummary(context: ModelContext) {

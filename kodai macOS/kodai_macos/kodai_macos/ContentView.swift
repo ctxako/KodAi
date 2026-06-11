@@ -65,8 +65,8 @@ struct ContentView: View {
                         onGenerateSummary: {
                             viewModel.generateProjectSummary(project, context: modelContext)
                         },
-                        onCreateTask: { title, notes, priority in
-                            viewModel.createTask(in: project, title: title, notes: notes, priority: priority, context: modelContext)
+                        onCreateTask: { title, notes, priority, dueDate in
+                            viewModel.createTask(in: project, title: title, notes: notes, priority: priority, dueDate: dueDate, context: modelContext)
                         },
                         onToggleTask: { task in
                             viewModel.toggleTask(task, context: modelContext)
@@ -76,6 +76,9 @@ struct ContentView: View {
                         },
                         onRenameTask: { task, title in
                             viewModel.renameTask(task, title: title, context: modelContext)
+                        },
+                        onUpdateTaskDueDate: { task, dueDate in
+                            viewModel.updateTaskDueDate(task, dueDate: dueDate, context: modelContext)
                         }
                     )
                 }

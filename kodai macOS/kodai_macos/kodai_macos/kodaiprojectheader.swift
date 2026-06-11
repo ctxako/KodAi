@@ -12,10 +12,11 @@ struct KodaiProjectHeader: View {
     let isGenerating: Bool
     let onUpdateSummary: (String) -> Void
     let onGenerateSummary: () -> Void
-    let onCreateTask: (String, String, TaskPriority) -> Void
+    let onCreateTask: (String, String, TaskPriority, Date?) -> Void
     let onToggleTask: (KodaiTask) -> Void
     let onDeleteTask: (KodaiTask) -> Void
     let onRenameTask: (KodaiTask, String) -> Void
+    let onUpdateTaskDueDate: (KodaiTask, Date?) -> Void
 
     @State private var editingSummary = false
     @State private var summaryDraft = ""
@@ -25,9 +26,12 @@ struct KodaiProjectHeader: View {
     @State private var showAddTask = false
     @State private var newTaskTitle = ""
     @State private var newTaskPriority: TaskPriority = .medium
+    @State private var newTaskDueDate: Date? = nil
+    @State private var showNewTaskDatePicker = false
     @State private var hoveredTaskID: UUID? = nil
     @State private var editingTaskID: UUID? = nil
     @State private var editingTaskTitle = ""
+    @State private var dueDatePopoverTaskID: UUID? = nil
     @FocusState private var addTaskFocused: Bool
     @FocusState private var renameTaskFocused: Bool
 
@@ -42,6 +46,12 @@ struct KodaiProjectHeader: View {
         let f = DateFormatter()
         f.dateStyle = .short
         f.timeStyle = .none
+        return f
+    }()
+
+    private static let dueDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM d"
         return f
     }()
 
@@ -156,6 +166,10 @@ struct KodaiProjectHeader: View {
                 .lineLimit(1)
 
             statusBadge
+
+            if let deadline = project.deadline {
+                deadlineBadge(deadline)
+            }
 
             Spacer()
 
@@ -311,44 +325,90 @@ struct KodaiProjectHeader: View {
     }
 
     private var addTaskRow: some View {
-        HStack(spacing: 8) {
-            TextField("Task title", text: $newTaskTitle)
-                .font(.system(size: 12, weight: .regular, design: .rounded))
-                .textFieldStyle(.plain)
-                .foregroundStyle(.white.opacity(0.9))
-                .focused($addTaskFocused)
-                .onSubmit { commitAddTask() }
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                TextField("Task title", text: $newTaskTitle)
+                    .font(.system(size: 12, weight: .regular, design: .rounded))
+                    .textFieldStyle(.plain)
+                    .foregroundStyle(.white.opacity(0.9))
+                    .focused($addTaskFocused)
+                    .onSubmit { commitAddTask() }
 
-            Menu {
-                Button("High") { newTaskPriority = .high }
-                Button("Medium") { newTaskPriority = .medium }
-                Button("Low") { newTaskPriority = .low }
-            } label: {
-                HStack(spacing: 3) {
-                    Circle()
-                        .fill(priorityColor(newTaskPriority))
-                        .frame(width: 6, height: 6)
-                    Text(newTaskPriority.rawValue.prefix(1).uppercased())
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.75))
+                Menu {
+                    Button("High") { newTaskPriority = .high }
+                    Button("Medium") { newTaskPriority = .medium }
+                    Button("Low") { newTaskPriority = .low }
+                } label: {
+                    HStack(spacing: 3) {
+                        Circle()
+                            .fill(priorityColor(newTaskPriority))
+                            .frame(width: 6, height: 6)
+                        Text(newTaskPriority.rawValue.prefix(1).uppercased())
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.75))
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(.white.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                 }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(.white.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .buttonStyle(.plain)
+
+                Button {
+                    withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
+                        showNewTaskDatePicker.toggle()
+                        if !showNewTaskDatePicker { newTaskDueDate = nil }
+                        else if newTaskDueDate == nil { newTaskDueDate = Calendar.current.startOfDay(for: Date()) }
+                    }
+                } label: {
+                    Image(systemName: newTaskDueDate != nil ? "calendar.badge.checkmark" : "calendar")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(newTaskDueDate != nil ? .blue.opacity(0.85) : .white.opacity(0.35))
+                }
+                .buttonStyle(.plain)
+                .help("Set due date")
+
+                Button("Add") { commitAddTask() }
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .buttonStyle(.plain)
+                    .disabled(newTaskTitle.trimmingCharacters(in: .whitespaces).isEmpty)
+
+                Button("Cancel") { cancelAddTask() }
+                    .font(.system(size: 11, weight: .regular, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.35))
+                    .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
 
-            Button("Add") { commitAddTask() }
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.7))
-                .buttonStyle(.plain)
-                .disabled(newTaskTitle.trimmingCharacters(in: .whitespaces).isEmpty)
+            if showNewTaskDatePicker {
+                HStack(spacing: 6) {
+                    DatePicker(
+                        "",
+                        selection: Binding(
+                            get: { newTaskDueDate ?? Calendar.current.startOfDay(for: Date()) },
+                            set: { newTaskDueDate = $0 }
+                        ),
+                        in: Date()...,
+                        displayedComponents: .date
+                    )
+                    .datePickerStyle(.compact)
+                    .labelsHidden()
+                    .colorScheme(.dark)
 
-            Button("Cancel") { cancelAddTask() }
-                .font(.system(size: 11, weight: .regular, design: .rounded))
-                .foregroundStyle(.white.opacity(0.35))
-                .buttonStyle(.plain)
+                    Button {
+                        newTaskDueDate = nil
+                        showNewTaskDatePicker = false
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.35))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Clear due date")
+                }
+                .padding(.leading, 2)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
@@ -384,6 +444,9 @@ struct KodaiProjectHeader: View {
 
             if !task.isCompleted {
                 priorityBadge(task.priority)
+                if let dueDate = task.dueDate {
+                    dueDateBadge(dueDate, completed: false)
+                }
             } else if let completedAt = task.completedAt {
                 Text(Self.completedFormatter.string(from: completedAt))
                     .font(.system(size: 10, weight: .regular, design: .rounded))
@@ -391,6 +454,23 @@ struct KodaiProjectHeader: View {
             }
 
             Spacer()
+
+            if hoveredTaskID == task.id && !task.isCompleted {
+                Button {
+                    dueDatePopoverTaskID = task.id
+                } label: {
+                    Image(systemName: task.dueDate != nil ? "calendar.badge.checkmark" : "calendar")
+                        .font(.system(size: 11))
+                        .foregroundStyle(task.dueDate != nil ? .blue.opacity(0.7) : .white.opacity(0.35))
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: Binding(
+                    get: { dueDatePopoverTaskID == task.id },
+                    set: { if !$0 { dueDatePopoverTaskID = nil } }
+                ), arrowEdge: .bottom) {
+                    dueDatePopover(for: task)
+                }
+            }
 
             Button {
                 onDeleteTask(task)
@@ -411,11 +491,59 @@ struct KodaiProjectHeader: View {
                 onToggleTask(task)
             }
             Button("Rename") { beginTaskRename(task) }
+            if !task.isCompleted {
+                Button(task.dueDate == nil ? "Set due date" : "Edit due date") {
+                    dueDatePopoverTaskID = task.id
+                }
+                if task.dueDate != nil {
+                    Button("Clear due date") { onUpdateTaskDueDate(task, nil) }
+                }
+            }
             Divider()
             Button(role: .destructive) { onDeleteTask(task) } label: {
                 Text("Delete")
             }
         }
+    }
+
+    private func dueDatePopover(for task: KodaiTask) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Due date")
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            DatePicker(
+                "",
+                selection: Binding(
+                    get: { task.dueDate ?? Calendar.current.startOfDay(for: Date()) },
+                    set: { onUpdateTaskDueDate(task, $0) }
+                ),
+                displayedComponents: .date
+            )
+            .datePickerStyle(.graphical)
+            .labelsHidden()
+            .frame(maxWidth: 260)
+
+            HStack {
+                Spacer()
+                if task.dueDate != nil {
+                    Button("Clear") {
+                        onUpdateTaskDueDate(task, nil)
+                        dueDatePopoverTaskID = nil
+                    }
+                    .font(.system(size: 11, weight: .regular, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .buttonStyle(.plain)
+                }
+                Button("Done") {
+                    dueDatePopoverTaskID = nil
+                }
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .frame(minWidth: 260)
     }
 
     // MARK: – Chips and badges
@@ -448,6 +576,47 @@ struct KodaiProjectHeader: View {
             .frame(width: 14, height: 13)
             .background(color.opacity(0.15))
             .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func dueDateBadge(_ dueDate: Date, completed: Bool) -> some View {
+        let overdue = !completed && dueDate < Calendar.current.startOfDay(for: Date())
+        let label = overdue ? overdueLabel(dueDate) : Self.dueDateFormatter.string(from: dueDate)
+        let color: Color = overdue ? .red : .white.opacity(0.45)
+
+        Text(label)
+            .font(.system(size: 9, weight: overdue ? .semibold : .regular, design: .rounded))
+            .foregroundStyle(color)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(overdue ? Color.red.opacity(0.12) : Color.white.opacity(0.07))
+            .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+    }
+
+    private func overdueLabel(_ dueDate: Date) -> String {
+        let days = Calendar.current.dateComponents([.day], from: dueDate, to: Date()).day ?? 0
+        if days <= 0 { return "overdue" }
+        if days == 1 { return "1d overdue" }
+        return "\(days)d overdue"
+    }
+
+    @ViewBuilder
+    private func deadlineBadge(_ deadline: Date) -> some View {
+        let isPast = deadline < Date()
+        let label = Self.dueDateFormatter.string(from: deadline)
+        let color: Color = isPast ? .red.opacity(0.8) : .orange.opacity(0.75)
+
+        HStack(spacing: 3) {
+            Image(systemName: "flag.fill")
+                .font(.system(size: 8, weight: .medium))
+            Text(label)
+                .font(.system(size: 9, weight: .medium, design: .rounded))
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2)
+        .background(color.opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
     }
 
     // MARK: – Helpers
@@ -498,15 +667,19 @@ struct KodaiProjectHeader: View {
     private func commitAddTask() {
         let title = newTaskTitle.trimmingCharacters(in: .whitespaces)
         guard !title.isEmpty else { return }
-        onCreateTask(title, "", newTaskPriority)
+        onCreateTask(title, "", newTaskPriority, newTaskDueDate)
         newTaskTitle = ""
         newTaskPriority = .medium
+        newTaskDueDate = nil
+        showNewTaskDatePicker = false
         showAddTask = false
     }
 
     private func cancelAddTask() {
         newTaskTitle = ""
         newTaskPriority = .medium
+        newTaskDueDate = nil
+        showNewTaskDatePicker = false
         showAddTask = false
     }
 }
