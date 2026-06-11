@@ -138,6 +138,7 @@ struct ContentView: View {
             chatSessions: chatSessions,
             streams: streams,
             projects: projects,
+            todaysTasks: viewModel.todaysTasks(from: projects),
             selectedChatID: viewModel.selectedChat?.id,
             telemetryStore: viewModel.telemetryStore,
             onRenameChat: { session, newTitle in

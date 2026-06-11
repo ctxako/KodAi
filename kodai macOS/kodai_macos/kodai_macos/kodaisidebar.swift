@@ -19,6 +19,7 @@ struct KodaiSidebar: View {
     let chatSessions: [KodaiChatSession]
     let streams: [KodaiStream]
     let projects: [KodaiProject]
+    let todaysTasks: [KodaiTask]
     let selectedChatID: UUID?
     let telemetryStore: TelemetryStore
 
@@ -79,6 +80,12 @@ struct KodaiSidebar: View {
             }
 
             if sidebarOpen {
+                todaySectionView
+            } else if !todaysTasks.isEmpty {
+                todayCollapsedBadge
+            }
+
+            if sidebarOpen {
                 projectsSection
                 streamsSection
                 chatHistorySection
@@ -131,6 +138,152 @@ struct KodaiSidebar: View {
                 projectPendingDelete = nil
             }
             Button("Cancel", role: .cancel) { projectPendingDelete = nil }
+        }
+    }
+
+    // MARK: – Today
+
+    private var todaySectionView: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Divider()
+                .opacity(0.25)
+                .padding(.vertical, 4)
+
+            Text("Today")
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+
+            todayTasksContent
+        }
+    }
+
+    @ViewBuilder
+    private var todayTasksContent: some View {
+        if todaysTasks.isEmpty {
+            if projects.contains(where: { $0.status == .active }) {
+                Text("Nothing due today")
+                    .font(.system(size: 12, weight: .regular, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.32))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+            }
+        } else if todaysTasks.count <= 5 {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(todaysTasks, id: \.id) { task in
+                    todayTaskRow(task)
+                }
+            }
+        } else {
+            ScrollView(showsIndicators: false) {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    ForEach(todaysTasks, id: \.id) { task in
+                        todayTaskRow(task)
+                    }
+                }
+            }
+            .frame(maxHeight: 170)
+        }
+    }
+
+    private var todayCollapsedBadge: some View {
+        let hasOverdue = todaysTasks.contains {
+            guard let due = $0.dueDate else { return false }
+            return due < Calendar.current.startOfDay(for: Date())
+        }
+        return ZStack(alignment: .topTrailing) {
+            Image(systemName: "calendar")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.white.opacity(0.72))
+                .frame(width: 34, height: 34)
+                .background(.white.opacity(0.065))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            Text(todaysTasks.count > 9 ? "9+" : "\(todaysTasks.count)")
+                .font(.system(size: 9, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(hasOverdue ? Color.red.opacity(0.75) : Color.white.opacity(0.45))
+                .clipShape(Capsule())
+                .offset(x: 6, y: -4)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                sidebarOpen = true
+            }
+        }
+    }
+
+    private func todayTaskRow(_ task: KodaiTask) -> some View {
+        let startOfToday = Calendar.current.startOfDay(for: Date())
+        let overdue = task.dueDate.map { $0 < startOfToday } ?? false
+
+        return Button {
+            selectTodayTask(task)
+        } label: {
+            HStack(alignment: .center, spacing: 8) {
+                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                    .fill(overdue ? Color.red.opacity(0.55) : Color.white.opacity(0.2))
+                    .frame(width: 3, height: 28)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(task.title)
+                        .font(.system(size: 12, weight: .regular, design: .rounded))
+                        .foregroundStyle(.white.opacity(overdue ? 0.88 : 0.76))
+                        .lineLimit(1)
+
+                    HStack(spacing: 4) {
+                        if let projTitle = task.project?.title {
+                            Text(projTitle)
+                                .font(.system(size: 10, weight: .regular, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.36))
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                        Text(taskDueLabel(task, startOfToday: startOfToday))
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .foregroundStyle(overdue ? Color.red.opacity(0.68) : Color.white.opacity(0.40))
+                    }
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, 4)
+            .padding(.trailing, 8)
+            .padding(.vertical, 4)
+            .frame(minHeight: 36)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func taskDueLabel(_ task: KodaiTask, startOfToday: Date) -> String {
+        guard let due = task.dueDate else { return "" }
+        if due < startOfToday {
+            let days = Calendar.current.dateComponents(
+                [.day],
+                from: Calendar.current.startOfDay(for: due),
+                to: startOfToday
+            ).day ?? 0
+            if days == 1 { return "yesterday" }
+            if days > 1 { return "\(days)d overdue" }
+            return "overdue"
+        }
+        return "today"
+    }
+
+    private func selectTodayTask(_ task: KodaiTask) {
+        guard let project = task.project else { return }
+        let sorted = project.sessions.sorted { $0.updatedAt > $1.updatedAt }
+        if let latest = sorted.first {
+            onSelectChat(latest)
+        } else {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.84)) {
+                projectsExpanded = true
+                expandedProjectIDs.insert(project.id)
+            }
         }
     }
 
