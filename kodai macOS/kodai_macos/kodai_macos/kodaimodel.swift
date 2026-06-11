@@ -2,12 +2,6 @@
 //  kodaimodel.swift
 //  kodai_macos
 //
-//  Created by Charles Thomas Xavier Austin III on 6/9/26.
-//
-//
-//  KodaiModel.swift
-//  kodai_macos
-//
 
 import Foundation
 import FoundationModels
@@ -15,13 +9,64 @@ import FoundationModels
 @MainActor
 @Observable
 final class KodaiModel {
+    // Single source of truth for the estimated context window size (chars / 4 ≈ tokens).
+    static let contextWindowTokenLimit = 4096
+
     private let model = SystemLanguageModel.default
-    private var session: LanguageModelSession?
+    private var currentSession: LanguageModelSession?
+    private var currentChatID: UUID?
+    // Per-chat session cache so history survives chat switches within a session.
+    private var sessionCache: [UUID: LanguageModelSession] = [:]
     private var currentInstructions = ""
 
-    func configure(instructions: String) {
+    /// Create a fresh session with new instructions (e.g. mode change).
+    /// Updates the cache entry for the current chat if one is set.
+    func configure(instructions: String, chatID: UUID? = nil) {
         currentInstructions = instructions
-        session = LanguageModelSession(instructions: instructions)
+        let resolvedID = chatID ?? currentChatID
+        currentChatID = resolvedID
+        let session = LanguageModelSession(instructions: instructions)
+        currentSession = session
+        if let id = resolvedID {
+            sessionCache[id] = session
+        }
+    }
+
+    /// Restore or create a session for a specific chat.
+    /// If the chat already has a cached session it is reused (history preserved).
+    func switchToChat(_ chatID: UUID, instructions: String) {
+        currentInstructions = instructions
+        currentChatID = chatID
+        if let cached = sessionCache[chatID] {
+            currentSession = cached
+        } else {
+            let session = LanguageModelSession(instructions: instructions)
+            currentSession = session
+            sessionCache[chatID] = session
+        }
+    }
+
+    /// Bind an existing (unkeyed) session to a newly-assigned chat UUID.
+    func bindChatID(_ chatID: UUID) {
+        currentChatID = chatID
+        if let session = currentSession {
+            sessionCache[chatID] = session
+        }
+    }
+
+    /// Remove a deleted chat's session from the cache.
+    func evictSession(for chatID: UUID) {
+        sessionCache.removeValue(forKey: chatID)
+        if currentChatID == chatID {
+            currentSession = nil
+            currentChatID = nil
+        }
+    }
+
+    /// Drop the current session without touching the cache (used on full reset).
+    func reset() {
+        currentSession = nil
+        currentChatID = nil
     }
 
     func streamResponse(
@@ -49,12 +94,16 @@ final class KodaiModel {
             return message
         }
 
-        if session == nil {
-            session = LanguageModelSession(instructions: currentInstructions)
+        if currentSession == nil {
+            let session = LanguageModelSession(instructions: currentInstructions)
+            currentSession = session
+            if let id = currentChatID {
+                sessionCache[id] = session
+            }
         }
 
         do {
-            let stream = session!.streamResponse(to: input)
+            let stream = currentSession!.streamResponse(to: input)
 
             var finalText = ""
             var lastUIUpdate = Date.distantPast
@@ -65,7 +114,6 @@ final class KodaiModel {
                 let text = partial.content.trimmingCharacters(in: .whitespacesAndNewlines)
                 finalText = text
 
-                // Avoid redrawing SwiftUI for every tiny chunk.
                 let now = Date()
                 if now.timeIntervalSince(lastUIUpdate) >= 0.035 {
                     onPartial(text)
@@ -84,9 +132,5 @@ final class KodaiModel {
             onPartial(message)
             return message
         }
-    }
-
-    func reset() {
-        session = nil
     }
 }

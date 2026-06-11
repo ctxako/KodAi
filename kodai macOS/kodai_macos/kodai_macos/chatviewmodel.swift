@@ -35,7 +35,7 @@ final class ChatViewModel {
     var selectedMode: OutputMode = .chat {
         didSet {
             if selectedMode != oldValue {
-                kodai.configure(instructions: buildInstructions())
+                kodai.configure(instructions: buildInstructions(), chatID: selectedChat?.id)
             }
         }
     }
@@ -53,14 +53,12 @@ final class ChatViewModel {
     private var activeLastTokenAt: Date?
     private var activePromptTokens: Int = 0
 
-    private let estimatedContextWindowTokenLimit = 4096
-
     var lastAssistantMessage: String {
         messages.reversed().first { $0.role == .assistant }?.text ?? ""
     }
 
     var chatTelemetry: ChatTelemetry {
-        let activeTokens = Int(Double(estimatedContextPercent) / 100.0 * Double(estimatedContextWindowTokenLimit))
+        let activeTokens = Int(Double(estimatedContextPercent) / 100.0 * Double(KodaiModel.contextWindowTokenLimit))
         let summaryAge = max(0, messages.count - 1)
 
         let allMetrics = messages.compactMap { $0.metrics }
@@ -87,7 +85,7 @@ final class ChatViewModel {
         return ChatTelemetry(
             contextPercent: estimatedContextPercent,
             activeTokens: activeTokens,
-            contextWindowSize: estimatedContextWindowTokenLimit,
+            contextWindowSize: KodaiModel.contextWindowTokenLimit,
             messageCount: messages.count,
             summaryAge: summaryAge,
             failureCount: allMetrics.filter { $0.phase == "No response" }.count,
@@ -125,7 +123,7 @@ final class ChatViewModel {
 
         inputText = ""
         selectedMode = .chat
-        kodai.configure(instructions: buildInstructions())
+        kodai.configure(instructions: buildInstructions(), chatID: session.id)
         estimatedContextPercent = estimatedCurrentContextPercent()
         saveModelContext(context)
 
@@ -137,11 +135,10 @@ final class ChatViewModel {
             stopGeneration()
         }
 
-        kodai.reset()
         selectedChat = session
         messages = messagesForSession(session)
         inputText = ""
-        kodai.configure(instructions: buildInstructions())
+        kodai.switchToChat(session.id, instructions: buildInstructions())
         estimatedContextPercent = estimatedCurrentContextPercent()
     }
 
@@ -171,6 +168,7 @@ final class ChatViewModel {
 
         let wasSelected = selectedChat?.id == session.id
 
+        kodai.evictSession(for: session.id)
         context.delete(session)
         saveModelContext(context)
 
@@ -213,6 +211,7 @@ final class ChatViewModel {
         } else {
             let wasSelectedInStream = stream.sessions.contains { $0.id == selectedChat?.id }
             for session in stream.sessions {
+                kodai.evictSession(for: session.id)
                 context.delete(session)
             }
             if wasSelectedInStream {
@@ -245,8 +244,7 @@ final class ChatViewModel {
     }
 
     func resetSession() {
-        kodai.reset()
-        kodai.configure(instructions: buildInstructions())
+        kodai.configure(instructions: buildInstructions(), chatID: selectedChat?.id)
         estimatedContextPercent = estimatedCurrentContextPercent()
     }
 
@@ -295,9 +293,7 @@ final class ChatViewModel {
         activeFirstTokenAt = nil
         activeLastTokenAt = startedAt
 
-        let promptHistory = recentConversationHistory(limit: 15)
         activePromptTokens = estimatedTokenCount(selectedMode.systemPrompt)
-            + estimatedTokenCount(promptHistory)
             + estimatedTokenCount(cleanInput)
         telemetryStore.emit(.promptCounted, to: reqID)
 
@@ -429,6 +425,7 @@ final class ChatViewModel {
 
         let session = makeStoredChatSession(context: context)
         selectedChat = session
+        kodai.bindChatID(session.id)
         saveModelContext(context)
         return session
     }
@@ -626,7 +623,7 @@ final class ChatViewModel {
         }
 
         let contextTokens = estimatedTokenCount(contextText)
-        let percent = (Double(contextTokens) / Double(estimatedContextWindowTokenLimit)) * 100.0
+        let percent = (Double(contextTokens) / Double(KodaiModel.contextWindowTokenLimit)) * 100.0
 
         return min(100, max(0, Int(percent.rounded())))
     }
