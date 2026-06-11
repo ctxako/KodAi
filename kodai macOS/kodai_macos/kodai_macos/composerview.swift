@@ -19,13 +19,23 @@ struct ComposerView: View {
     var body: some View {
         HStack(spacing: 10) {
             VStack(spacing: 0) {
-                Text(telemetry.composerBarText)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .lineLimit(1)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 8) {
+                    Text(telemetry.composerBarText)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .lineLimit(1)
+
+                    Spacer(minLength: 4)
+
+                    ContextArcView(
+                        percent: telemetry.contextPercent,
+                        activeTokens: telemetry.activeTokens,
+                        contextWindowSize: telemetry.contextWindowSize,
+                        color: telemetry.contextRiskColor
+                    )
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
 
                 Rectangle()
                     .fill(.white.opacity(0.08))
@@ -79,5 +89,53 @@ struct ComposerView: View {
         .padding(.horizontal, 16)
         .padding(.top, 12)
         .padding(.bottom, 16)
+    }
+}
+
+private struct ContextArcView: View {
+    let percent: Int
+    let activeTokens: Int
+    let contextWindowSize: Int
+    let color: Color
+
+    @State private var isHovering = false
+    private var fraction: Double { min(Double(percent) / 100.0, 1.0) }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(.white.opacity(0.10), lineWidth: 2)
+
+            Circle()
+                .trim(from: 0, to: fraction)
+                .stroke(
+                    color.opacity(fraction < 0.02 ? 0 : 1),
+                    style: StrokeStyle(lineWidth: 2, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+                .animation(.easeInOut(duration: 0.4), value: fraction)
+        }
+        .frame(width: 18, height: 18)
+        .onHover { isHovering = $0 }
+        .popover(isPresented: $isHovering, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("\(percent)%")
+                    .font(.system(size: 22, weight: .semibold, design: .rounded))
+                    .foregroundStyle(color)
+
+                Text("\(formatCount(activeTokens)) / \(formatCount(contextWindowSize))")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(.ultraThinMaterial)
+            .preferredColorScheme(.dark)
+        }
+    }
+
+    private func formatCount(_ n: Int) -> String {
+        guard n >= 1_000 else { return "\(n)" }
+        return String(format: "%d,%03d", n / 1_000, n % 1_000)
     }
 }

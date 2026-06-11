@@ -37,6 +37,7 @@ final class KodaiChatSession {
     var title: String
     var createdAt: Date
     var updatedAt: Date
+    var stream: KodaiStream?
 
     @Relationship(deleteRule: .cascade, inverse: \KodaiChatMessage.session)
     var messages: [KodaiChatMessage]
@@ -46,12 +47,39 @@ final class KodaiChatSession {
         title: String = "New chat",
         createdAt: Date = .now,
         updatedAt: Date = .now,
+        stream: KodaiStream? = nil,
         messages: [KodaiChatMessage] = []
     ) {
         self.id = id
         self.title = title
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.stream = stream
         self.messages = messages
+    }
+}
+
+@Model
+final class KodaiStream {
+    @Attribute(.unique) var id: UUID
+    var title: String
+    var createdAt: Date
+    var updatedAt: Date
+
+    @Relationship(deleteRule: .nullify, inverse: \KodaiChatSession.stream)
+    var sessions: [KodaiChatSession]
+
+    init(
+        id: UUID = UUID(),
+        title: String = "New stream",
+        createdAt: Date = .now,
+        updatedAt: Date = .now,
+        sessions: [KodaiChatSession] = []
+    ) {
+        self.id = id
+        self.title = title
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.sessions = sessions
     }
 }

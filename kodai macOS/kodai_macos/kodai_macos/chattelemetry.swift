@@ -14,6 +14,8 @@ struct ChatTelemetry {
     let failureCount: Int
     let averageSpeed: Double
     let averageLatency: Double
+    let averageTimeToFirstToken: Double
+    let streamName: String?
 
     var contextRiskColor: Color {
         if contextPercent >= 80 { return .red }
@@ -22,11 +24,11 @@ struct ChatTelemetry {
     }
 
     var composerBarText: String {
-        var parts: [String] = [
-            "\(messageCount) chats",
-            "\(contextPercent)%",
-            "\(formatCount(activeTokens)) / \(formatCount(contextWindowSize))",
-        ]
+        var parts: [String] = []
+        if let streamName {
+            parts.append(streamName)
+        }
+        parts.append("\(messageCount) chats")
         if averageSpeed > 0 {
             parts.append("\(String(format: "%.1f", averageSpeed)) tok/s")
         }

@@ -12,23 +12,33 @@ struct KodaiSidebar: View {
     @Binding var sidebarOpen: Bool
     @Binding var selectedMode: OutputMode
 
+    let isLoading: Bool
     let estimatedContextPercent: Int
-    let lastAssistantMessage: String
 
     let chatSessions: [KodaiChatSession]
+    let streams: [KodaiStream]
     let selectedChatID: UUID?
-    
+    let telemetryStore: TelemetryStore
+
     @State private var editingChat: KodaiChatSession?
     @State private var draftChatTitle = ""
     @State private var showingSettings = false
+    @State private var breathing = false
+
+    @State private var streamsExpanded = true
+    @State private var editingStream: KodaiStream?
+    @State private var draftStreamTitle = ""
+    @State private var streamPendingDelete: KodaiStream?
 
     let onRenameChat: (KodaiChatSession, String) -> Void
     let onDeleteChat: (KodaiChatSession) -> Void
-
     let onNewSession: () -> Void
-    let onCopyLatest: () -> Void
     let onSelectChat: (KodaiChatSession) -> Void
     let onResetSession: () -> Void
+    let onCreateStream: () -> Void
+    let onRenameStream: (KodaiStream, String) -> Void
+    let onDeleteStream: (KodaiStream, Bool) -> Void
+    let onAssignChat: (KodaiChatSession, KodaiStream?) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -48,13 +58,8 @@ struct KodaiSidebar: View {
                 onNewSession()
             }
 
-            sidebarRow("Copy latest", icon: "doc.on.doc") {
-                onCopyLatest()
-            }
-            .disabled(lastAssistantMessage.isEmpty)
-            .opacity(lastAssistantMessage.isEmpty ? 0.45 : 1)
-
             if sidebarOpen {
+                streamsSection
                 chatHistorySection
             }
 
@@ -74,7 +79,243 @@ struct KodaiSidebar: View {
         .padding(.leading, 10)
         .padding(.vertical, 10)
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: sidebarOpen)
+        .confirmationDialog(
+            "Delete \"\(streamPendingDelete?.title ?? "stream")\"?",
+            isPresented: Binding(
+                get: { streamPendingDelete != nil },
+                set: { if !$0 { streamPendingDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Keep threads") {
+                if let stream = streamPendingDelete {
+                    onDeleteStream(stream, true)
+                }
+                streamPendingDelete = nil
+            }
+            Button("Delete everything", role: .destructive) {
+                if let stream = streamPendingDelete {
+                    onDeleteStream(stream, false)
+                }
+                streamPendingDelete = nil
+            }
+            Button("Cancel", role: .cancel) {
+                streamPendingDelete = nil
+            }
+        }
     }
+
+    // MARK: – Streams
+
+    private var streamsSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Divider()
+                .opacity(0.25)
+                .padding(.vertical, 6)
+
+            HStack(spacing: 4) {
+                Text("Streams")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button {
+                    onCreateStream()
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                        streamsExpanded.toggle()
+                    }
+                } label: {
+                    Image(systemName: streamsExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 8)
+
+            if streamsExpanded {
+                if streams.isEmpty {
+                    Text("No streams yet")
+                        .font(.system(size: 13, weight: .regular, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .padding(.horizontal, 8)
+                        .frame(height: 30)
+                } else if streams.count <= 5 {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(streams, id: \.id) { stream in
+                            streamRow(stream)
+                        }
+                    }
+                } else {
+                    ScrollView(showsIndicators: false) {
+                        LazyVStack(alignment: .leading, spacing: 4) {
+                            ForEach(streams, id: \.id) { stream in
+                                streamRow(stream)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 160)
+                }
+            }
+        }
+    }
+
+    private func streamRow(_ stream: KodaiStream) -> some View {
+        let isActive = stream.sessions.contains { $0.id == selectedChatID }
+
+        return HStack(spacing: 10) {
+            Image(systemName: isActive ? "rectangle.stack.fill" : "rectangle.stack")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(isActive ? .white.opacity(0.9) : .white.opacity(0.55))
+                .frame(width: 16)
+
+            Text(stream.title)
+                .font(.system(size: 13, weight: .regular, design: .rounded))
+                .foregroundStyle(isActive ? .white.opacity(0.92) : .white.opacity(0.68))
+                .lineLimit(1)
+
+            Spacer()
+
+            Text("\(stream.sessions.count)")
+                .font(.system(size: 11, weight: .regular, design: .rounded))
+                .foregroundStyle(.white.opacity(0.35))
+        }
+        .padding(.horizontal, 8)
+        .frame(height: 30)
+        .background(isActive ? .white.opacity(0.08) : .clear)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            let sorted = stream.sessions.sorted { $0.updatedAt > $1.updatedAt }
+            if let latest = sorted.first {
+                onSelectChat(latest)
+            }
+        }
+        .simultaneousGesture(
+            TapGesture(count: 2).onEnded {
+                beginEditingStream(stream)
+            }
+        )
+        .dropDestination(for: String.self) { items, _ in
+            guard let uuidString = items.first,
+                  let sessionID = UUID(uuidString: uuidString),
+                  let session = findSession(by: sessionID) else {
+                return false
+            }
+            onAssignChat(session, stream)
+            return true
+        }
+        .contextMenu {
+            Button("Rename") {
+                beginEditingStream(stream)
+            }
+            Button(role: .destructive) {
+                streamPendingDelete = stream
+            } label: {
+                Text("Delete")
+            }
+        }
+        .popover(isPresented: streamEditPopoverBinding(for: stream)) {
+            streamEditPopover(for: stream)
+        }
+    }
+
+    private func beginEditingStream(_ stream: KodaiStream) {
+        editingStream = stream
+        draftStreamTitle = stream.title
+    }
+
+    private func closeEditingStream() {
+        editingStream = nil
+        draftStreamTitle = ""
+    }
+
+    private func streamEditPopoverBinding(for stream: KodaiStream) -> Binding<Bool> {
+        Binding(
+            get: { editingStream?.id == stream.id },
+            set: { if !$0 { closeEditingStream() } }
+        )
+    }
+
+    private func streamEditPopover(for stream: KodaiStream) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Edit stream")
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+
+            TextField("Stream name", text: $draftStreamTitle)
+                .textFieldStyle(.roundedBorder)
+
+            HStack {
+                Button("Cancel") {
+                    closeEditingStream()
+                }
+
+                Spacer()
+
+                Button("Rename") {
+                    onRenameStream(stream, draftStreamTitle)
+                    closeEditingStream()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+
+            Divider()
+
+            Button(role: .destructive) {
+                closeEditingStream()
+                streamPendingDelete = stream
+            } label: {
+                Label("Delete stream", systemImage: "trash")
+            }
+        }
+        .padding(14)
+        .frame(width: 250)
+    }
+
+    // MARK: – Threads
+
+    private var chatHistorySection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Divider()
+                .opacity(0.25)
+                .padding(.vertical, 6)
+
+            Text("Threads")
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+
+            if chatSessions.isEmpty {
+                Text("No chats yet")
+                    .font(.system(size: 13, weight: .regular, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.45))
+                    .padding(.horizontal, 8)
+                    .frame(height: 30)
+            } else {
+                ScrollView(showsIndicators: false) {
+                    LazyVStack(alignment: .leading, spacing: 4) {
+                        ForEach(chatSessions, id: \.id) { session in
+                            sidebarChat(session)
+                        }
+                    }
+                }
+                .layoutPriority(1)
+            }
+        }
+    }
+
+    // MARK: – Chrome
 
     private var sidebarChromeControls: some View {
         HStack {
@@ -102,110 +343,38 @@ struct KodaiSidebar: View {
     }
 
     private var sidebarBrandHeader: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("Kodai")
-                .font(.system(size: 20, weight: .semibold, design: .rounded))
+        ZStack(alignment: .leading) {
+            Circle()
+                .fill(.white)
+                .frame(width: 90, height: 90)
+                .blur(radius: 28)
+                .opacity(breathing ? 0.13 : 0.0)
+                .offset(x: 10, y: 0)
+                .allowsHitTesting(false)
 
-            Text("Local dev assistant")
-                .font(.system(size: 11, weight: .regular, design: .rounded))
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Kodai")
+                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+
+                Text("Local dev assistant")
+                    .font(.system(size: 11, weight: .regular, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(.horizontal, 8)
         .padding(.top, 2)
         .padding(.bottom, 10)
-    }
-
-    private var modeSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Style")
-                .font(.system(size: 12, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
-
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 8),
-                    GridItem(.flexible(), spacing: 8)
-                ],
-                spacing: 8
-            ) {
-                ForEach(OutputMode.allCases, id: \.self) { mode in
-                    modeButton(mode)
+        .onChange(of: isLoading) { _, loading in
+            if loading {
+                withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
+                    breathing = true
                 }
-            }
-        }
-        .padding(.top, 8)
-    }
-
-    private var chatHistorySection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Divider()
-                .opacity(0.25)
-                .padding(.vertical, 6)
-
-            Text("Threads")
-                .font(.system(size: 12, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
-
-            if chatSessions.isEmpty {
-                Text("No chats yet")
-                    .font(.system(size: 13, weight: .regular, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.45))
-                    .padding(.horizontal, 8)
-                    .frame(height: 30)
             } else {
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(alignment: .leading, spacing: 4) {
-                        ForEach(chatSessions, id: \.id) { session in
-                            sidebarChat(session)
-                        }
-                    }
+                withAnimation(.easeInOut(duration: 0.8)) {
+                    breathing = false
                 }
-                .frame(maxHeight: 190)
             }
         }
-    }
-
-    private func modeButton(_ mode: OutputMode) -> some View {
-        Button {
-            selectedMode = mode
-        } label: {
-            VStack(spacing: 6) {
-                Image(systemName: modeIcon(for: mode))
-                    .font(.system(size: 14, weight: .semibold))
-
-                Text(mode.rawValue)
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 58)
-            .foregroundStyle(selectedMode == mode ? .white : .white.opacity(0.70))
-            .background(selectedMode == mode ? .white.opacity(0.16) : .white.opacity(0.055))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(selectedMode == mode ? .white.opacity(0.20) : .white.opacity(0.08), lineWidth: 1)
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var sidebarIconOnlyMode: some View {
-        Button {
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
-                sidebarOpen = true
-            }
-        } label: {
-            Image(systemName: modeIcon(for: selectedMode))
-                .font(.system(size: 14, weight: .semibold))
-                .frame(width: 34, height: 34)
-                .background(.white.opacity(0.07))
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        }
-        .buttonStyle(.plain)
     }
 
     private var sidebarFooter: some View {
@@ -241,6 +410,7 @@ struct KodaiSidebar: View {
         .popover(isPresented: $showingSettings, arrowEdge: .bottom) {
             KodaiSettingsView(
                 selectedMode: $selectedMode,
+                telemetryStore: telemetryStore,
                 onResetSession: {
                     onResetSession()
                     showingSettings = false
@@ -248,9 +418,9 @@ struct KodaiSidebar: View {
             )
         }
     }
-    
-    
-    
+
+    // MARK: – Chat rows
+
     private func beginEditing(_ session: KodaiChatSession) {
         editingChat = session
         draftChatTitle = session.title
@@ -263,14 +433,8 @@ struct KodaiSidebar: View {
 
     private func editPopoverBinding(for session: KodaiChatSession) -> Binding<Bool> {
         Binding(
-            get: {
-                editingChat?.id == session.id
-            },
-            set: { isPresented in
-                if !isPresented {
-                    closeEditing()
-                }
-            }
+            get: { editingChat?.id == session.id },
+            set: { if !$0 { closeEditing() } }
         )
     }
 
@@ -339,11 +503,15 @@ struct KodaiSidebar: View {
     }
 
     private func sidebarChat(_ session: KodaiChatSession) -> some View {
-        HStack(spacing: 10) {
+        let isActiveThread = selectedChatID == session.id
+        let dotPulsing = isActiveThread && isLoading
+
+        return HStack(spacing: 10) {
             Circle()
-                .fill(selectedChatID == session.id ? .white.opacity(0.72) : .clear)
+                .fill(isActiveThread ? .white.opacity(dotPulsing && breathing ? 1.0 : 0.72) : .clear)
                 .stroke(.white.opacity(0.28), lineWidth: 1)
                 .frame(width: 6, height: 6)
+                .scaleEffect(dotPulsing ? (breathing ? 1.4 : 1.0) : 1.0)
 
             Text(session.title)
                 .font(.system(size: 13, weight: .regular, design: .rounded))
@@ -357,6 +525,7 @@ struct KodaiSidebar: View {
         .background(selectedChatID == session.id ? .white.opacity(0.08) : .clear)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .contentShape(Rectangle())
+        .draggable(session.id.uuidString)
         .onTapGesture {
             onSelectChat(session)
         }
@@ -370,6 +539,16 @@ struct KodaiSidebar: View {
                 beginEditing(session)
             }
 
+            if !streams.isEmpty {
+                Menu("Move to Stream") {
+                    ForEach(streams, id: \.id) { stream in
+                        Button(stream.title) {
+                            onAssignChat(session, stream)
+                        }
+                    }
+                }
+            }
+
             Button(role: .destructive) {
                 onDeleteChat(session)
             } label: {
@@ -379,6 +558,12 @@ struct KodaiSidebar: View {
         .popover(isPresented: editPopoverBinding(for: session)) {
             chatEditPopover(for: session)
         }
+    }
+
+    // MARK: – Helpers
+
+    private func findSession(by id: UUID) -> KodaiChatSession? {
+        chatSessions.first { $0.id == id }
     }
 
     private func modeIcon(for mode: OutputMode) -> String {

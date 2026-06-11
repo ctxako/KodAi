@@ -13,6 +13,12 @@ import UIKit
 import AppKit
 #endif
 
+private let userProfile = """
+You are Kodai, a private on-device assistant for Charles.
+Charles is a developer building Kodai, a macOS AI assistant app using Swift, SwiftUI, and Apple's Foundation Models framework.
+He prefers short, practical responses. Don't over-explain unless asked.
+"""
+
 @MainActor
 @Observable
 final class ChatViewModel {
@@ -26,10 +32,17 @@ final class ChatViewModel {
 
     var selectedChat: KodaiChatSession?
     var isLoading = false
-    var selectedMode: OutputMode = .chat
+    var selectedMode: OutputMode = .chat {
+        didSet {
+            if selectedMode != oldValue {
+                kodai.configure(instructions: buildInstructions())
+            }
+        }
+    }
     var estimatedContextPercent: Int = 0
 
     private let kodai = KodaiModel()
+    let telemetryStore = TelemetryStore()
 
     private var responseTask: Task<Void, Never>?
     private var metricsTask: Task<Void, Never>?
@@ -44,6 +57,45 @@ final class ChatViewModel {
 
     var lastAssistantMessage: String {
         messages.reversed().first { $0.role == .assistant }?.text ?? ""
+    }
+
+    var chatTelemetry: ChatTelemetry {
+        let activeTokens = Int(Double(estimatedContextPercent) / 100.0 * Double(estimatedContextWindowTokenLimit))
+        let summaryAge = max(0, messages.count - 1)
+
+        let allMetrics = messages.compactMap { $0.metrics }
+        let generatedMetrics = allMetrics.filter { $0.phase == "Generated" }
+
+        let avgSpeed: Double = {
+            let speeds = generatedMetrics.map { $0.tokensPerSecond }.filter { $0 > 0 }
+            guard !speeds.isEmpty else { return 0 }
+            return speeds.reduce(0, +) / Double(speeds.count)
+        }()
+
+        let avgLatency: Double = {
+            let latencies = generatedMetrics.map { $0.totalLatency }
+            guard !latencies.isEmpty else { return 0 }
+            return latencies.reduce(0, +) / Double(latencies.count)
+        }()
+
+        let avgTTFT: Double = {
+            let ttfts = generatedMetrics.compactMap { $0.timeToFirstToken }
+            guard !ttfts.isEmpty else { return 0 }
+            return ttfts.reduce(0, +) / Double(ttfts.count)
+        }()
+
+        return ChatTelemetry(
+            contextPercent: estimatedContextPercent,
+            activeTokens: activeTokens,
+            contextWindowSize: estimatedContextWindowTokenLimit,
+            messageCount: messages.count,
+            summaryAge: summaryAge,
+            failureCount: allMetrics.filter { $0.phase == "No response" }.count,
+            averageSpeed: avgSpeed,
+            averageLatency: avgLatency,
+            averageTimeToFirstToken: avgTTFT,
+            streamName: selectedChat?.stream?.title
+        )
     }
 
     func send(context: ModelContext) {
@@ -73,6 +125,7 @@ final class ChatViewModel {
 
         inputText = ""
         selectedMode = .chat
+        kodai.configure(instructions: buildInstructions())
         estimatedContextPercent = estimatedCurrentContextPercent()
         saveModelContext(context)
 
@@ -88,6 +141,7 @@ final class ChatViewModel {
         selectedChat = session
         messages = messagesForSession(session)
         inputText = ""
+        kodai.configure(instructions: buildInstructions())
         estimatedContextPercent = estimatedCurrentContextPercent()
     }
 
@@ -135,6 +189,52 @@ final class ChatViewModel {
         }
     }
 
+    @discardableResult
+    func createStream(title: String = "New stream", context: ModelContext) -> KodaiStream {
+        let stream = KodaiStream(title: title)
+        context.insert(stream)
+        saveModelContext(context)
+        return stream
+    }
+
+    func renameStream(_ stream: KodaiStream, to newTitle: String, context: ModelContext) {
+        let clean = newTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return }
+        stream.title = String(clean.prefix(60))
+        stream.updatedAt = .now
+        saveModelContext(context)
+    }
+
+    func deleteStream(_ stream: KodaiStream, keepChats: Bool, context: ModelContext) {
+        if keepChats {
+            for session in stream.sessions {
+                session.stream = nil
+            }
+        } else {
+            let wasSelectedInStream = stream.sessions.contains { $0.id == selectedChat?.id }
+            for session in stream.sessions {
+                context.delete(session)
+            }
+            if wasSelectedInStream {
+                selectedChat = nil
+                kodai.reset()
+                messages = [
+                    ChatMessage(role: .assistant, text: "What are we building today?")
+                ]
+                inputText = ""
+                estimatedContextPercent = 0
+            }
+        }
+        context.delete(stream)
+        saveModelContext(context)
+    }
+
+    func assignChat(_ session: KodaiChatSession, to stream: KodaiStream?, context: ModelContext) {
+        session.stream = stream
+        stream?.updatedAt = .now
+        saveModelContext(context)
+    }
+
     func copyToClipboard(_ text: String) {
         #if os(iOS)
         UIPasteboard.general.string = text
@@ -146,6 +246,7 @@ final class ChatViewModel {
 
     func resetSession() {
         kodai.reset()
+        kodai.configure(instructions: buildInstructions())
         estimatedContextPercent = estimatedCurrentContextPercent()
     }
 
@@ -163,6 +264,9 @@ final class ChatViewModel {
             )
         }
 
+        if isLoading {
+            telemetryStore.cancelRequest()
+        }
         isLoading = false
         activeAssistantID = nil
         activeStartedAt = nil
@@ -185,6 +289,8 @@ final class ChatViewModel {
         isLoading = true
 
         let startedAt = Date()
+        let reqID = telemetryStore.beginRequest()
+        telemetryStore.emit(.requestStarted, to: reqID)
         activeStartedAt = startedAt
         activeFirstTokenAt = nil
         activeLastTokenAt = startedAt
@@ -193,6 +299,7 @@ final class ChatViewModel {
         activePromptTokens = estimatedTokenCount(selectedMode.systemPrompt)
             + estimatedTokenCount(promptHistory)
             + estimatedTokenCount(cleanInput)
+        telemetryStore.emit(.promptCounted, to: reqID)
 
         let userMessage = ChatMessage(role: .user, text: cleanInput)
         messages.append(userMessage)
@@ -215,25 +322,28 @@ final class ChatViewModel {
         let assistantID = assistantMessage.id
         activeAssistantID = assistantID
         estimatedContextPercent = estimatedCurrentContextPercent()
+        telemetryStore.emit(.contextChecked, to: reqID)
 
         startMetricsTicker(
             assistantID: assistantID,
             startedAt: startedAt
         )
 
+        telemetryStore.emit(.modelPrefillStarted, to: reqID)
+
         let finalText = await kodai.streamResponse(
-            to: cleanInput,
-            mode: selectedMode,
-            history: promptHistory
+            to: cleanInput
         ) { [weak self] partialText in
             guard let self else { return }
 
             let now = Date()
             if self.activeFirstTokenAt == nil && !partialText.isEmpty {
                 self.activeFirstTokenAt = now
+                self.telemetryStore.emit(.firstTokenReceived, to: reqID)
             }
             if !partialText.isEmpty {
                 self.activeLastTokenAt = now
+                self.telemetryStore.emit(.tokenReceived, to: reqID)
             }
 
             let phase = partialText.isEmpty ? "Thinking" : "Generating"
@@ -265,6 +375,16 @@ final class ChatViewModel {
                 phase: "No response",
                 startedAt: startedAt
             )
+            telemetryStore.emit(.responseFailed, to: reqID)
+            if let idx = messages.firstIndex(where: { $0.id == assistantID }),
+               let m = messages[idx].metrics {
+                telemetryStore.finishRequest(id: reqID, summary: RequestSummary(
+                    tokensPerSecond: m.tokensPerSecond,
+                    totalLatency: m.totalLatency,
+                    timeToFirstToken: m.timeToFirstToken,
+                    failed: true
+                ))
+            }
         } else {
             if let index = messages.firstIndex(where: { $0.id == assistantID }) {
                 messages[index].text = finalText
@@ -275,6 +395,16 @@ final class ChatViewModel {
                 phase: "Generated",
                 startedAt: startedAt
             )
+            telemetryStore.emit(.responseFinished, to: reqID)
+            if let idx = messages.firstIndex(where: { $0.id == assistantID }),
+               let m = messages[idx].metrics {
+                telemetryStore.finishRequest(id: reqID, summary: RequestSummary(
+                    tokensPerSecond: m.tokensPerSecond,
+                    totalLatency: m.totalLatency,
+                    timeToFirstToken: m.timeToFirstToken,
+                    failed: false
+                ))
+            }
         }
 
         if let index = messages.firstIndex(where: { $0.id == assistantID }) {
@@ -450,6 +580,35 @@ final class ChatViewModel {
         } catch {
             print("SwiftData save failed: \(error)")
         }
+    }
+
+    private func buildInstructions() -> String {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "EEEE, MMMM d, yyyy 'at' h:mm a"
+        let dateString = dateFormatter.string(from: Date())
+
+        var lines = [
+            userProfile,
+            "",
+            "Current date and time: \(dateString)",
+        ]
+
+        if let chat = selectedChat?.title {
+            lines.append("Current conversation: \(chat)")
+        }
+        if let stream = selectedChat?.stream?.title {
+            lines.append("Project stream: \(stream)")
+        }
+
+        lines += [
+            "",
+            "Current mode: \(selectedMode.rawValue)",
+            "",
+            "Mode instructions:",
+            selectedMode.systemPrompt,
+        ]
+
+        return lines.joined(separator: "\n")
     }
 
     private func estimatedCurrentContextPercent(pendingInput: String = "") -> Int {

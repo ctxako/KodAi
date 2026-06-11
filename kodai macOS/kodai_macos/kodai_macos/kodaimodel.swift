@@ -17,27 +17,18 @@ import FoundationModels
 final class KodaiModel: ObservableObject {
     private let model = SystemLanguageModel.default
     private var session: LanguageModelSession?
+    private var currentInstructions = ""
 
-    private func makeSession() -> LanguageModelSession {
-        LanguageModelSession(instructions: """
-        You are Kodai, a private on-device local assistant for Charles.
-
-        Default behavior:
-        - Normal chat first.
-        - Keep responses short by default.
-        - Help with app development, debugging, organization, planning, and code.
-        - Be practical.
-        - Do not over-explain unless asked.
-        """)
+    func configure(instructions: String) {
+        currentInstructions = instructions
+        session = LanguageModelSession(instructions: instructions)
     }
 
     func streamResponse(
         to input: String,
-        mode: OutputMode,
-        history: String,
         onPartial: @escaping @MainActor (String) -> Void
     ) async -> String {
-        
+
         switch model.availability {
         case .available:
             break
@@ -59,25 +50,11 @@ final class KodaiModel: ObservableObject {
         }
 
         if session == nil {
-            session = makeSession()
+            session = LanguageModelSession(instructions: currentInstructions)
         }
 
         do {
-            let prompt = """
-            Current mode:
-            \(mode.rawValue)
-
-            Mode instructions:
-            \(mode.systemPrompt)
-
-            Recent conversation:
-            \(history.isEmpty ? "No prior messages." : history)
-
-            Latest user message:
-            \(input)
-            """
-
-            let stream = session!.streamResponse(to: prompt)
+            let stream = session!.streamResponse(to: input)
 
             var finalText = ""
             var lastUIUpdate = Date.distantPast

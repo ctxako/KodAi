@@ -20,7 +20,8 @@ struct kodai_macosApp: App {
         .windowStyle(.hiddenTitleBar)
         .modelContainer(for: [
             KodaiChatSession.self,
-            KodaiChatMessage.self
+            KodaiChatMessage.self,
+            KodaiStream.self
         ])
     }
 }
