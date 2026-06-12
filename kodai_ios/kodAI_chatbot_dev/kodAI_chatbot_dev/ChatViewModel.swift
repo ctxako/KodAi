@@ -10,53 +10,9 @@ import Foundation
 import KodaiKernel
 import UIKit
 
-struct SlashCommand: Identifiable, Equatable {
-    let name: String
-    let description: String
-    let acceptsArgument: Bool
-
-    var id: String { name }
-
-    init(name: String, description: String, acceptsArgument: Bool = false) {
-        self.name = name
-        self.description = description
-        self.acceptsArgument = acceptsArgument
-    }
-
-    static let all: [SlashCommand] = [
-        SlashCommand(name: "/project", description: "Create a new project", acceptsArgument: true),
-        SlashCommand(name: "/task", description: "Create a task in current project", acceptsArgument: true),
-        SlashCommand(name: "/done", description: "Complete a task by name", acceptsArgument: true),
-        SlashCommand(name: "/propose", description: "Propose a task for confirmation", acceptsArgument: true),
-        SlashCommand(name: "/help", description: "Show available commands"),
-        SlashCommand(name: "/commands", description: "Show available commands"),
-        SlashCommand(name: "/export", description: "Export current chat as Markdown"),
-        SlashCommand(name: "/summary", description: "Summarize current chat"),
-        SlashCommand(name: "/stats", description: "Show chat/session stats"),
-        SlashCommand(name: "/tools", description: "Show local tool status")
-    ]
-
-    static func match(for input: String) -> (command: SlashCommand, argument: String?)? {
-        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        for command in all {
-            if command.acceptsArgument {
-                let prefix = command.name + " "
-                if trimmed.hasPrefix(prefix) {
-                    let arg = String(trimmed.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
-                    return (command, arg.isEmpty ? nil : arg)
-                }
-                if trimmed == command.name {
-                    return (command, nil)
-                }
-            } else {
-                if trimmed == command.name {
-                    return (command, nil)
-                }
-            }
-        }
-        return nil
-    }
-}
+/// Slash command vocabulary, parsing, and picker metadata live in KodaiKernel;
+/// this app executes the parsed intents.
+typealias SlashCommand = KodaiSlashCommandMetadata
 
 struct PendingSummaryConfirmation: Identifiable, Equatable {
     let id = UUID()
@@ -1110,60 +1066,6 @@ final class ChatViewModel: ObservableObject {
         log.event("tool proposal cancelled")
     }
 
-    /// Splits a trailing `due:` token off a /task argument. Supports only
-    /// `due:today`, `due:tomorrow`, `due:Jun20`, and `due:6/20`; anything else
-    /// stays in the title unchanged.
-    static func splitDueArgument(_ argument: String, now: Date = Date()) -> (title: String, dueDate: Date?) {
-        var tokens = argument.split(separator: " ").map(String.init)
-        guard let index = tokens.lastIndex(where: { $0.lowercased().hasPrefix("due:") }) else {
-            return (argument, nil)
-        }
-        guard let dueDate = parseDueValue(String(tokens[index].dropFirst(4)), now: now) else {
-            return (argument, nil)
-        }
-        tokens.remove(at: index)
-        let title = tokens.joined(separator: " ").trimmingCharacters(in: .whitespaces)
-        return (title.isEmpty ? argument : title, dueDate)
-    }
-
-    static func parseDueValue(_ raw: String, now: Date = Date()) -> Date? {
-        let calendar = Calendar.current
-        let value = raw.lowercased()
-
-        switch value {
-        case "today":
-            return calendar.startOfDay(for: now)
-        case "tomorrow":
-            return calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))
-        default:
-            break
-        }
-
-        let year = calendar.component(.year, from: now)
-
-        // Numeric form: 6/20 or 6-20
-        let numericParts = value.split(whereSeparator: { $0 == "/" || $0 == "-" })
-        if numericParts.count == 2,
-           let month = Int(numericParts[0]),
-           let day = Int(numericParts[1]) {
-            let components = DateComponents(year: year, month: month, day: day)
-            guard calendar.date(from: components) != nil, (1...12).contains(month), (1...31).contains(day) else { return nil }
-            return calendar.date(from: components)
-        }
-
-        // Month-name form: Jun20 or June20
-        let letters = String(value.prefix(while: { $0.isLetter }))
-        guard letters.count >= 3,
-              let day = Int(value.dropFirst(letters.count)),
-              (1...31).contains(day) else { return nil }
-
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        let fullNames = formatter.monthSymbols.map { $0.lowercased() }
-        guard let monthIndex = fullNames.firstIndex(where: { $0.hasPrefix(letters) }) else { return nil }
-        return calendar.date(from: DateComponents(year: year, month: monthIndex + 1, day: day))
-    }
-
     private func loadProjects() async {
         do {
             projects = try await projectTaskStore.loadProjects()
@@ -1254,7 +1156,7 @@ final class ChatViewModel: ObservableObject {
     }
 
     private func runSlashCommand(_ prompt: String) {
-        guard let match = SlashCommand.match(for: prompt) else {
+        guard let parsed = KodaiSlashCommandParser.parse(prompt), parsed.kind != .unknown else {
             log.event("unknown slash command ignored command=\(prompt)")
             appendSystemMessage("Unknown command. Type /help to see available commands.")
             inputText = ""
@@ -1263,32 +1165,32 @@ final class ChatViewModel: ObservableObject {
 
         recordActivity(
             kind: .slashCommandHandled,
-            title: "Handled \(match.command.name)",
-            detail: match.argument,
+            title: "Handled \(parsed.normalizedCommandName)",
+            detail: parsed.rawArgument,
             source: .slashCommand
         )
 
-        switch match.command.name {
-        case "/project":
-            handleProjectCommand(argument: match.argument)
-        case "/task":
-            handleTaskCommand(argument: match.argument)
-        case "/done":
-            handleDoneCommand(argument: match.argument)
-        case "/propose":
-            handleProposeCommand(argument: match.argument)
-        case "/help", "/commands":
+        switch parsed.kind {
+        case .project:
+            handleProjectCommand(argument: parsed.rawArgument)
+        case .task:
+            handleTaskCommand(parsed)
+        case .done:
+            handleDoneCommand(argument: parsed.rawArgument)
+        case .proposeTask:
+            handleProposeCommand(parsed)
+        case .help, .commands:
             handleHelpCommand()
-        case "/export":
+        case .export:
             openExportSheet()
-        case "/summary":
+        case .summary:
             summarizeCurrentChat()
-        case "/stats":
+        case .stats:
             showStatsMessage()
-        case "/tools":
+        case .tools:
             showToolsMessage()
-        default:
-            log.event("unhandled slash command command=\(match.command.name)")
+        case .unknown:
+            log.event("unhandled slash command command=\(parsed.normalizedCommandName)")
         }
     }
 
@@ -1305,14 +1207,13 @@ final class ChatViewModel: ObservableObject {
         saveSessions()
     }
 
-    private func handleTaskCommand(argument: String?) {
+    private func handleTaskCommand(_ parsed: KodaiParsedSlashCommand) {
         inputText = ""
-        guard let argument, !argument.isEmpty else {
+        guard let title = parsed.title, !title.isEmpty else {
             appendSystemMessage("Usage: /task <title> [due:today|tomorrow|Jun20|6/20]")
             return
         }
-
-        let (title, dueDate) = Self.splitDueArgument(argument)
+        let dueDate = parsed.dueDate
 
         let projectID: UUID
         if let selected = selectedProjectID, projects.contains(where: { $0.id == selected }) {
@@ -1388,23 +1289,21 @@ final class ChatViewModel: ObservableObject {
         saveSessions()
     }
 
-    private func handleProposeCommand(argument: String?) {
+    private func handleProposeCommand(_ parsed: KodaiParsedSlashCommand) {
         inputText = ""
-        guard let argument, !argument.isEmpty else {
+        guard parsed.rawArgument != nil else {
             appendSystemMessage("Usage: /propose task <title> [due:today|tomorrow|Jun20|6/20]")
             return
         }
 
-        let parts = argument.split(separator: " ", maxSplits: 1).map(String.init)
-        guard parts.first?.lowercased() == "task", parts.count == 2 else {
+        guard let title = parsed.title, !title.isEmpty else {
             appendSystemMessage("Usage: /propose task <title> [due:today|tomorrow|Jun20|6/20]")
             updateActiveSession()
             saveSessions()
             return
         }
 
-        let (title, dueDate) = Self.splitDueArgument(parts[1])
-        proposeCreateTask(title: title, dueDate: dueDate)
+        proposeCreateTask(title: title, dueDate: parsed.dueDate)
         updateActiveSession()
         saveSessions()
     }
