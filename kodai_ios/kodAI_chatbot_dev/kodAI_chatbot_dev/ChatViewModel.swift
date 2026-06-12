@@ -48,6 +48,8 @@ final class ChatViewModel: ObservableObject {
     @Published private(set) var exportSnapshot: ChatExportSnapshot?
     @Published private(set) var warmupStatus: WarmupStatus?
     @Published private(set) var pendingSummaryConfirmation: PendingSummaryConfirmation?
+    @Published private(set) var projects: [KodaiProjectLite] = []
+    @Published private(set) var selectedProjectID: UUID?
 
     var activeProcessSummary: InferenceProcessSummary? {
         guard activeAssistantMessageID != nil, phase != .idle else { return nil }
@@ -70,6 +72,11 @@ final class ChatViewModel: ObservableObject {
     var activeSession: ChatSession? {
         guard let activeSessionID else { return nil }
         return sessions.first { $0.id == activeSessionID }
+    }
+
+    var selectedProject: KodaiProjectLite? {
+        guard let selectedProjectID else { return nil }
+        return projects.first { $0.id == selectedProjectID }
     }
 
     var activeAssistantMode: AssistantMode {
@@ -141,6 +148,7 @@ final class ChatViewModel: ObservableObject {
     private let log = AppLog(category: "Chat")
     private let inferenceService = InferenceService()
     private let chatStore = ChatStore()
+    private let projectTaskStore = ProjectTaskStore()
     private var generationTask: Task<Void, Never>?
     private var flushTask: Task<Void, Never>?
     private var hideStatusTask: Task<Void, Never>?
@@ -157,6 +165,9 @@ final class ChatViewModel: ObservableObject {
     init() {
         Task {
             await loadSessions()
+        }
+        Task {
+            await loadProjects()
         }
         Task { [weak self] in
             guard let self else { return }
@@ -701,6 +712,90 @@ final class ChatViewModel: ObservableObject {
             streams = []
             activeSessionID = session.id
             messages = session.messages
+        }
+    }
+
+    // MARK: - Projects & Tasks (lightweight iOS-local layer)
+
+    @discardableResult
+    func createProject(title: String) -> KodaiProjectLite {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let project = KodaiProjectLite(title: trimmedTitle.isEmpty ? "New Project" : trimmedTitle)
+        projects.insert(project, at: 0)
+        saveProjects()
+        log.event("project created id=\(project.id)")
+        return project
+    }
+
+    func updateProjectTitle(projectID: UUID, title: String) {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty,
+              let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
+        projects[index].title = trimmedTitle
+        projects[index].updatedAt = Date()
+        saveProjects()
+    }
+
+    func deleteProject(projectID: UUID) {
+        projects.removeAll { $0.id == projectID }
+        if selectedProjectID == projectID {
+            selectedProjectID = nil
+        }
+        saveProjects()
+        log.event("project deleted id=\(projectID)")
+    }
+
+    func selectProject(projectID: UUID?) {
+        selectedProjectID = projectID
+    }
+
+    func createTask(title: String, projectID: UUID) {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty,
+              let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
+        let task = KodaiTaskLite(title: trimmedTitle)
+        projects[index].tasks.append(task)
+        projects[index].updatedAt = Date()
+        saveProjects()
+        log.event("task created id=\(task.id) projectID=\(projectID)")
+    }
+
+    func toggleTaskCompletion(taskID: UUID, projectID: UUID) {
+        guard let projectIndex = projects.firstIndex(where: { $0.id == projectID }),
+              let taskIndex = projects[projectIndex].tasks.firstIndex(where: { $0.id == taskID }) else { return }
+        let isNowCompleted = !projects[projectIndex].tasks[taskIndex].isCompleted
+        projects[projectIndex].tasks[taskIndex].isCompleted = isNowCompleted
+        projects[projectIndex].tasks[taskIndex].completedAt = isNowCompleted ? Date() : nil
+        projects[projectIndex].tasks[taskIndex].updatedAt = Date()
+        projects[projectIndex].updatedAt = Date()
+        saveProjects()
+    }
+
+    func deleteTask(taskID: UUID, projectID: UUID) {
+        guard let projectIndex = projects.firstIndex(where: { $0.id == projectID }) else { return }
+        projects[projectIndex].tasks.removeAll { $0.id == taskID }
+        projects[projectIndex].updatedAt = Date()
+        saveProjects()
+        log.event("task deleted id=\(taskID) projectID=\(projectID)")
+    }
+
+    private func loadProjects() async {
+        do {
+            projects = try await projectTaskStore.loadProjects()
+        } catch {
+            log.event("failed to load projects: \(error.localizedDescription)")
+            projects = []
+        }
+    }
+
+    private func saveProjects() {
+        let projectsToSave = projects
+        Task {
+            do {
+                try await projectTaskStore.saveProjects(projectsToSave)
+            } catch {
+                log.event("failed to save projects: \(error.localizedDescription)")
+            }
         }
     }
 

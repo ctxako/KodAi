@@ -214,6 +214,27 @@ struct ChatView: View {
             onSaveChatSummary: viewModel.saveChatSummary,
             onSaveStreamSummary: viewModel.saveStreamSummary,
             chatsForStream: viewModel.chatsForStream,
+            projects: viewModel.projects,
+            selectedProjectID: viewModel.selectedProjectID,
+            onCreateProject: { title in
+                viewModel.createProject(title: title)
+            },
+            onSelectProject: viewModel.selectProject,
+            onRenameProject: { projectID, title in
+                viewModel.updateProjectTitle(projectID: projectID, title: title)
+            },
+            onDeleteProject: { projectID in
+                viewModel.deleteProject(projectID: projectID)
+            },
+            onCreateTask: { title, projectID in
+                viewModel.createTask(title: title, projectID: projectID)
+            },
+            onToggleTask: { taskID, projectID in
+                viewModel.toggleTaskCompletion(taskID: taskID, projectID: projectID)
+            },
+            onDeleteTask: { taskID, projectID in
+                viewModel.deleteTask(taskID: taskID, projectID: projectID)
+            },
             onClose: closeMenu
         )
         .transition(.move(edge: .leading).combined(with: .opacity))
@@ -376,6 +397,7 @@ private struct SideMenuDrawer: View {
         case chats
         case settings
         case streamDetail(Stream.ID)
+        case projectDetail(KodaiProjectLite.ID)
     }
 
     let width: CGFloat
@@ -406,6 +428,15 @@ private struct SideMenuDrawer: View {
     let onSaveChatSummary: (ChatSession.ID, String) -> Void
     let onSaveStreamSummary: (Stream.ID, String) -> Void
     let chatsForStream: (Stream.ID) -> [ChatSession]
+    let projects: [KodaiProjectLite]
+    let selectedProjectID: UUID?
+    let onCreateProject: (String) -> Void
+    let onSelectProject: (UUID?) -> Void
+    let onRenameProject: (UUID, String) -> Void
+    let onDeleteProject: (UUID) -> Void
+    let onCreateTask: (String, UUID) -> Void
+    let onToggleTask: (UUID, UUID) -> Void
+    let onDeleteTask: (UUID, UUID) -> Void
     let onClose: () -> Void
 
     private let log = AppLog(category: "StreamUI")
@@ -417,6 +448,13 @@ private struct SideMenuDrawer: View {
     @State private var streamToDelete: Stream?
     @State private var chatToMove: ChatSession?
     @State private var summaryEditor: SummaryEditor?
+    @State private var isCreatingProject = false
+    @State private var newProjectTitle = ""
+    @State private var projectToRename: KodaiProjectLite?
+    @State private var renameProjectTitle = ""
+    @State private var projectToDelete: KodaiProjectLite?
+    @State private var isCreatingTask = false
+    @State private var newTaskTitle = ""
     @State private var expandedStreamSummaryIDs: Set<Stream.ID> = []
     @State private var showPhaseTimeline = true
     @State private var showTokenCounters = true
@@ -440,6 +478,9 @@ private struct SideMenuDrawer: View {
                     .transition(drawerContentTransition)
             case .streamDetail(let streamID):
                 streamDetailContent(streamID: streamID)
+                    .transition(drawerContentTransition)
+            case .projectDetail(let projectID):
+                projectDetailContent(projectID: projectID)
                     .transition(drawerContentTransition)
             }
         }
@@ -491,6 +532,79 @@ private struct SideMenuDrawer: View {
             Button("Cancel", role: .cancel) {
                 streamToRename = nil
                 renameStreamTitle = ""
+            }
+        }
+        .alert("New Project", isPresented: $isCreatingProject) {
+            TextField("Title", text: $newProjectTitle)
+
+            Button("Create") {
+                onCreateProject(newProjectTitle)
+                newProjectTitle = ""
+            }
+
+            Button("Cancel", role: .cancel) {
+                newProjectTitle = ""
+            }
+        }
+        .alert("Rename Project", isPresented: Binding(
+            get: { projectToRename != nil },
+            set: { isPresented in
+                if !isPresented {
+                    projectToRename = nil
+                    renameProjectTitle = ""
+                }
+            }
+        )) {
+            TextField("Title", text: $renameProjectTitle)
+
+            Button("Rename") {
+                if let projectToRename {
+                    onRenameProject(projectToRename.id, renameProjectTitle)
+                }
+                projectToRename = nil
+                renameProjectTitle = ""
+            }
+
+            Button("Cancel", role: .cancel) {
+                projectToRename = nil
+                renameProjectTitle = ""
+            }
+        }
+        .alert("New Task", isPresented: $isCreatingTask) {
+            TextField("Title", text: $newTaskTitle)
+
+            Button("Add") {
+                if case .projectDetail(let projectID) = drawerMode {
+                    onCreateTask(newTaskTitle, projectID)
+                }
+                newTaskTitle = ""
+            }
+
+            Button("Cancel", role: .cancel) {
+                newTaskTitle = ""
+            }
+        }
+        .confirmationDialog("Delete Project", isPresented: Binding(
+            get: { projectToDelete != nil },
+            set: { isPresented in
+                if !isPresented {
+                    projectToDelete = nil
+                }
+            }
+        ), titleVisibility: .visible) {
+            Button("Delete Project and Tasks", role: .destructive) {
+                if let projectToDelete {
+                    log.event("delete project selected id=\(projectToDelete.id)")
+                    onDeleteProject(projectToDelete.id)
+                    if case .projectDetail(let projectID) = drawerMode, projectID == projectToDelete.id {
+                        drawerMode = .chats
+                    }
+                }
+                projectToDelete = nil
+            }
+
+            Button("Cancel", role: .cancel) {
+                projectToDelete = nil
             }
         }
         .confirmationDialog("Move to Stream", isPresented: Binding(
@@ -643,6 +757,52 @@ private struct SideMenuDrawer: View {
                             log.event("stream create tapped")
                             newStreamTitle = ""
                             isCreatingStream = true
+                        }
+                    }
+
+                    Section {
+                        if projects.isEmpty {
+                            DrawerEmptyRow(text: "No Projects")
+                                .listRowInsets(.init(top: 4, leading: 0, bottom: 8, trailing: 0))
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.clear)
+                        } else {
+                            ForEach(projects) { project in
+                                ProjectRow(
+                                    project: project,
+                                    isSelected: project.id == selectedProjectID,
+                                    onSelect: {
+                                        log.event("project selected id=\(project.id)")
+                                        onSelectProject(project.id)
+                                        withAnimation(.smooth(duration: 0.22)) {
+                                            drawerMode = .projectDetail(project.id)
+                                        }
+                                    }
+                                )
+                                .contextMenu {
+                                    Button {
+                                        projectToRename = project
+                                        renameProjectTitle = project.title
+                                    } label: {
+                                        Label("Rename", systemImage: "pencil")
+                                    }
+
+                                    Button(role: .destructive) {
+                                        projectToDelete = project
+                                    } label: {
+                                        Label("Delete Project", systemImage: "trash")
+                                    }
+                                }
+                                .listRowInsets(.init(top: 3, leading: 0, bottom: 3, trailing: 0))
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.clear)
+                            }
+                        }
+                    } header: {
+                        DrawerSectionHeader(title: "Projects") {
+                            log.event("project create tapped")
+                            newProjectTitle = ""
+                            isCreatingProject = true
                         }
                     }
 
@@ -878,6 +1038,121 @@ private struct SideMenuDrawer: View {
         }
     }
 
+    @ViewBuilder
+    private func projectDetailContent(projectID: KodaiProjectLite.ID) -> some View {
+        if let project = projects.first(where: { $0.id == projectID }) {
+            let incompleteTasks = project.incompleteTasks
+            let completedTasks = project.completedTasks
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    Button {
+                        log.event("project back tapped id=\(projectID)")
+                        withAnimation(.smooth(duration: 0.22)) {
+                            drawerMode = .chats
+                        }
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 30, height: 30)
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Circle())
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(project.title)
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+
+                        Text("\(incompleteTasks.count) open · \(completedTasks.count) done")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+                }
+
+                Button {
+                    log.event("project new task tapped id=\(projectID)")
+                    newTaskTitle = ""
+                    isCreatingTask = true
+                } label: {
+                    Label("New Task", systemImage: "plus.circle")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.88))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .drawerGlassRow(verticalPadding: 7)
+                }
+                .buttonStyle(.plain)
+
+                List {
+                    Section {
+                        if incompleteTasks.isEmpty {
+                            DrawerEmptyRow(text: "No open tasks")
+                                .listRowInsets(.init(top: 3, leading: 0, bottom: 3, trailing: 0))
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.clear)
+                        } else {
+                            ForEach(incompleteTasks) { task in
+                                ProjectTaskRow(
+                                    task: task,
+                                    onToggle: { onToggleTask(task.id, project.id) }
+                                )
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        onDeleteTask(task.id, project.id)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                                .listRowInsets(.init(top: 3, leading: 0, bottom: 3, trailing: 0))
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.clear)
+                            }
+                        }
+                    } header: {
+                        Text("Tasks")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary.opacity(0.72))
+                    }
+
+                    if !completedTasks.isEmpty {
+                        Section {
+                            ForEach(completedTasks) { task in
+                                ProjectTaskRow(
+                                    task: task,
+                                    onToggle: { onToggleTask(task.id, project.id) }
+                                )
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        onDeleteTask(task.id, project.id)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                                .listRowInsets(.init(top: 3, leading: 0, bottom: 3, trailing: 0))
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.clear)
+                            }
+                        } header: {
+                            Text("Completed")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary.opacity(0.72))
+                        }
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .scrollIndicators(.hidden)
+                .frame(maxHeight: .infinity, alignment: .top)
+            }
+        } else {
+            chatsContent
+        }
+    }
+
     private var settingsContent: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 12) {
@@ -979,7 +1254,7 @@ private struct SideMenuDrawer: View {
                 insertion: .move(edge: .trailing).combined(with: .opacity),
                 removal: .move(edge: .leading).combined(with: .opacity)
             )
-        case .streamDetail:
+        case .streamDetail, .projectDetail:
             .asymmetric(
                 insertion: .move(edge: .trailing).combined(with: .opacity),
                 removal: .move(edge: .leading).combined(with: .opacity)
@@ -1486,6 +1761,83 @@ private struct SummaryCompactionSheet: View {
         }
         .presentationDetents([.medium, .large])
         .preferredColorScheme(.dark)
+    }
+}
+
+private struct ProjectRow: View {
+    let project: KodaiProjectLite
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button {
+            onSelect()
+        } label: {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(isSelected ? ChatPalette.accentBlue.opacity(0.72) : Color.clear)
+                    .frame(width: 4, height: 4)
+
+                Image(systemName: isSelected ? "checklist.checked" : "checklist")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(isSelected ? ChatPalette.accentBlue.opacity(0.92) : .secondary.opacity(0.78))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(project.title)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+
+                    Text(openTasksText)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary.opacity(0.72))
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary.opacity(0.48))
+            }
+            .frame(minHeight: 46)
+        }
+        .buttonStyle(.plain)
+        .drawerGlassRow(isSelected: isSelected)
+    }
+
+    private var openTasksText: String {
+        let openCount = project.incompleteTasks.count
+        return "\(openCount) open \(openCount == 1 ? "task" : "tasks")"
+    }
+}
+
+private struct ProjectTaskRow: View {
+    let task: KodaiTaskLite
+    let onToggle: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button {
+                onToggle()
+            } label: {
+                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(task.isCompleted ? ChatPalette.accentBlue.opacity(0.9) : .secondary.opacity(0.62))
+                    .frame(width: 28, height: 28)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+
+            Text(task.title)
+                .font(.subheadline)
+                .foregroundStyle(task.isCompleted ? .secondary : Color.white)
+                .strikethrough(task.isCompleted, color: .secondary)
+                .lineLimit(2)
+
+            Spacer()
+        }
+        .drawerGlassRow(isDimmed: task.isCompleted)
     }
 }
 
