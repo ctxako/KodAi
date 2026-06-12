@@ -117,6 +117,14 @@ final class ChatViewModel {
             handleTaskCommand(trimmed, context: context)
             return
         }
+        if lower == "/project" || lower.hasPrefix("/project ") {
+            handleProjectCommand(trimmed, context: context)
+            return
+        }
+        if lower == "/done" || lower.hasPrefix("/done ") {
+            handleDoneCommand(trimmed, context: context)
+            return
+        }
         responseTask = Task {
             await runModel(context: context)
         }
@@ -1226,5 +1234,88 @@ final class ChatViewModel {
                 return "\(role): \(message.text)"
             }
             .joined(separator: "\n")
+    }
+
+    // MARK: – Slash command: /project
+
+    private func handleProjectCommand(_ input: String, context: ModelContext) {
+        inputText = ""
+
+        let remainder = String(input.dropFirst(8)).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !remainder.isEmpty else {
+            let session = ensureCurrentChat(context: context)
+            messages.append(ChatMessage(role: .user, text: input))
+            saveStoredMessage(role: .user, content: input, in: session, context: context)
+            let reply = "Usage: `/project <name>` — creates a new project and opens a chat in it."
+            messages.append(ChatMessage(role: .assistant, text: reply))
+            saveStoredMessage(role: .assistant, content: reply, in: session, context: context)
+            return
+        }
+
+        let title = String(remainder.prefix(60))
+        let project = createProject(title: title, context: context)
+        ledgerRecorder.recordActivity(kind: .taskChange, summary: "created project: \(title)", context: context)
+
+        createNewChat(context: context, project: project)
+
+        guard let newSession = selectedChat else { return }
+
+        messages.append(ChatMessage(role: .user, text: input))
+        saveStoredMessage(role: .user, content: input, in: newSession, context: context)
+        let reply = "Created project: \(title)"
+        messages.append(ChatMessage(role: .assistant, text: reply))
+        saveStoredMessage(role: .assistant, content: reply, in: newSession, context: context)
+    }
+
+    // MARK: – Slash command: /done
+
+    private func handleDoneCommand(_ input: String, context: ModelContext) {
+        inputText = ""
+        let currentSession = ensureCurrentChat(context: context)
+
+        messages.append(ChatMessage(role: .user, text: input))
+        saveStoredMessage(role: .user, content: input, in: currentSession, context: context)
+
+        func reply(_ text: String) {
+            messages.append(ChatMessage(role: .assistant, text: text))
+            saveStoredMessage(role: .assistant, content: text, in: currentSession, context: context)
+        }
+
+        guard let project = selectedChat?.project else {
+            reply("No active project — open a project chat or use /project to create one.")
+            return
+        }
+
+        // "/done" is 5 chars; remainder is empty for bare /done
+        let remainder = String(input.dropFirst(5)).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !remainder.isEmpty else {
+            let openTasks = project.tasks
+                .filter { !$0.isCompleted }
+                .sorted { taskPriorityOrder($0.priority) < taskPriorityOrder($1.priority) }
+            if openTasks.isEmpty {
+                reply("No open tasks in this project.")
+            } else {
+                let list = openTasks.map { "• \($0.title)" }.joined(separator: "\n")
+                reply("Open tasks in \(project.title):\n\(list)")
+            }
+            return
+        }
+
+        let query = remainder.lowercased()
+        let matches = project.tasks.filter { !$0.isCompleted && $0.title.lowercased().contains(query) }
+
+        switch matches.count {
+        case 0:
+            reply("No open task matched: \(remainder)")
+        case 1:
+            let task = matches[0]
+            toggleTask(task, context: context)
+            reply("Completed task: \(task.title)")
+        default:
+            let titles = matches.map { "• \($0.title)" }.joined(separator: "\n")
+            reply("Multiple tasks matched \"\(remainder)\" — be more specific:\n\(titles)")
+        }
     }
 }
