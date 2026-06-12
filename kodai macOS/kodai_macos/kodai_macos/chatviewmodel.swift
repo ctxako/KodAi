@@ -1243,6 +1243,56 @@ final class ChatViewModel {
         return nil
     }
 
+    // MARK: – Tool proposal confirmation
+
+    func confirmProposal(context: ModelContext, projects: [KodaiProject]) {
+        guard let proposal = pendingToolProposal else { return }
+        let currentSession = ensureCurrentChat(context: context)
+
+        switch proposal.kind {
+        case .createTask(let p):
+            let project: KodaiProject? = {
+                if let id = p.projectID {
+                    return projects.first { $0.id == id }
+                }
+                return selectedChat?.project
+            }()
+
+            guard let project else {
+                let msg = "No active project — open a project chat or use /project to create one."
+                messages.append(ChatMessage(role: .assistant, text: msg))
+                saveStoredMessage(role: .assistant, content: msg, in: currentSession, context: context)
+                pendingToolProposal = nil
+                return
+            }
+
+            let priority = TaskPriority(rawValue: p.priority.lowercased()) ?? .medium
+            createTask(in: project, title: p.title, priority: priority, dueDate: p.dueDate, context: context)
+
+            var parts: [String] = [priority.rawValue]
+            if let due = p.dueDate { parts.append("due \(shortDateString(due))") }
+            let msg = "Created task: \(p.title) (\(parts.joined(separator: ", ")))"
+            messages.append(ChatMessage(role: .assistant, text: msg))
+            saveStoredMessage(role: .assistant, content: msg, in: currentSession, context: context)
+        }
+
+        pendingToolProposal = nil
+    }
+
+    func cancelProposal(context: ModelContext) {
+        guard let proposal = pendingToolProposal else { return }
+        ledgerRecorder.recordActivity(
+            kind: .toolProposal,
+            summary: "dismissed: \(proposalSummary(proposal))",
+            context: context
+        )
+        pendingToolProposal = nil
+        let currentSession = ensureCurrentChat(context: context)
+        let msg = "Canceled task creation."
+        messages.append(ChatMessage(role: .assistant, text: msg))
+        saveStoredMessage(role: .assistant, content: msg, in: currentSession, context: context)
+    }
+
     private func proposalSummary(_ proposal: PendingToolProposal) -> String {
         switch proposal.kind {
         case .createTask(let p):

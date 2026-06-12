@@ -88,6 +88,24 @@ struct ContentView: View {
 
                 ChatScrollView(messages: viewModel.messages, turnRecords: viewModel.turnRecords)
 
+                if let proposal = viewModel.pendingToolProposal {
+                    ToolProposalConfirmationCard(
+                        proposal: proposal,
+                        onConfirm: {
+                            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                                viewModel.confirmProposal(context: modelContext, projects: projects)
+                            }
+                        },
+                        onCancel: {
+                            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                                viewModel.cancelProposal(context: modelContext)
+                            }
+                        }
+                    )
+                    .padding(.horizontal)
+                    .padding(.bottom, 4)
+                }
+
                 ComposerView(
                     inputText: $viewModel.inputText,
                     selectedMode: $viewModel.selectedMode,
