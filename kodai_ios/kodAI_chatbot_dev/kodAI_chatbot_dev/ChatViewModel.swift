@@ -26,6 +26,7 @@ struct SlashCommand: Identifiable, Equatable {
         SlashCommand(name: "/project", description: "Create a new project", acceptsArgument: true),
         SlashCommand(name: "/task", description: "Create a task in current project", acceptsArgument: true),
         SlashCommand(name: "/done", description: "Complete a task by name", acceptsArgument: true),
+        SlashCommand(name: "/propose", description: "Propose a task for confirmation", acceptsArgument: true),
         SlashCommand(name: "/help", description: "Show available commands"),
         SlashCommand(name: "/commands", description: "Show available commands"),
         SlashCommand(name: "/export", description: "Export current chat as Markdown"),
@@ -79,6 +80,7 @@ final class ChatViewModel: ObservableObject {
     @Published private(set) var pendingSummaryConfirmation: PendingSummaryConfirmation?
     @Published private(set) var projects: [KodaiProjectLite] = []
     @Published private(set) var selectedProjectID: UUID?
+    @Published private(set) var pendingToolProposal: PendingToolProposalLite?
 
     var activeProcessSummary: InferenceProcessSummary? {
         guard activeAssistantMessageID != nil, phase != .idle else { return nil }
@@ -854,6 +856,86 @@ final class ChatViewModel: ObservableObject {
         return (overdue.sorted(by: byDueDate), today.sorted(by: byDueDate))
     }
 
+    // MARK: - Tool Proposals (in-memory, deterministic trigger only for now)
+
+    func proposeCreateTask(
+        title: String,
+        details: String? = nil,
+        projectID: UUID? = nil,
+        dueDate: Date? = nil,
+        priority: TaskPriorityLite = .normal
+    ) {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else { return }
+
+        let resolvedProjectID = projectID ?? selectedProjectID
+        let projectTitle = resolvedProjectID.flatMap { id in
+            projects.first(where: { $0.id == id })?.title
+        }
+
+        pendingToolProposal = PendingToolProposalLite(
+            kind: .createTask,
+            title: "Create task",
+            message: "Confirm to create this task.",
+            createTask: CreateTaskProposalLite(
+                title: trimmedTitle,
+                details: details,
+                projectID: resolvedProjectID,
+                projectTitle: projectTitle,
+                dueDate: dueDate,
+                priority: priority
+            )
+        )
+        log.event("tool proposal created kind=createTask")
+    }
+
+    func confirmPendingToolProposal() {
+        guard let proposal = pendingToolProposal else { return }
+        pendingToolProposal = nil
+
+        switch proposal.kind {
+        case .createTask:
+            guard let createTask = proposal.createTask else { return }
+
+            let projectID: UUID
+            if let proposedID = createTask.projectID, projects.contains(where: { $0.id == proposedID }) {
+                projectID = proposedID
+            } else if let selected = selectedProjectID, projects.contains(where: { $0.id == selected }) {
+                projectID = selected
+            } else if let inbox = projects.first(where: { $0.title == "Inbox" }) {
+                projectID = inbox.id
+            } else {
+                let inbox = createProject(title: "Inbox")
+                projectID = inbox.id
+                selectProject(projectID: inbox.id)
+            }
+
+            performCreateTaskProposal(createTask, in: projectID)
+        }
+    }
+
+    private func performCreateTaskProposal(_ proposal: CreateTaskProposalLite, in projectID: UUID) {
+        createTask(title: proposal.title, projectID: projectID, dueDate: proposal.dueDate)
+        let projectTitle = projects.first(where: { $0.id == projectID })?.title ?? "Unknown"
+        var lines = ["Created task: \(proposal.title)", "Project: \(projectTitle)"]
+        if let dueDate = proposal.dueDate {
+            lines.append("Due: \(dueDate.formatted(date: .abbreviated, time: .omitted))")
+        }
+        appendSystemMessage(lines.joined(separator: "\n"))
+        updateActiveSession()
+        saveSessions()
+        log.event("tool proposal confirmed kind=createTask")
+    }
+
+    func cancelPendingToolProposal() {
+        guard pendingToolProposal != nil else { return }
+        pendingToolProposal = nil
+        appendSystemMessage("Cancelled proposal. No task was created.")
+        updateActiveSession()
+        saveSessions()
+        log.event("tool proposal cancelled")
+    }
+
     /// Splits a trailing `due:` token off a /task argument. Supports only
     /// `due:today`, `due:tomorrow`, `due:Jun20`, and `due:6/20`; anything else
     /// stays in the title unchanged.
@@ -1011,6 +1093,8 @@ final class ChatViewModel: ObservableObject {
             handleTaskCommand(argument: match.argument)
         case "/done":
             handleDoneCommand(argument: match.argument)
+        case "/propose":
+            handleProposeCommand(argument: match.argument)
         case "/help", "/commands":
             handleHelpCommand()
         case "/export":
@@ -1120,6 +1204,27 @@ final class ChatViewModel: ObservableObject {
         saveSessions()
     }
 
+    private func handleProposeCommand(argument: String?) {
+        inputText = ""
+        guard let argument, !argument.isEmpty else {
+            appendSystemMessage("Usage: /propose task <title> [due:today|tomorrow|Jun20|6/20]")
+            return
+        }
+
+        let parts = argument.split(separator: " ", maxSplits: 1).map(String.init)
+        guard parts.first?.lowercased() == "task", parts.count == 2 else {
+            appendSystemMessage("Usage: /propose task <title> [due:today|tomorrow|Jun20|6/20]")
+            updateActiveSession()
+            saveSessions()
+            return
+        }
+
+        let (title, dueDate) = Self.splitDueArgument(parts[1])
+        proposeCreateTask(title: title, dueDate: dueDate)
+        updateActiveSession()
+        saveSessions()
+    }
+
     private func handleHelpCommand() {
         inputText = ""
         let helpText = [
@@ -1132,6 +1237,7 @@ final class ChatViewModel: ObservableObject {
             "/task <title> due:Jun20 — Create a task due on a date",
             "/task <title> due:6/20 — Create a task due on a date",
             "/done <title> — Complete a task by name",
+            "/propose task <title> — Propose a task to confirm or cancel",
             "/help — Show this list",
             "/commands — Show this list",
             "/summary — Summarize current chat",
