@@ -39,8 +39,8 @@ struct ContextAssemblerTests {
             FixedProvider(block: ContextBlock(kind: "time",     content: String(repeating: "b", count: 40),  tokenEstimate: 10, priority: 1)),
             FixedProvider(block: ContextBlock(kind: "history",  content: String(repeating: "c", count: 800), tokenEstimate: 200, priority: 10)),
         ]
-        let assembler = ContextAssembler(providers: providers, budget: TokenBudget(total: 50))
-        let (_, manifest) = assembler.assemble(for: KodaiChatSession(), userMessage: "test")
+        let assembler = ContextAssembler(budget: TokenBudget(total: 50))
+        let (_, manifest) = assembler.assemble(for: KodaiChatSession(), userMessage: "test", providers: providers)
 
         #expect(manifest.blocks.first { $0.kind == "persona" }?.status == .included)
         #expect(manifest.blocks.first { $0.kind == "time" }?.status == .included)
@@ -98,8 +98,8 @@ struct ContextAssemblerTests {
             FixedProvider(block: ContextBlock(kind: "active_tasks",    content: "tasks",    tokenEstimate: 10, priority: 4)),
             FixedProvider(block: ContextBlock(kind: "history",         content: "history",  tokenEstimate: 10, priority: 10)),
         ]
-        let assembler = ContextAssembler(providers: providers, budget: TokenBudget(total: 100))
-        let (prompt, manifest) = assembler.assemble(for: KodaiChatSession(), userMessage: "test")
+        let assembler = ContextAssembler(budget: TokenBudget(total: 100))
+        let (prompt, manifest) = assembler.assemble(for: KodaiChatSession(), userMessage: "test", providers: providers)
 
         #expect(manifest.blocks.count == 5)
         #expect(manifest.blocks.allSatisfy { $0.status == .included })

@@ -1,4 +1,5 @@
 import Foundation
+import KodaiKernel
 import SwiftData
 
 /// The glass-box contract: one record per assistant turn capturing the full context

@@ -1,4 +1,5 @@
 import Foundation
+import KodaiKernel
 
 // Plain-struct representations of the old macOS app models,
 // used as input to the migration — no dependency on the app target.

@@ -1,4 +1,5 @@
 import Foundation
+import KodaiKernel
 
 public struct ProjectSummaryBlockProvider: ContextBlockProvider, Sendable {
     public init() {}

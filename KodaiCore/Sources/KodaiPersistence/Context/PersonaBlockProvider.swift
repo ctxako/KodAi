@@ -1,4 +1,5 @@
 import Foundation
+import KodaiKernel
 
 public struct PersonaBlockProvider: ContextBlockProvider, Sendable {
     public var persona: PersonaMode

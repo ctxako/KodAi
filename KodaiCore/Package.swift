@@ -8,13 +8,20 @@ let package = Package(
         .iOS(.v18)
     ],
     products: [
-        .library(name: "KodaiCore", targets: ["KodaiCore"])
+        .library(name: "KodaiCore", targets: ["KodaiCore"]),
+        .library(name: "KodaiKernel", targets: ["KodaiKernel"]),
+        .library(name: "KodaiPersistence", targets: ["KodaiPersistence"])
     ],
     targets: [
-        .target(name: "KodaiCore"),
+        // Foundation-only shared logic and value types.
+        .target(name: "KodaiKernel"),
+        // SwiftData-backed models and ledger write paths.
+        .target(name: "KodaiPersistence", dependencies: ["KodaiKernel"]),
+        // Compatibility umbrella re-exporting both targets.
+        .target(name: "KodaiCore", dependencies: ["KodaiKernel", "KodaiPersistence"]),
         .testTarget(
             name: "KodaiCoreTests",
-            dependencies: ["KodaiCore"]
+            dependencies: ["KodaiCore", "KodaiKernel", "KodaiPersistence"]
         )
     ]
 )

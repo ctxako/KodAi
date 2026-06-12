@@ -1,26 +1,14 @@
 import Foundation
 
 public final class ContextAssembler {
-    private let providers: [any ContextBlockProvider]
     private let budget: TokenBudget
 
-    public init(providers: [any ContextBlockProvider] = [], budget: TokenBudget = TokenBudget()) {
-        self.providers = providers
+    public init(budget: TokenBudget = TokenBudget()) {
         self.budget = budget
     }
 
-    // MARK: - Provider-based assembly
-
-    public func assemble(
-        for chat: KodaiChatSession,
-        userMessage: String
-    ) -> (prompt: String, manifest: ContextManifest) {
-        var rawBlocks = providers.compactMap { $0.provide(for: chat, query: userMessage) }
-        rawBlocks.sort { $0.priority < $1.priority }
-        return applyBudget(to: rawBlocks)
-    }
-
-    // MARK: - Block-first assembly (bypasses providers, used when caller builds blocks directly)
+    // MARK: - Block-first assembly (callers build blocks directly; session-based
+    // provider assembly lives in KodaiPersistence)
 
     public func assemble(blocks rawBlocks: [ContextBlock]) -> (prompt: String, manifest: ContextManifest) {
         let sorted = rawBlocks.sorted { $0.priority < $1.priority }

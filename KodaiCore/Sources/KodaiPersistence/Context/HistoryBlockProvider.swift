@@ -1,4 +1,5 @@
 import Foundation
+import KodaiKernel
 
 public struct HistoryBlockProvider: ContextBlockProvider, Sendable {
     public var maxMessages: Int
