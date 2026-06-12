@@ -5,6 +5,7 @@
 //  Created by Charles Thomas Xavier Austin III on 6/6/26.
 //
 
+import KodaiKernel
 import Testing
 @testable import kodAI_chatbot_dev
 
@@ -22,13 +23,21 @@ struct kodAI_chatbot_devTests {
             "What's 6x8"
         ]
 
+        let promptStack = ModelPromptStack(settings: .default)
         for prompt in prompts {
             var assistantText = ""
             print("[PromptTest] prompt=\(prompt.debugDescription)")
-            let stream = await runtime.generate(prompt: prompt)
+            let stream = await runtime.generate(
+                messages: [ChatMessage(role: .user, text: prompt)],
+                promptStack: promptStack
+            )
             for try await event in stream {
-                if case .token(let chunk) = event {
+                switch event {
+                case .token(let chunk, generatedTokenCount: let generatedTokenCount):
+                    _ = generatedTokenCount
                     assistantText += chunk
+                default:
+                    break
                 }
             }
             print("[PromptTest] final prompt=\(prompt.debugDescription) length=\(assistantText.count) text=\(assistantText.debugDescription)")

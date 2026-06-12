@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		3C1A89632FD4A001003E89DE /* llama in Frameworks */ = {isa = PBXBuildFile; productRef = 3C1A89652FD4A001003E89DE /* llama */; };
+		3C2CBAFA2FDCB28800FCC924 /* KodaiKernel in Frameworks */ = {isa = PBXBuildFile; productRef = 3C1A89672FD4A001003E89DE /* KodaiKernel */; };
+		3C2CBAFB2FDCB28800FCC924 /* KodaiPersistence in Frameworks */ = {isa = PBXBuildFile; productRef = 3C1A89682FD4A002003E89DE /* KodaiPersistence */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -69,6 +71,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3C2CBAFB2FDCB28800FCC924 /* KodaiPersistence in Frameworks */,
+				3C2CBAFA2FDCB28800FCC924 /* KodaiKernel in Frameworks */,
 				3C1A89632FD4A001003E89DE /* llama in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -132,6 +136,7 @@
 			packageProductDependencies = (
 				3C1A89652FD4A001003E89DE /* llama */,
 				3C1A89672FD4A001003E89DE /* KodaiKernel */,
+				3C1A89682FD4A002003E89DE /* KodaiPersistence */,
 			);
 			productName = kodAI_chatbot_dev;
 			productReference = 3C1A891A2FD48C3C003E89DE /* kodAI_chatbot_dev.app */;
@@ -628,6 +633,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 3C1A89662FD4A001003E89DE /* XCLocalSwiftPackageReference "../../KodaiCore" */;
 			productName = KodaiKernel;
+		};
+		3C1A89682FD4A002003E89DE /* KodaiPersistence */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3C1A89662FD4A001003E89DE /* XCLocalSwiftPackageReference "../../KodaiCore" */;
+			productName = KodaiPersistence;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
