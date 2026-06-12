@@ -96,7 +96,7 @@ struct ContentView: View {
                     isSummarizing: viewModel.isSummarizing,
                     telemetry: viewModel.chatTelemetry,
                     onSend: {
-                        viewModel.send(context: modelContext)
+                        viewModel.send(context: modelContext, projects: projects)
                     },
                     onStop: {
                         viewModel.stopGeneration()
@@ -111,12 +111,8 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .frame(minWidth: 950, minHeight: 650)
         .onAppear {
-            viewModel.allProjects = projects
             viewModel.createNewChat(context: modelContext)
             viewModel.refreshContextEstimate()
-        }
-        .onChange(of: projects) {
-            viewModel.allProjects = projects
         }
         .onChange(of: allChatSessions.map { $0.id }) {
             if viewModel.selectedChat == nil, let newest = allChatSessions.first {

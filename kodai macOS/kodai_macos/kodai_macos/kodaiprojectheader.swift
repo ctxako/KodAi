@@ -85,7 +85,7 @@ struct KodaiProjectHeader: View {
     private var sortedTasks: [KodaiTask] {
         let active = project.tasks
             .filter { !$0.isCompleted }
-            .sorted { taskPriorityOrder($0.priority) < taskPriorityOrder($1.priority) }
+            .sorted { $0.priority.sortOrder < $1.priority.sortOrder }
         let done = project.tasks
             .filter { $0.isCompleted }
             .sorted { ($0.completedAt ?? $0.updatedAt) > ($1.completedAt ?? $1.updatedAt) }
@@ -695,14 +695,6 @@ struct KodaiProjectHeader: View {
         case .high:   return ("H", .red)
         case .medium: return ("M", .orange)
         case .low:    return ("L", .blue)
-        }
-    }
-
-    private func taskPriorityOrder(_ p: TaskPriority) -> Int {
-        switch p {
-        case .high: return 0
-        case .medium: return 1
-        case .low: return 2
         }
     }
 

@@ -39,6 +39,14 @@ public enum TaskPriority: String, Codable, CaseIterable, Sendable {
     case low = "low"
     case medium = "medium"
     case high = "high"
+
+    public var sortOrder: Int {
+        switch self {
+        case .high: return 0
+        case .medium: return 1
+        case .low: return 2
+        }
+    }
 }
 
 public enum ActivityKind: String, Codable, CaseIterable, Sendable {

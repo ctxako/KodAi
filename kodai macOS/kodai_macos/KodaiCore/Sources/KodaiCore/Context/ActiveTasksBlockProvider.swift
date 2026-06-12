@@ -11,7 +11,7 @@ public struct ActiveTasksBlockProvider: ContextBlockProvider, Sendable {
         guard !openTasks.isEmpty else { return nil }
 
         let lines = openTasks
-            .sorted { priorityOrder($0.priority) < priorityOrder($1.priority) }
+            .sorted { $0.priority.sortOrder < $1.priority.sortOrder }
             .prefix(5)
             .map { "• [\($0.priority.rawValue)] \($0.title)" }
             .joined(separator: "\n")
@@ -23,13 +23,5 @@ public struct ActiveTasksBlockProvider: ContextBlockProvider, Sendable {
             priority: 4,
             sourceID: project.id
         )
-    }
-
-    private func priorityOrder(_ p: TaskPriority) -> Int {
-        switch p {
-        case .high: return 0
-        case .medium: return 1
-        case .low: return 2
-        }
     }
 }

@@ -52,7 +52,6 @@ final class ChatViewModel {
     var estimatedContextPercent: Int = 0
     var turnRecords: [UUID: TurnRecord] = [:]
     var isSummarizing = false
-    var allProjects: [KodaiProject] = []
 
     private let backend = FoundationModelsBackend()
     private let summaryEngine = SummaryEngine()
@@ -114,7 +113,7 @@ final class ChatViewModel {
         )
     }
 
-    func send(context: ModelContext) {
+    func send(context: ModelContext, projects: [KodaiProject] = []) {
         let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.lowercased() == "/summary" {
             inputText = ""
@@ -139,7 +138,7 @@ final class ChatViewModel {
             return
         }
         responseTask = Task {
-            await runModel(context: context)
+            await runModel(context: context, projects: projects)
         }
     }
 
@@ -522,7 +521,7 @@ final class ChatViewModel {
         estimatedContextPercent = estimatedCurrentContextPercent()
     }
 
-    private func runModel(context: ModelContext) async {
+    private func runModel(context: ModelContext, projects: [KodaiProject]) async {
         let cleanInput = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !cleanInput.isEmpty else { return }
@@ -543,7 +542,7 @@ final class ChatViewModel {
 
         // Assemble context blocks + manifest before streaming.
         // History excluded here — LanguageModelSession owns conversational continuity.
-        let (assembledInstructions, turnManifest) = assembleContext(userMessage: cleanInput)
+        let (assembledInstructions, turnManifest) = assembleContext(userMessage: cleanInput, projects: projects)
         activePromptTokens = turnManifest.totalTokens + TokenEstimator.estimate(cleanInput)
         telemetryStore.emit(.promptCounted, to: reqID)
 
@@ -933,7 +932,7 @@ final class ChatViewModel {
 
     /// Build system instructions + context manifest for one turn.
     /// History is intentionally excluded: LanguageModelSession owns conversational continuity.
-    private func assembleContext(userMessage: String) -> (instructions: String, manifest: ContextManifest) {
+    private func assembleContext(userMessage: String, projects: [KodaiProject]) -> (instructions: String, manifest: ContextManifest) {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "EEEE, MMMM d, yyyy 'at' h:mm a"
         let dateString = dateFormatter.string(from: Date())
@@ -1004,7 +1003,7 @@ final class ChatViewModel {
         if let project = selectedChat?.project {
             let activeTitles = project.tasks
                 .filter { !$0.isCompleted }
-                .sorted { taskPriorityOrder($0.priority) < taskPriorityOrder($1.priority) }
+                .sorted { $0.priority.sortOrder < $1.priority.sortOrder }
                 .prefix(3)
                 .map { $0.title }
             if !activeTitles.isEmpty {
@@ -1020,7 +1019,7 @@ final class ChatViewModel {
         }
 
         // Today's tasks — cross-project due/overdue tasks
-        let dueTasks = todaysTasks(from: allProjects)
+        let dueTasks = todaysTasks(from: projects)
         if !dueTasks.isEmpty {
             let content = formattedTodayTasksContext(dueTasks)
             blocks.append(ContextBlock(
@@ -1142,14 +1141,6 @@ final class ChatViewModel {
         let f = DateFormatter()
         f.dateFormat = "MMM d"
         return f.string(from: date)
-    }
-
-    private func taskPriorityOrder(_ p: TaskPriority) -> Int {
-        switch p {
-        case .high: return 0
-        case .medium: return 1
-        case .low: return 2
-        }
     }
 
     // MARK: – Slash command: /task
@@ -1306,7 +1297,7 @@ final class ChatViewModel {
         guard !remainder.isEmpty else {
             let openTasks = project.tasks
                 .filter { !$0.isCompleted }
-                .sorted { taskPriorityOrder($0.priority) < taskPriorityOrder($1.priority) }
+                .sorted { $0.priority.sortOrder < $1.priority.sortOrder }
             if openTasks.isEmpty {
                 reply("No open tasks in this project.")
             } else {
