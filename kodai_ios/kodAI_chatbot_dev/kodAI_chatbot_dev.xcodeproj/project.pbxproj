@@ -215,7 +215,7 @@
 			mainGroup = 3C1A89112FD48C3C003E89DE;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				3C1A89642FD4A001003E89DE /* XCLocalSwiftPackageReference "../../kodai_x/kodAI/LlamaCPP" */,
+				3C1A89642FD4A001003E89DE /* XCLocalSwiftPackageReference "../LlamaCPP" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3C1A891B2FD48C3C003E89DE /* Products */;
@@ -606,16 +606,16 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		3C1A89642FD4A001003E89DE /* XCLocalSwiftPackageReference "../../kodai_x/kodAI/LlamaCPP" */ = {
+		3C1A89642FD4A001003E89DE /* XCLocalSwiftPackageReference "../LlamaCPP" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = ../../kodai_x/kodAI/LlamaCPP;
+			relativePath = ../LlamaCPP;
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		3C1A89652FD4A001003E89DE /* llama */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 3C1A89642FD4A001003E89DE /* XCLocalSwiftPackageReference "../../kodai_x/kodAI/LlamaCPP" */;
+			package = 3C1A89642FD4A001003E89DE /* XCLocalSwiftPackageReference "../LlamaCPP" */;
 			productName = llama;
 		};
 /* End XCSwiftPackageProductDependency section */
