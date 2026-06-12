@@ -18,6 +18,10 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
         synthesizer.delegate = self
     }
 
+    var isSpeaking: Bool {
+        synthesizer.isSpeaking
+    }
+
     func speak(_ text: String) {
         let cleaned = text
             .trimmingCharacters(in: .whitespacesAndNewlines)

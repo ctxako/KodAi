@@ -24,6 +24,29 @@ private enum MessageListAnchor {
     static let bottom = "message-list-bottom"
 }
 
+private enum PrefKey {
+    static let messageTextSize = "pref.messageTextSize"
+    static let reduceMotion = "pref.reduceMotion"
+    static let haptics = "pref.haptics"
+    static let compactMessageSpacing = "pref.compactMessageSpacing"
+}
+
+private enum Haptics {
+    private static var isEnabled: Bool {
+        UserDefaults.standard.object(forKey: PrefKey.haptics) as? Bool ?? true
+    }
+
+    static func lightTap() {
+        guard isEnabled else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    static func success() {
+        guard isEnabled else { return }
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+}
+
 private enum MessageTextSize: String, CaseIterable, Identifiable {
     case small
     case regular
@@ -64,7 +87,9 @@ struct ChatView: View {
     @State private var expandedProcessMessageIDs: Set<ChatMessage.ID> = []
     @State private var isMenuOpen = false
     @State private var commentEditor: MessageCommentEditor?
-    @State private var messageTextSize: MessageTextSize = .small
+    @AppStorage(PrefKey.messageTextSize) private var messageTextSize: MessageTextSize = .small
+    @AppStorage(PrefKey.reduceMotion) private var reduceMotion = false
+    @AppStorage(PrefKey.compactMessageSpacing) private var compactMessageSpacing = false
     @State private var isMessageListNearBottom = true
     @FocusState private var isInputFocused: Bool
 
@@ -72,7 +97,7 @@ struct ChatView: View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
                 LiquidGlassBackground()
-                mainContent
+                mainContent(width: geometry.size.width)
 
                 if isMenuOpen {
                     menuOverlay(width: min(geometry.size.width * 0.83, 326))
@@ -139,16 +164,25 @@ struct ChatView: View {
         )
     }
 
-    private var mainContent: some View {
-        VStack(spacing: 0) {
+    private func mainContent(width: CGFloat) -> some View {
+        let hasPendingProposal = viewModel.pendingToolProposal != nil
+
+        return VStack(spacing: 0) {
             header
-            messageList
+            messageList(width: width)
+                .opacity(hasPendingProposal ? 0.45 : 1)
 
             if let proposal = viewModel.pendingToolProposal {
                 ToolProposalCard(
                     proposal: proposal,
-                    onConfirm: viewModel.confirmPendingToolProposal,
-                    onCancel: viewModel.cancelPendingToolProposal
+                    onConfirm: {
+                        Haptics.success()
+                        viewModel.confirmPendingToolProposal()
+                    },
+                    onCancel: {
+                        Haptics.lightTap()
+                        viewModel.cancelPendingToolProposal()
+                    }
                 )
                 .padding(.horizontal, 12)
                 .padding(.bottom, 6)
@@ -161,13 +195,22 @@ struct ChatView: View {
                 isInputFocused: $isInputFocused,
                 modelName: viewModel.settingsSnapshot.shortDisplayName,
                 onNewChat: inputBarNewChatAction,
-                onSend: viewModel.send,
+                onSend: {
+                    Haptics.lightTap()
+                    viewModel.send()
+                },
                 onStop: viewModel.stop,
                 onSpeechInput: nil
             )
+            .opacity(hasPendingProposal ? 0.55 : 1)
         }
         .blur(radius: mainContentBlurRadius)
         .animation(.easeInOut(duration: 0.2), value: viewModel.pendingToolProposal)
+        .onChange(of: viewModel.isGenerating) { wasGenerating, isGenerating in
+            if wasGenerating, !isGenerating {
+                Haptics.success()
+            }
+        }
     }
 
     private var inputBarNewChatAction: (() -> Void)? {
@@ -272,6 +315,7 @@ struct ChatView: View {
                 }
                 .buttonStyle(.plain)
                 .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Capsule())
+                .accessibilityLabel("Menu")
 
                 Text("kodAI")
                     .font(.headline)
@@ -310,10 +354,12 @@ struct ChatView: View {
             }
     }
 
-    private var messageList: some View {
-        ScrollViewReader { proxy in
+    private func messageList(width: CGFloat) -> some View {
+        let maxBubbleWidth = min(560, width * 0.78)
+
+        return ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 12) {
+                LazyVStack(alignment: .leading, spacing: compactMessageSpacing ? 6 : 12) {
                     if viewModel.messages.isEmpty {
                         emptyState
                     } else {
@@ -321,6 +367,8 @@ struct ChatView: View {
                             MessageBubble(
                                 message: message,
                                 messageFont: messageTextSize.font,
+                                maxBubbleWidth: maxBubbleWidth,
+                                reduceMotion: reduceMotion,
                                 statusText: statusText(for: message),
                                 activeProcessSummary: activeProcessSummary(for: message),
                                 isProcessExpanded: expandedProcessMessageIDs.contains(message.id),
@@ -372,6 +420,25 @@ struct ChatView: View {
 
                 scrollToBottom(with: proxy)
             }
+            .overlay(alignment: .bottomTrailing) {
+                if !isMessageListNearBottom, !viewModel.messages.isEmpty {
+                    Button {
+                        scrollToBottom(with: proxy)
+                    } label: {
+                        Image(systemName: "arrow.down")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 34, height: 34)
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.tint(ChatPalette.statusSurface).interactive(), in: Circle())
+                    .accessibilityLabel("Scroll to bottom")
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 10)
+                    .transition(.opacity.combined(with: .scale(scale: 0.85)))
+                }
+            }
+            .animation(.easeInOut(duration: 0.18), value: isMessageListNearBottom)
         }
     }
 
@@ -383,7 +450,7 @@ struct ChatView: View {
                     onSelect: viewModel.assignCurrentChatToStream
                 )
             } else {
-                Text("Send a prompt to exercise the inference boundary.")
+                Text("Ask anything — runs fully on-device.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -480,16 +547,11 @@ private struct SideMenuDrawer: View {
     @State private var newTaskTitle = ""
     @State private var isEditingDeadline = false
     @State private var expandedStreamSummaryIDs: Set<Stream.ID> = []
-    @State private var showPhaseTimeline = true
-    @State private var showTokenCounters = true
-    @State private var showGenerationSpeed = true
-    @State private var showRuntimeDetails = true
-    @State private var verboseLogs = false
-    @State private var reduceMotion = false
-    @State private var highContrastBubbles = false
-    @State private var haptics = true
-    @State private var keepInputReachable = true
-    @State private var compactMessageSpacing = false
+    @State private var sessionToRename: ChatSession?
+    @State private var renameSessionTitle = ""
+    @AppStorage(PrefKey.reduceMotion) private var reduceMotion = false
+    @AppStorage(PrefKey.haptics) private var haptics = true
+    @AppStorage(PrefKey.compactMessageSpacing) private var compactMessageSpacing = false
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -559,6 +621,30 @@ private struct SideMenuDrawer: View {
             Button("Cancel", role: .cancel) {
                 streamToRename = nil
                 renameStreamTitle = ""
+            }
+        }
+        .alert("Rename Chat", isPresented: Binding(
+            get: { sessionToRename != nil },
+            set: { isPresented in
+                if !isPresented {
+                    sessionToRename = nil
+                    renameSessionTitle = ""
+                }
+            }
+        )) {
+            TextField("Title", text: $renameSessionTitle)
+
+            Button("Rename") {
+                if let sessionToRename {
+                    onRenameSession(sessionToRename.id, renameSessionTitle)
+                }
+                sessionToRename = nil
+                renameSessionTitle = ""
+            }
+
+            Button("Cancel", role: .cancel) {
+                sessionToRename = nil
+                renameSessionTitle = ""
             }
         }
         .alert("New Project", isPresented: $isCreatingProject) {
@@ -884,9 +970,6 @@ private struct SideMenuDrawer: View {
                                     isGenerating: isGenerating,
                                     onSelect: {
                                         onSelectSession(session)
-                                    },
-                                    onRename: { title in
-                                        onRenameSession(session.id, title)
                                     }
                                 )
                                 .listRowInsets(.init(top: 4, leading: 0, bottom: 4, trailing: 0))
@@ -903,6 +986,14 @@ private struct SideMenuDrawer: View {
                                         onUpdateChatSummary(session.id)
                                     } label: {
                                         Label("Update Summary", systemImage: "arrow.triangle.2.circlepath")
+                                    }
+                                    .disabled(isGenerating)
+
+                                    Button {
+                                        sessionToRename = session
+                                        renameSessionTitle = session.title
+                                    } label: {
+                                        Label("Rename", systemImage: "pencil")
                                     }
                                     .disabled(isGenerating)
 
@@ -991,6 +1082,7 @@ private struct SideMenuDrawer: View {
                     }
                     .buttonStyle(.plain)
                     .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Circle())
+                    .accessibilityLabel("Back")
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(stream.title)
@@ -1071,9 +1163,6 @@ private struct SideMenuDrawer: View {
                                 isGenerating: isGenerating,
                                 onSelect: {
                                     onSelectSession(session)
-                                },
-                                onRename: { title in
-                                    onRenameSession(session.id, title)
                                 }
                             )
                             .contextMenu {
@@ -1087,6 +1176,14 @@ private struct SideMenuDrawer: View {
                                     onUpdateChatSummary(session.id)
                                 } label: {
                                     Label("Update Summary", systemImage: "arrow.triangle.2.circlepath")
+                                }
+                                .disabled(isGenerating)
+
+                                Button {
+                                    sessionToRename = session
+                                    renameSessionTitle = session.title
+                                } label: {
+                                    Label("Rename", systemImage: "pencil")
                                 }
                                 .disabled(isGenerating)
 
@@ -1136,6 +1233,7 @@ private struct SideMenuDrawer: View {
                     }
                     .buttonStyle(.plain)
                     .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Circle())
+                    .accessibilityLabel("Back")
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(project.title)
@@ -1198,7 +1296,10 @@ private struct SideMenuDrawer: View {
                             ForEach(incompleteTasks) { task in
                                 ProjectTaskRow(
                                     task: task,
-                                    onToggle: { onToggleTask(task.id, project.id) }
+                                    onToggle: {
+                                        Haptics.lightTap()
+                                        onToggleTask(task.id, project.id)
+                                    }
                                 )
                                 .contextMenu {
                                     Button {
@@ -1236,7 +1337,10 @@ private struct SideMenuDrawer: View {
                             ForEach(completedTasks) { task in
                                 ProjectTaskRow(
                                     task: task,
-                                    onToggle: { onToggleTask(task.id, project.id) }
+                                    onToggle: {
+                                        Haptics.lightTap()
+                                        onToggleTask(task.id, project.id)
+                                    }
                                 )
                                 .contextMenu {
                                     Button {
@@ -1294,6 +1398,7 @@ private struct SideMenuDrawer: View {
                 }
                 .buttonStyle(.plain)
                 .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Circle())
+                .accessibilityLabel("Back")
 
                 Text("Settings")
                     .font(.title3.weight(.semibold))
@@ -1330,11 +1435,11 @@ private struct SideMenuDrawer: View {
                     }
 
                     settingsSection(title: "Developer") {
-                        settingsToggleRow(title: "Show phase timeline", isOn: $showPhaseTimeline, systemImage: "timeline.selection")
-                        settingsToggleRow(title: "Show token counters", isOn: $showTokenCounters, systemImage: "number")
-                        settingsToggleRow(title: "Show generation speed", isOn: $showGenerationSpeed, systemImage: "speedometer")
-                        settingsToggleRow(title: "Show model/runtime details", isOn: $showRuntimeDetails, systemImage: "info.circle")
-                        settingsToggleRow(title: "Verbose logs", isOn: $verboseLogs, systemImage: "terminal")
+                        settingsValueRow(title: "Show phase timeline", value: "Coming soon", systemImage: "timeline.selection")
+                        settingsValueRow(title: "Show token counters", value: "Coming soon", systemImage: "number")
+                        settingsValueRow(title: "Show generation speed", value: "Coming soon", systemImage: "speedometer")
+                        settingsValueRow(title: "Show model/runtime details", value: "Coming soon", systemImage: "info.circle")
+                        settingsValueRow(title: "Verbose logs", value: "Coming soon", systemImage: "terminal")
                         settingsValueRow(title: "Export current chat", value: "Use /export", systemImage: "square.and.arrow.up")
                         settingsValueRow(title: "Runtime diagnostics", value: settings.backendName ?? "Unavailable", systemImage: "stethoscope")
                     }
@@ -1342,9 +1447,9 @@ private struct SideMenuDrawer: View {
                     settingsSection(title: "Accessibility") {
                         settingsToggleRow(title: "Reduce motion", isOn: $reduceMotion, systemImage: "figure.walk.motion")
                         settingsPickerRow(title: "Chat text size", selection: $messageTextSize, systemImage: "textformat.size")
-                        settingsToggleRow(title: "High contrast bubbles", isOn: $highContrastBubbles, systemImage: "circle.lefthalf.filled")
+                        settingsValueRow(title: "High contrast bubbles", value: "Coming soon", systemImage: "circle.lefthalf.filled")
                         settingsToggleRow(title: "Haptics", isOn: $haptics, systemImage: "iphone.radiowaves.left.and.right")
-                        settingsToggleRow(title: "Keep input controls reachable", isOn: $keepInputReachable, systemImage: "keyboard")
+                        settingsValueRow(title: "Keep input controls reachable", value: "Coming soon", systemImage: "keyboard")
                         settingsToggleRow(title: "Compact message spacing", isOn: $compactMessageSpacing, systemImage: "rectangle.compress.vertical")
                     }
 
@@ -1383,6 +1488,7 @@ private struct SideMenuDrawer: View {
                 }
                 .buttonStyle(.plain)
                 .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Circle())
+                .accessibilityLabel("Back")
 
                 Text("Glass Box")
                     .font(.title3.weight(.semibold))
@@ -1787,6 +1893,7 @@ private struct DrawerSectionHeader: View {
             }
             .buttonStyle(.plain)
             .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Circle())
+            .accessibilityLabel("Add \(title)")
         }
     }
 }
@@ -2048,6 +2155,7 @@ private struct ProjectTaskRow: View {
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(task.isCompleted ? "Mark task incomplete" : "Mark task complete")
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.title)
@@ -2230,6 +2338,7 @@ private struct StreamRow: View {
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(stream.isFavorite ? "Remove favorite" : "Mark favorite")
         }
         .drawerGlassRow(isSelected: isSelected)
     }
@@ -2306,26 +2415,11 @@ private struct ChatSessionRow: View {
     let isActive: Bool
     let isGenerating: Bool
     let onSelect: () -> Void
-    let onRename: (String) -> Void
-
-    @State private var isRenaming = false
-    @State private var renameTitle = ""
 
     var body: some View {
-        Group {
-            if isRenaming {
-                renameControls
-            } else {
-                rowButton
-            }
-        }
-        .drawerGlassRow(isSelected: isActive, isDimmed: isEmptyDraft && !isActive)
-        .opacity(isGenerating && !isActive ? 0.65 : 1)
-        .onLongPressGesture {
-            guard !isGenerating else { return }
-            renameTitle = session.title
-            isRenaming = true
-        }
+        rowButton
+            .drawerGlassRow(isSelected: isActive, isDimmed: isEmptyDraft && !isActive)
+            .opacity(isGenerating && !isActive ? 0.65 : 1)
     }
 
     private var rowButton: some View {
@@ -2369,37 +2463,6 @@ private struct ChatSessionRow: View {
             }
         }
         .frame(minHeight: 42)
-    }
-
-    private var renameControls: some View {
-        HStack(spacing: 8) {
-            TextField("Chat title", text: $renameTitle)
-                .textFieldStyle(.plain)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white)
-                .submitLabel(.done)
-                .onSubmit(saveRename)
-
-            Button("Save") {
-                saveRename()
-            }
-            .font(.caption.weight(.semibold))
-            .buttonStyle(.plain)
-            .disabled(isGenerating)
-
-            Button("Cancel") {
-                renameTitle = session.title
-                isRenaming = false
-            }
-            .font(.caption.weight(.semibold))
-            .buttonStyle(.plain)
-        }
-        .frame(minHeight: 42)
-    }
-
-    private func saveRename() {
-        onRename(renameTitle)
-        isRenaming = false
     }
 
     private var isEmptyDraft: Bool {
@@ -2497,6 +2560,8 @@ private struct MessageCommentEditorSheet: View {
 struct MessageBubble: View {
     let message: ChatMessage
     let messageFont: Font
+    let maxBubbleWidth: CGFloat
+    let reduceMotion: Bool
     let statusText: String?
     let activeProcessSummary: InferenceProcessSummary?
     let isProcessExpanded: Bool
@@ -2522,8 +2587,8 @@ struct MessageBubble: View {
                 if let statusText {
                     if activeProcessSummary != nil,
                        message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        ThinkingDotsView()
-                            .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                        ThinkingDotsView(isAnimated: !reduceMotion)
+                            .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.8)))
                     }
                     processStatusView(statusText, summary: activeProcessSummary, isLive: true, generationStartDate: generationStartDate)
                 } else if let processSummary = message.processSummary {
@@ -2539,8 +2604,14 @@ struct MessageBubble: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .messageBubbleGlass(tint: bubbleTint, isUser: message.role == .user)
-            .frame(maxWidth: 300, alignment: message.role == .user ? .trailing : .leading)
+            .frame(maxWidth: maxBubbleWidth, alignment: message.role == .user ? .trailing : .leading)
             .contextMenu {
+                Button {
+                    UIPasteboard.general.string = message.text
+                } label: {
+                    Label("Copy", systemImage: "doc.on.doc")
+                }
+
                 Button {
                     onEditComment()
                 } label: {
@@ -2558,11 +2629,23 @@ struct MessageBubble: View {
                     Label("Read Aloud", systemImage: "speaker.wave.2")
                 }
 
-                Button(role: .destructive) {
-                    SpeechService.shared.stop()
-                } label: {
-                    Label("Stop Reading", systemImage: "speaker.slash")
+                if SpeechService.shared.isSpeaking {
+                    Button {
+                        SpeechService.shared.stop()
+                    } label: {
+                        Label("Stop Reading", systemImage: "speaker.slash")
+                    }
                 }
+
+                Divider()
+
+                Button {} label: {
+                    Label(
+                        message.createdAt.formatted(date: .abbreviated, time: .shortened),
+                        systemImage: "clock"
+                    )
+                }
+                .disabled(true)
             }
     }
 
@@ -2674,10 +2757,12 @@ struct MessageBubble: View {
 }
 
 private struct ThinkingDotsView: View {
+    let isAnimated: Bool
+
     var body: some View {
         HStack(spacing: 5) {
             ForEach(0..<3, id: \.self) { i in
-                BouncingDot(delay: Double(i) * 0.15)
+                BouncingDot(delay: Double(i) * 0.15, isAnimated: isAnimated)
             }
         }
         .padding(.vertical, 4)
@@ -2686,6 +2771,7 @@ private struct ThinkingDotsView: View {
 
 private struct BouncingDot: View {
     let delay: Double
+    let isAnimated: Bool
     @State private var isUp = false
 
     var body: some View {
@@ -2694,6 +2780,7 @@ private struct BouncingDot: View {
             .frame(width: 7, height: 7)
             .offset(y: isUp ? -5 : 0)
             .onAppear {
+                guard isAnimated else { return }
                 withAnimation(
                     .easeInOut(duration: 0.45)
                     .delay(delay)
@@ -2767,6 +2854,7 @@ struct InputBar: View {
                     }
                     .buttonStyle(.plain)
                     .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Circle())
+                    .accessibilityLabel("New chat")
                     .transition(.scale.combined(with: .opacity))
                 }
 
@@ -2788,20 +2876,9 @@ struct InputBar: View {
                     }
                     .buttonStyle(.glassProminent)
                     .tint(.red)
+                    .accessibilityLabel("Stop generating")
                     .transition(.scale.combined(with: .opacity))
-                }
-
-                if canSend {
-                    Button { sendIfPossible() } label: {
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 38, height: 38)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .tint(ChatPalette.accentBlue)
-                    .transition(.scale.combined(with: .opacity))
-                } else if let onSpeechInput {
+                } else if !canSend, let onSpeechInput {
                     Button { onSpeechInput() } label: {
                         Image(systemName: "mic")
                             .font(.system(size: 16, weight: .semibold))
@@ -2810,6 +2887,19 @@ struct InputBar: View {
                     }
                     .buttonStyle(.plain)
                     .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Circle())
+                    .accessibilityLabel("Dictate message")
+                } else {
+                    Button { sendIfPossible() } label: {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 38, height: 38)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .tint(ChatPalette.accentBlue)
+                    .disabled(!canSend)
+                    .opacity(canSend ? 1 : 0.45)
+                    .accessibilityLabel("Send message")
                 }
             }
             .animation(.smooth(duration: 0.18), value: canSend)
