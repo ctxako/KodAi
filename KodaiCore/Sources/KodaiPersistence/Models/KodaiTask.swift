@@ -4,7 +4,9 @@ import SwiftData
 
 @Model
 public final class KodaiTask {
-    @Attribute(.unique) public var id: UUID
+    // No `.unique` constraint: CloudKit-backed stores reject unique attributes,
+    // and the app never relies on upsert-by-id. Identity is preserved by value.
+    public var id: UUID
     public var title: String
     public var notes: String
     public var priority: TaskPriority

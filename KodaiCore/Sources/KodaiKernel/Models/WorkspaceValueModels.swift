@@ -13,6 +13,14 @@ public enum KodaiTaskPriority: String, Codable, CaseIterable, Sendable {
     case low
     case normal
     case high
+
+    public var sortOrder: Int {
+        switch self {
+        case .high: return 0
+        case .normal: return 1
+        case .low: return 2
+        }
+    }
 }
 
 public struct KodaiTaskValue: Identifiable, Equatable, Codable, Sendable {
