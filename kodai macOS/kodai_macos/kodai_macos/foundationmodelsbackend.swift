@@ -109,13 +109,13 @@ final class FoundationModelsBackend: KodaiInferenceBackend {
 
                     let now = Date()
                     if now.timeIntervalSince(lastUIUpdate) >= 0.035 {
-                        continuation.yield(.token(text))
+                        continuation.yield(.token(text, generatedTokenCount: 0))
                         lastUIUpdate = now
                     }
                 }
 
                 // Flush the final accumulated text before completing.
-                continuation.yield(.token(finalText))
+                continuation.yield(.token(finalText, generatedTokenCount: 0))
 
                 let duration = max(Date().timeIntervalSince(startedAt), 0.001)
                 let outputTokensEst = max(1, Int(ceil(Double(finalText.count) / 4.0)))

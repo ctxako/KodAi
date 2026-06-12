@@ -584,10 +584,10 @@ final class ChatViewModel {
 
         for await event in backend.stream(prompt: cleanInput, instructions: assembledInstructions) {
             switch event {
-            case .phase(_):
+            case .phase(_), .warmup(_), .diagnostic(_), .done(_):
                 break
 
-            case .token(let text):
+            case .token(let text, _):
                 let now = Date()
                 if activeFirstTokenAt == nil && !text.isEmpty {
                     activeFirstTokenAt = now

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import KodaiKernel
 
 actor LocalModelRuntime {
     private let configuration: LocalModelConfiguration

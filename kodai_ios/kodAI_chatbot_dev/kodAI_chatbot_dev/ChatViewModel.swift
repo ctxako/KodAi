@@ -7,6 +7,7 @@
 
 import Combine
 import Foundation
+import KodaiKernel
 import UIKit
 
 struct SlashCommand: Identifiable, Equatable {
@@ -156,7 +157,7 @@ final class ChatViewModel: ObservableObject {
 
     private var estimatedTotalTokenCount: Int {
         let totalCharacters = messages.reduce(0) { $0 + $1.text.count }
-        return totalCharacters / 4
+        return TokenEstimator.estimate(characterCount: totalCharacters)
     }
 
     private var contextWindowPercentageText: String {
@@ -313,6 +314,10 @@ final class ChatViewModel: ObservableObject {
                         cancelScheduledFlush()
                         updateActiveSession()
                         saveSessions()
+                    case .completed, .error:
+                        // Emitted only by the macOS FoundationModels backend; the iOS
+                        // llama runtime signals end-of-turn via .done/.cancelled.
+                        break
                     }
                 }
             } catch {
@@ -867,7 +872,7 @@ final class ChatViewModel: ObservableObject {
             blocks.append(ContextBlockLite(
                 title: "Local context",
                 detail: "Injected into latest prompt · visible to model · not saved as a chat message",
-                estimatedTokens: injectedPromptBlock.count / 4
+                estimatedTokens: TokenEstimator.estimate(characterCount: injectedPromptBlock.count)
             ))
         } else {
             blocks.append(ContextBlockLite(
@@ -1609,7 +1614,7 @@ final class ChatViewModel: ObservableObject {
             case .token(let chunk, let generatedTokenCount):
                 summary += chunk
                 self.generatedTokenCount = generatedTokenCount
-            case .done, .cancelled:
+            case .done, .cancelled, .completed, .error:
                 break
             }
         }
@@ -2045,7 +2050,7 @@ final class ChatViewModel: ObservableObject {
 
     private func ensureAssistantHasVisibleText(
         for id: ChatMessage.ID,
-        finishReason: LlamaGenerationFinishReason
+        finishReason: GenerationFinishReason
     ) {
         guard let index = messages.firstIndex(where: { $0.id == id }) else { return }
         guard messages[index].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
@@ -2346,6 +2351,10 @@ private extension InferencePhase {
         switch self {
         case .idle:
             return "idle"
+        case .resolving:
+            return "resolving"
+        case .initializing:
+            return "initializing"
         case .checkingRuntimeState:
             return "checkingRuntimeState"
         case .checkingLocalTime:

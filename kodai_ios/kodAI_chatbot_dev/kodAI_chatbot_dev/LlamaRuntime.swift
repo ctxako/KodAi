@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import KodaiKernel
 
 actor LlamaRuntime {
     private let modelFileResolver: BundledModelFileResolver
@@ -41,7 +42,7 @@ actor LlamaRuntime {
         context: LlamaContextWrapper,
         configuration: LocalModelConfiguration,
         continuation: AsyncThrowingStream<InferenceEvent, Error>.Continuation
-    ) async throws -> LlamaGenerationFinishReason {
+    ) async throws -> GenerationFinishReason {
         try Task.checkCancellation()
 
         continuation.yield(.phase(.formattingPrompt))

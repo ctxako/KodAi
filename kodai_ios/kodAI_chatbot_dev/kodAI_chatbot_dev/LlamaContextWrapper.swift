@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import KodaiKernel
 import llama
 
 nonisolated final class LlamaContextWrapper: @unchecked Sendable {
@@ -195,7 +196,7 @@ nonisolated final class LlamaContextWrapper: @unchecked Sendable {
     nonisolated func decode(
         maxTokens: Int32,
         onToken: (String, Int) -> Void
-    ) throws -> LlamaGenerationFinishReason {
+    ) throws -> GenerationFinishReason {
         var generatedTokenCount: Int32 = 0
         utf8Buffer.removeAll(keepingCapacity: true)
         debugYieldedCharacterCount = 0
@@ -425,7 +426,7 @@ nonisolated final class LlamaContextWrapper: @unchecked Sendable {
         #endif
     }
 
-    private func logRawOutputSummary(finishReason: LlamaGenerationFinishReason) {
+    private func logRawOutputSummary(finishReason: GenerationFinishReason) {
         #if DEBUG
         log.event("generated token ids=\(debugGeneratedTokenIDs)")
         log.event("decoded text before stop filtering=\(debugEscaped(debugRawDecodedText))")
@@ -500,25 +501,7 @@ nonisolated struct LlamaPromptBuildResult: Sendable {
     let historyIncluded: Bool
 }
 
-nonisolated enum LlamaGenerationFinishReason: Equatable, Sendable {
-    case maxTokens
-    case endOfGenerationToken
-    case textualStopString
-    case cancelled
-
-    var logValue: String {
-        switch self {
-        case .maxTokens:
-            return "maxTokens"
-        case .endOfGenerationToken:
-            return "endOfGenerationToken"
-        case .textualStopString:
-            return "textualStopString"
-        case .cancelled:
-            return "cancelled"
-        }
-    }
-}
+// GenerationFinishReason now lives in KodaiKernel.
 
 nonisolated private struct TextualStopFilterResult {
     let didStop: Bool

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import KodaiKernel
 
 actor InferenceService {
     private let runtime = LocalModelRuntime()

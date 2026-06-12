@@ -47,6 +47,66 @@ struct TokenEstimatorTests {
         let text = String(repeating: "€", count: 6)
         #expect(TokenEstimator.estimate(text) == 4)
     }
+
+    @Test func characterCountVariantHasNoFloorOfOne() {
+        #expect(TokenEstimator.estimate(characterCount: 0) == 0)
+        #expect(TokenEstimator.estimate(characterCount: 3) == 0)
+        #expect(TokenEstimator.estimate(characterCount: 100) == 25)
+    }
+}
+
+// MARK: - Shared inference vocabulary
+
+@Suite("Inference vocabulary")
+struct InferenceVocabularyTests {
+    @Test func phaseSupersetCoversIOSAndMacOSCases() {
+        // iOS-originated phases
+        let iosPhases: [InferencePhase] = [
+            .idle, .checkingRuntimeState, .checkingLocalTime, .checkingWeather,
+            .usingCachedWeather, .downloadingModel, .loadingModel, .formattingPrompt,
+            .tokenizing, .prefilling, .decoding, .flushingOutput,
+            .completed, .cancelled, .failed
+        ]
+        // macOS-originated phases
+        let macPhases: [InferencePhase] = [.resolving, .initializing]
+        for phase in iosPhases + macPhases {
+            #expect(InferencePhase.allCases.contains(phase))
+        }
+    }
+
+    @Test func phaseRawValuesAreStableForPersistedChats() throws {
+        // iOS persists InferencePhase inside ChatMessage; raw values must not drift.
+        #expect(InferencePhase.checkingRuntimeState.rawValue == "checkingRuntimeState")
+        #expect(InferencePhase.flushingOutput.rawValue == "flushingOutput")
+        let decoded = try JSONDecoder().decode(
+            InferencePhase.self,
+            from: Data("\"downloadingModel\"".utf8)
+        )
+        #expect(decoded == .downloadingModel)
+    }
+
+    @Test func eventCarriesIOSPayloads() {
+        let events: [InferenceEvent] = [
+            .warmup(.compilingMetal),
+            .diagnostic("weather unavailable"),
+            .token("hi", generatedTokenCount: 2),
+            .done(.endOfGenerationToken),
+            .cancelled
+        ]
+        if case .token(let text, let count) = events[2] {
+            #expect(text == "hi")
+            #expect(count == 2)
+        } else {
+            Issue.record("expected token event")
+        }
+    }
+
+    @Test func finishReasonLogValues() {
+        #expect(GenerationFinishReason.maxTokens.logValue == "maxTokens")
+        #expect(GenerationFinishReason.endOfGenerationToken.logValue == "endOfGenerationToken")
+        #expect(GenerationFinishReason.textualStopString.logValue == "textualStopString")
+        #expect(GenerationFinishReason.cancelled.logValue == "cancelled")
+    }
 }
 
 // MARK: - Enum defaults

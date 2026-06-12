@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import KodaiKernel
 #if canImport(CoreLocation)
 import CoreLocation
 #endif

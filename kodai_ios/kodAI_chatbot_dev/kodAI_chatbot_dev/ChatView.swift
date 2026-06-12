@@ -5,6 +5,7 @@
 //  Created by Charles Thomas Xavier Austin III on 6/6/26.
 //
 
+import KodaiKernel
 import SwiftUI
 import UIKit
 
@@ -3381,7 +3382,7 @@ private extension ChatView {
             return "Checking weather…"
         case .usingCachedWeather:
             return "Using cached weather…"
-        case .downloadingModel, .loadingModel, .formattingPrompt, .tokenizing, .prefilling, .decoding:
+        case .resolving, .initializing, .downloadingModel, .loadingModel, .formattingPrompt, .tokenizing, .prefilling, .decoding:
             return message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Thinking…" : "Responding…"
         case .flushingOutput:
             return "Responding…"
@@ -3431,6 +3432,8 @@ private extension InferencePhase {
         switch self {
         case .idle:
             return "Idle"
+        case .resolving, .initializing:
+            return "Initializing"
         case .checkingRuntimeState:
             return "Checking runtime state"
         case .checkingLocalTime:

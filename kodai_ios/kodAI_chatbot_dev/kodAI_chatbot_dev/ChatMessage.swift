@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import KodaiKernel
 
 struct ChatMessage: Identifiable, Equatable, Codable, Sendable {
     let id: UUID

@@ -131,6 +131,7 @@
 			name = kodAI_chatbot_dev;
 			packageProductDependencies = (
 				3C1A89652FD4A001003E89DE /* llama */,
+				3C1A89672FD4A001003E89DE /* KodaiKernel */,
 			);
 			productName = kodAI_chatbot_dev;
 			productReference = 3C1A891A2FD48C3C003E89DE /* kodAI_chatbot_dev.app */;
@@ -216,6 +217,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				3C1A89642FD4A001003E89DE /* XCLocalSwiftPackageReference "../LlamaCPP" */,
+				3C1A89662FD4A001003E89DE /* XCLocalSwiftPackageReference "../../KodaiCore" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3C1A891B2FD48C3C003E89DE /* Products */;
@@ -610,6 +612,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../LlamaCPP;
 		};
+		3C1A89662FD4A001003E89DE /* XCLocalSwiftPackageReference "../../KodaiCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../KodaiCore;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -617,6 +623,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 3C1A89642FD4A001003E89DE /* XCLocalSwiftPackageReference "../LlamaCPP" */;
 			productName = llama;
+		};
+		3C1A89672FD4A001003E89DE /* KodaiKernel */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3C1A89662FD4A001003E89DE /* XCLocalSwiftPackageReference "../../KodaiCore" */;
+			productName = KodaiKernel;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import KodaiKernel
 
 struct ChatExportSnapshot: Equatable {
     let id = UUID()
@@ -73,7 +74,7 @@ enum ChatExportService {
     ) -> String {
         let exportTitle = normalizedTitle(title)
         let characterCount = snapshot.messages.reduce(0) { $0 + $1.text.count }
-        let tokenCount = characterCount / 4
+        let tokenCount = TokenEstimator.estimate(characterCount: characterCount)
         let contextLimit = snapshot.contextLimit
         let contextPercent = contextLimit.flatMap { limit -> String? in
             guard limit > 0 else { return nil }
