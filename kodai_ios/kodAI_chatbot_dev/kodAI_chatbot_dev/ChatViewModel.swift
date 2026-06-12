@@ -81,6 +81,8 @@ final class ChatViewModel: ObservableObject {
     @Published private(set) var projects: [KodaiProjectLite] = []
     @Published private(set) var selectedProjectID: UUID?
     @Published private(set) var pendingToolProposal: PendingToolProposalLite?
+    @Published private(set) var recentActivityEvents: [ActivityEventLite] = []
+    @Published private(set) var latestContextSnapshot: ContextSnapshotLite?
 
     var activeProcessSummary: InferenceProcessSummary? {
         guard activeAssistantMessageID != nil, phase != .idle else { return nil }
@@ -221,6 +223,8 @@ final class ChatViewModel: ObservableObject {
 
         sendStartedAt = Date()
         log.event("send tapped", since: sendStartedAt)
+
+        updateContextSnapshot(reason: "Sending message to local model")
 
         messages.append(ChatMessage(role: .user, text: prompt))
         log.event("user message appended", since: sendStartedAt)
@@ -746,15 +750,79 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Glass-box activity & context visibility (in-memory)
+
+    private let maxRecentActivityEvents = 100
+
+    func recordActivity(
+        kind: ActivityKindLite,
+        title: String,
+        detail: String? = nil,
+        projectID: UUID? = nil,
+        taskID: UUID? = nil,
+        source: ActivitySourceLite = .user
+    ) {
+        let event = ActivityEventLite(
+            kind: kind,
+            title: title,
+            detail: detail,
+            projectID: projectID,
+            taskID: taskID,
+            source: source
+        )
+        recentActivityEvents.insert(event, at: 0)
+        if recentActivityEvents.count > maxRecentActivityEvents {
+            recentActivityEvents.removeLast(recentActivityEvents.count - maxRecentActivityEvents)
+        }
+        log.event("activity recorded kind=\(kind.rawValue) source=\(source.rawValue)")
+    }
+
+    private func updateContextSnapshot(reason: String) {
+        var blocks: [ContextBlockLite] = []
+
+        blocks.append(ContextBlockLite(
+            title: "Assistant mode",
+            detail: activeAssistantMode.title
+        ))
+
+        if let project = selectedProject {
+            let activeTaskCount = project.incompleteTasks.count
+            blocks.append(ContextBlockLite(
+                title: "Selected project",
+                detail: "\(project.title) · \(activeTaskCount) active task\(activeTaskCount == 1 ? "" : "s")"
+            ))
+        } else {
+            blocks.append(ContextBlockLite(
+                title: "Selected project",
+                detail: "None"
+            ))
+        }
+
+        let dueItems = collectDueItems()
+        blocks.append(ContextBlockLite(
+            title: "Today / overdue",
+            detail: "\(dueItems.today.count) due today, \(dueItems.overdue.count) overdue"
+        ))
+
+        blocks.append(ContextBlockLite(
+            title: "Current chat",
+            detail: "\(messages.count) messages",
+            estimatedTokens: estimatedTotalTokenCount
+        ))
+
+        latestContextSnapshot = ContextSnapshotLite(reason: reason, blocks: blocks)
+    }
+
     // MARK: - Projects & Tasks (lightweight iOS-local layer)
 
     @discardableResult
-    func createProject(title: String) -> KodaiProjectLite {
+    func createProject(title: String, source: ActivitySourceLite = .user) -> KodaiProjectLite {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let project = KodaiProjectLite(title: trimmedTitle.isEmpty ? "New Project" : trimmedTitle)
         projects.insert(project, at: 0)
         saveProjects()
         log.event("project created id=\(project.id)")
+        recordActivity(kind: .projectCreated, title: "Created project", detail: project.title, projectID: project.id, source: source)
         return project
     }
 
@@ -762,25 +830,29 @@ final class ChatViewModel: ObservableObject {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty,
               let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
+        let previousTitle = projects[index].title
         projects[index].title = trimmedTitle
         projects[index].updatedAt = Date()
         saveProjects()
+        recordActivity(kind: .projectRenamed, title: "Renamed project", detail: "\(previousTitle) → \(trimmedTitle)", projectID: projectID)
     }
 
     func deleteProject(projectID: UUID) {
+        let deletedTitle = projects.first(where: { $0.id == projectID })?.title
         projects.removeAll { $0.id == projectID }
         if selectedProjectID == projectID {
             selectedProjectID = nil
         }
         saveProjects()
         log.event("project deleted id=\(projectID)")
+        recordActivity(kind: .projectDeleted, title: "Deleted project", detail: deletedTitle, projectID: projectID)
     }
 
     func selectProject(projectID: UUID?) {
         selectedProjectID = projectID
     }
 
-    func createTask(title: String, projectID: UUID, dueDate: Date? = nil) {
+    func createTask(title: String, projectID: UUID, dueDate: Date? = nil, source: ActivitySourceLite = .user) {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty,
               let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
@@ -789,6 +861,7 @@ final class ChatViewModel: ObservableObject {
         projects[index].updatedAt = Date()
         saveProjects()
         log.event("task created id=\(task.id) projectID=\(projectID)")
+        recordActivity(kind: .taskCreated, title: "Created task", detail: trimmedTitle, projectID: projectID, taskID: task.id, source: source)
     }
 
     func toggleTaskCompletion(taskID: UUID, projectID: UUID) {
@@ -800,14 +873,23 @@ final class ChatViewModel: ObservableObject {
         projects[projectIndex].tasks[taskIndex].updatedAt = Date()
         projects[projectIndex].updatedAt = Date()
         saveProjects()
+        recordActivity(
+            kind: isNowCompleted ? .taskCompleted : .taskReopened,
+            title: isNowCompleted ? "Completed task" : "Reopened task",
+            detail: projects[projectIndex].tasks[taskIndex].title,
+            projectID: projectID,
+            taskID: taskID
+        )
     }
 
     func deleteTask(taskID: UUID, projectID: UUID) {
         guard let projectIndex = projects.firstIndex(where: { $0.id == projectID }) else { return }
+        let deletedTitle = projects[projectIndex].tasks.first(where: { $0.id == taskID })?.title
         projects[projectIndex].tasks.removeAll { $0.id == taskID }
         projects[projectIndex].updatedAt = Date()
         saveProjects()
         log.event("task deleted id=\(taskID) projectID=\(projectID)")
+        recordActivity(kind: .taskDeleted, title: "Deleted task", detail: deletedTitle, projectID: projectID, taskID: taskID)
     }
 
     func setProjectDeadline(projectID: UUID, deadline: Date?) {
@@ -816,6 +898,12 @@ final class ChatViewModel: ObservableObject {
         projects[index].updatedAt = Date()
         saveProjects()
         log.event("project deadline updated id=\(projectID) hasDeadline=\(deadline != nil)")
+        recordActivity(
+            kind: .projectDeadlineChanged,
+            title: deadline == nil ? "Cleared project deadline" : "Set project deadline",
+            detail: deadline.map { "\(projects[index].title) · \($0.formatted(date: .abbreviated, time: .omitted))" } ?? projects[index].title,
+            projectID: projectID
+        )
     }
 
     // MARK: - Today / Overdue
@@ -887,6 +975,7 @@ final class ChatViewModel: ObservableObject {
             )
         )
         log.event("tool proposal created kind=createTask")
+        recordActivity(kind: .toolProposalCreated, title: "Proposed task", detail: trimmedTitle, projectID: resolvedProjectID, source: .proposal)
     }
 
     func confirmPendingToolProposal() {
@@ -915,7 +1004,8 @@ final class ChatViewModel: ObservableObject {
     }
 
     private func performCreateTaskProposal(_ proposal: CreateTaskProposalLite, in projectID: UUID) {
-        createTask(title: proposal.title, projectID: projectID, dueDate: proposal.dueDate)
+        recordActivity(kind: .toolProposalConfirmed, title: "Confirmed proposal", detail: proposal.title, projectID: projectID, source: .proposal)
+        createTask(title: proposal.title, projectID: projectID, dueDate: proposal.dueDate, source: .proposal)
         let projectTitle = projects.first(where: { $0.id == projectID })?.title ?? "Unknown"
         var lines = ["Created task: \(proposal.title)", "Project: \(projectTitle)"]
         if let dueDate = proposal.dueDate {
@@ -928,8 +1018,9 @@ final class ChatViewModel: ObservableObject {
     }
 
     func cancelPendingToolProposal() {
-        guard pendingToolProposal != nil else { return }
+        guard let proposal = pendingToolProposal else { return }
         pendingToolProposal = nil
+        recordActivity(kind: .toolProposalCancelled, title: "Cancelled proposal", detail: proposal.createTask?.title, source: .proposal)
         appendSystemMessage("Cancelled proposal. No task was created.")
         updateActiveSession()
         saveSessions()
@@ -1086,6 +1177,13 @@ final class ChatViewModel: ObservableObject {
             return
         }
 
+        recordActivity(
+            kind: .slashCommandHandled,
+            title: "Handled \(match.command.name)",
+            detail: match.argument,
+            source: .slashCommand
+        )
+
         switch match.command.name {
         case "/project":
             handleProjectCommand(argument: match.argument)
@@ -1116,7 +1214,7 @@ final class ChatViewModel: ObservableObject {
             appendSystemMessage("Usage: /project <title>")
             return
         }
-        let project = createProject(title: title)
+        let project = createProject(title: title, source: .slashCommand)
         selectProject(projectID: project.id)
         appendSystemMessage("Created project: \(project.title)")
         updateActiveSession()
@@ -1145,7 +1243,7 @@ final class ChatViewModel: ObservableObject {
             }
         }
 
-        createTask(title: title, projectID: projectID, dueDate: dueDate)
+        createTask(title: title, projectID: projectID, dueDate: dueDate, source: .slashCommand)
         let projectTitle = projects.first(where: { $0.id == projectID })?.title ?? "Unknown"
         var lines = ["Created task: \(title)", "Project: \(projectTitle)"]
         if let dueDate {
@@ -1176,6 +1274,7 @@ final class ChatViewModel: ObservableObject {
             projects[projectIndex].tasks[taskIndex].updatedAt = Date()
             projects[projectIndex].updatedAt = Date()
             saveProjects()
+            recordActivity(kind: .taskCompleted, title: "Completed task", detail: task.title, projectID: projects[projectIndex].id, taskID: task.id, source: .slashCommand)
             appendSystemMessage("Completed task: \(task.title)")
             updateActiveSession()
             saveSessions()
@@ -1192,6 +1291,7 @@ final class ChatViewModel: ObservableObject {
                 projects[projectIndex].tasks[taskIndex].updatedAt = Date()
                 projects[projectIndex].updatedAt = Date()
                 saveProjects()
+                recordActivity(kind: .taskCompleted, title: "Completed task", detail: task.title, projectID: projects[projectIndex].id, taskID: task.id, source: .slashCommand)
                 appendSystemMessage("Completed task: \(task.title)\nProject: \(projects[projectIndex].title)")
                 updateActiveSession()
                 saveSessions()

@@ -251,6 +251,8 @@ struct ChatView: View {
             onSetProjectDeadline: { projectID, deadline in
                 viewModel.setProjectDeadline(projectID: projectID, deadline: deadline)
             },
+            recentActivityEvents: viewModel.recentActivityEvents,
+            latestContextSnapshot: viewModel.latestContextSnapshot,
             onClose: closeMenu
         )
         .transition(.move(edge: .leading).combined(with: .opacity))
@@ -412,6 +414,7 @@ private struct SideMenuDrawer: View {
     private enum DrawerMode {
         case chats
         case settings
+        case glassBox
         case streamDetail(Stream.ID)
         case projectDetail(KodaiProjectLite.ID)
     }
@@ -455,6 +458,8 @@ private struct SideMenuDrawer: View {
     let onDeleteTask: (UUID, UUID) -> Void
     let dueItems: [DueTaskItem]
     let onSetProjectDeadline: (UUID, Date?) -> Void
+    let recentActivityEvents: [ActivityEventLite]
+    let latestContextSnapshot: ContextSnapshotLite?
     let onClose: () -> Void
 
     private let log = AppLog(category: "StreamUI")
@@ -494,6 +499,9 @@ private struct SideMenuDrawer: View {
                     .transition(drawerContentTransition)
             case .settings:
                 settingsContent
+                    .transition(drawerContentTransition)
+            case .glassBox:
+                glassBoxContent
                     .transition(drawerContentTransition)
             case .streamDetail(let streamID):
                 streamDetailContent(streamID: streamID)
@@ -939,6 +947,19 @@ private struct SideMenuDrawer: View {
 
             Button {
                 withAnimation(.smooth(duration: 0.22)) {
+                    drawerMode = .glassBox
+                }
+            } label: {
+                Label("Glass Box", systemImage: "cube.transparent")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.88))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .drawerGlassRow(verticalPadding: 7)
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                withAnimation(.smooth(duration: 0.22)) {
                     drawerMode = .settings
                 }
             } label: {
@@ -1347,6 +1368,99 @@ private struct SideMenuDrawer: View {
         }
     }
 
+    private var glassBoxContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 12) {
+                Button {
+                    withAnimation(.smooth(duration: 0.22)) {
+                        drawerMode = .chats
+                    }
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 34, height: 34)
+                }
+                .buttonStyle(.plain)
+                .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Circle())
+
+                Text("Glass Box")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.white)
+
+                Spacer()
+            }
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    settingsSection(title: "Latest Context") {
+                        if let snapshot = latestContextSnapshot {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(snapshot.reason)
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.white.opacity(0.88))
+                                Text(snapshot.createdAt.formatted(date: .omitted, time: .shortened))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .drawerGlassRow(verticalPadding: 7)
+
+                            ForEach(snapshot.blocks) { block in
+                                settingsValueRow(
+                                    title: block.title,
+                                    value: block.estimatedTokens.map { "\(block.detail) · ~\($0) tok" } ?? block.detail,
+                                    systemImage: "square.stack.3d.up"
+                                )
+                            }
+                        } else {
+                            DrawerEmptyRow(text: "No context snapshot yet — send a message")
+                        }
+                    }
+
+                    settingsSection(title: "Recent Activity") {
+                        if recentActivityEvents.isEmpty {
+                            DrawerEmptyRow(text: "No local activity yet")
+                        } else {
+                            ForEach(recentActivityEvents.prefix(30)) { event in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(systemName: event.kind.systemImage)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 16)
+
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(event.title)
+                                            .font(.caption.weight(.medium))
+                                            .foregroundStyle(.white.opacity(0.88))
+
+                                        if let detail = event.detail, !detail.isEmpty {
+                                            Text(detail)
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                                .lineLimit(2)
+                                        }
+
+                                        Text("\(event.source.displayName) · \(event.createdAt.formatted(date: .omitted, time: .shortened))")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary.opacity(0.7))
+                                    }
+
+                                    Spacer(minLength: 0)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .drawerGlassRow(verticalPadding: 6)
+                            }
+                        }
+                    }
+                }
+                .padding(.bottom, 4)
+            }
+            .scrollIndicators(.hidden)
+            .frame(maxHeight: .infinity, alignment: .top)
+        }
+    }
+
     private var drawerContentTransition: AnyTransition {
         switch drawerMode {
         case .chats:
@@ -1354,7 +1468,7 @@ private struct SideMenuDrawer: View {
                 insertion: .move(edge: .leading).combined(with: .opacity),
                 removal: .move(edge: .trailing).combined(with: .opacity)
             )
-        case .settings:
+        case .settings, .glassBox:
             .asymmetric(
                 insertion: .move(edge: .trailing).combined(with: .opacity),
                 removal: .move(edge: .leading).combined(with: .opacity)
