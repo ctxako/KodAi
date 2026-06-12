@@ -1340,6 +1340,7 @@ final class ChatViewModel {
         `/project <name>` — create a new project and switch into it
         `/done <task>` — complete a matching open task
         `/done` — list open tasks in the current project
+        `/summary` — summarize the current chat
         `/help` or `/commands` — show this list
         """
 
