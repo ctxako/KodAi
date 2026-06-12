@@ -9,6 +9,7 @@
 //
 
 import Foundation
+import KodaiKernel
 
 enum ToolProposalKindLite: String, Codable, Sendable {
     case createTask
