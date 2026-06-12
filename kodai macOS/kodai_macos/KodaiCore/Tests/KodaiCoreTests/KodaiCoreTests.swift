@@ -10,15 +10,13 @@ private func makeContainer() throws -> ModelContainer {
         KodaiProject.self,
         KodaiChatSession.self,
         KodaiChatMessage.self,
-        TurnRecord.self,
-        MemoryEntry.self,
-        Summary.self,
+        KodaiStream.self,
+        KodaiSummary.self,
         KodaiTask.self,
+        TurnRecord.self,
         ActivityEvent.self,
         ToolCall.self,
-        ModelPerformanceMetric.self,
-        FileReference.self,
-        KodaiReminder.self
+        ModelPerformanceMetric.self
     ])
     return try ModelContainer(for: schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
 }
@@ -79,7 +77,9 @@ struct ModelCreationTests {
         let project = KodaiProject(title: "My Project")
         #expect(project.title == "My Project")
         #expect(project.status == .active)
-        #expect(project.notes == "")
+        #expect(project.details == "")
+        #expect(project.summary == nil)
+        #expect(project.deadline == nil)
         #expect(project.sessions.isEmpty)
         #expect(project.tasks.isEmpty)
     }
@@ -87,21 +87,18 @@ struct ModelCreationTests {
     @Test func sessionDefaults() throws {
         let session = KodaiChatSession()
         #expect(session.title == "New chat")
-        #expect(session.persona == .default_)
-        #expect(session.format == .chat)
         #expect(session.project == nil)
+        #expect(session.stream == nil)
+        #expect(session.summarizedThroughMessageID == nil)
         #expect(session.messages.isEmpty)
+        #expect(session.summaries.isEmpty)
     }
 
-    @Test func messageTokenEstimateAutoFilled() {
-        let msg = KodaiChatMessage(role: .user, content: "Hello world!")
-        // "Hello world!" = 12 bytes → 12/4 = 3
-        #expect(msg.tokenEstimate == 3)
-    }
-
-    @Test func messageTokenEstimateOverride() {
-        let msg = KodaiChatMessage(role: .assistant, content: "Hi", tokenEstimate: 42)
-        #expect(msg.tokenEstimate == 42)
+    @Test func messageDefaults() {
+        let msg = KodaiChatMessage(role: "user", content: "Hello world!")
+        #expect(msg.role == "user")
+        #expect(msg.content == "Hello world!")
+        #expect(msg.session == nil)
     }
 
     @Test func turnRecordAutoEstimates() {
@@ -114,25 +111,19 @@ struct ModelCreationTests {
         #expect(turn.outputTokenEstimate >= 1)
     }
 
-    @Test func reminderDefaultsFired() {
-        let reminder = KodaiReminder(title: "Follow up", scheduledAt: .now)
-        #expect(reminder.fired == false)
-    }
-
     @Test func taskDefaults() {
         let task = KodaiTask(title: "Write tests")
-        #expect(task.status == .pending)
+        #expect(task.isCompleted == false)
+        #expect(task.completedAt == nil)
         #expect(task.priority == .medium)
         #expect(task.notes == "")
         #expect(task.dueDate == nil)
     }
 
-    @Test func memoryEntryDefaults() {
-        let entry = MemoryEntry(content: "User prefers Swift", type: .preference)
-        #expect(entry.status == .active)
-        #expect(entry.tags.isEmpty)
-        #expect(entry.project == nil)
-        #expect(entry.session == nil)
+    @Test func summaryTokenCountAutoFilled() {
+        let summary = KodaiSummary(kind: .session, content: String(repeating: "x", count: 100))
+        #expect(summary.tokenCount == 25)
+        #expect(summary.previousContent == nil)
     }
 }
 
@@ -161,7 +152,7 @@ struct RelationshipTests {
         let context = ModelContext(container)
 
         let session = KodaiChatSession(title: "Test")
-        let msg = KodaiChatMessage(role: .user, content: "Hello")
+        let msg = KodaiChatMessage(role: "user", content: "Hello")
         session.messages.append(msg)
         msg.session = session
         context.insert(session)
@@ -170,6 +161,38 @@ struct RelationshipTests {
 
         #expect(session.messages.count == 1)
         #expect(session.messages.first?.content == "Hello")
+    }
+
+    @Test func sessionBelongsToStream() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+
+        let stream = KodaiStream(title: "Work")
+        let session = KodaiChatSession(title: "Chat")
+        stream.sessions.append(session)
+        session.stream = stream
+        context.insert(stream)
+        context.insert(session)
+        try context.save()
+
+        #expect(session.stream?.title == "Work")
+        #expect(stream.sessions.count == 1)
+    }
+
+    @Test func summaryLinksToSession() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+
+        let session = KodaiChatSession(title: "Chat")
+        let summary = KodaiSummary(kind: .session, content: "Recap")
+        session.summaries.append(summary)
+        summary.session = session
+        context.insert(session)
+        context.insert(summary)
+        try context.save()
+
+        #expect(session.summaries.count == 1)
+        #expect(session.summaries.first?.content == "Recap")
     }
 
     @Test func turnRecordLinksToSessionViaSessionID() throws {
@@ -211,22 +234,6 @@ struct RelationshipTests {
         #expect(turn.toolCalls.count == 1)
         #expect(turn.toolCalls.first?.toolName == "search")
     }
-
-    @Test func reminderLinksToTask() throws {
-        let container = try makeContainer()
-        let context = ModelContext(container)
-
-        let task = KodaiTask(title: "Ship v1")
-        let reminder = KodaiReminder(title: "Check CI", scheduledAt: .now)
-        task.reminders.append(reminder)
-        reminder.task = task
-        context.insert(task)
-        context.insert(reminder)
-        try context.save()
-
-        #expect(task.reminders.count == 1)
-        #expect(task.reminders.first?.title == "Check CI")
-    }
 }
 
 // MARK: - MigrationHelper
@@ -240,8 +247,6 @@ struct MigrationHelperTests {
 
         #expect(session.id == id)
         #expect(session.title == "Old chat")
-        #expect(session.persona == .default_)
-        #expect(session.format == .chat)
         #expect(session.project == nil)
     }
 
@@ -249,13 +254,13 @@ struct MigrationHelperTests {
         let userMsg = LegacyChatMessage(role: "user", content: "Hi")
         let assistantMsg = LegacyChatMessage(role: "assistant", content: "Hello")
 
-        #expect(MigrationHelper.migrate(userMsg).role == .user)
-        #expect(MigrationHelper.migrate(assistantMsg).role == .assistant)
+        #expect(MigrationHelper.migrate(userMsg).role == "user")
+        #expect(MigrationHelper.migrate(assistantMsg).role == "assistant")
     }
 
     @Test func unknownRoleFallsBackToUser() {
         let msg = LegacyChatMessage(role: "bot", content: "??")
-        #expect(MigrationHelper.migrate(msg).role == .user)
+        #expect(MigrationHelper.migrate(msg).role == "user")
     }
 
     @Test func migratesAllMessages() {
@@ -269,7 +274,7 @@ struct MigrationHelperTests {
         )
         let session = MigrationHelper.migrate(legacy)
         #expect(session.messages.count == 3)
-        #expect(session.messages[1].role == .assistant)
+        #expect(session.messages[1].role == "assistant")
     }
 
     @Test func preservesMessageTimestamps() {

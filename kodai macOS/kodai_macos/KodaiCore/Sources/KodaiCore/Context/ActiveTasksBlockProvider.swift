@@ -5,9 +5,7 @@ public struct ActiveTasksBlockProvider: ContextBlockProvider, Sendable {
 
     public func provide(for chat: KodaiChatSession, query: String) -> ContextBlock? {
         guard let project = chat.project else { return nil }
-        let openTasks = project.tasks.filter {
-            $0.status == .pending || $0.status == .inProgress
-        }
+        let openTasks = project.tasks.filter { !$0.isCompleted }
         guard !openTasks.isEmpty else { return nil }
 
         let lines = openTasks

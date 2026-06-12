@@ -28,13 +28,6 @@ public enum OutputFormat: String, Codable, CaseIterable, Sendable {
     case debug = "debug"
 }
 
-public enum TaskStatus: String, Codable, CaseIterable, Sendable {
-    case pending = "pending"
-    case inProgress = "inProgress"
-    case completed = "completed"
-    case cancelled = "cancelled"
-}
-
 public enum TaskPriority: String, Codable, CaseIterable, Sendable {
     case low = "low"
     case medium = "medium"

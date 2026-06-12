@@ -15,14 +15,15 @@ public struct HistoryBlockProvider: ContextBlockProvider, Sendable {
         let lines = recent.map { msg -> String in
             let label: String
             switch msg.role {
-            case .user: label = "User"
-            case .assistant: label = "Assistant"
-            case .system: label = "System"
+            case ChatRole.user.rawValue: label = "User"
+            case ChatRole.assistant.rawValue: label = "Assistant"
+            case ChatRole.system.rawValue: label = "System"
+            default: label = msg.role.capitalized
             }
             return "\(label): \(msg.content)"
         }
         let content = lines.joined(separator: "\n")
-        let tokens = recent.reduce(0) { $0 + $1.tokenEstimate }
+        let tokens = recent.reduce(0) { $0 + TokenEstimator.estimate($1.content) }
         return ContextBlock(
             kind: "history",
             content: content,

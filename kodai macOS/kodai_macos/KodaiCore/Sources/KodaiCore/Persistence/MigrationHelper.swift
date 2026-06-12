@@ -46,13 +46,11 @@ public struct LegacyChatSession: Sendable {
 
 public enum MigrationHelper {
     /// Converts a legacy session into the canonical KodaiChatSession.
-    /// The result is a loose chat (project == nil) with default persona and format.
+    /// The result is a loose chat (project == nil).
     public static func migrate(_ legacy: LegacyChatSession) -> KodaiChatSession {
         let session = KodaiChatSession(
             id: legacy.id,
             title: legacy.title,
-            persona: .default_,
-            format: .chat,
             createdAt: legacy.createdAt,
             updatedAt: legacy.updatedAt
         )
@@ -63,7 +61,7 @@ public enum MigrationHelper {
     public static func migrate(_ legacy: LegacyChatMessage) -> KodaiChatMessage {
         KodaiChatMessage(
             id: legacy.id,
-            role: ChatRole(rawValue: legacy.role) ?? .user,
+            role: ChatRole(rawValue: legacy.role)?.rawValue ?? ChatRole.user.rawValue,
             content: legacy.content,
             createdAt: legacy.createdAt
         )

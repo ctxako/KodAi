@@ -5,6 +5,7 @@
 
 import Foundation
 import FoundationModels
+import KodaiCore
 
 @MainActor
 final class SummaryEngine {

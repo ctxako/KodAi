@@ -10,15 +10,13 @@ private func makeContainer() throws -> ModelContainer {
         KodaiProject.self,
         KodaiChatSession.self,
         KodaiChatMessage.self,
-        TurnRecord.self,
-        MemoryEntry.self,
-        Summary.self,
+        KodaiStream.self,
+        KodaiSummary.self,
         KodaiTask.self,
+        TurnRecord.self,
         ActivityEvent.self,
         ToolCall.self,
-        ModelPerformanceMetric.self,
-        FileReference.self,
-        KodaiReminder.self
+        ModelPerformanceMetric.self
     ])
     return try ModelContainer(for: schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
 }
@@ -66,12 +64,12 @@ struct ContextAssemblerTests {
         let session = KodaiChatSession()
         context.insert(session)
 
-        let fixtures: [(ChatRole, String, TimeInterval)] = [
-            (.user,      "Message 1 old",    -4),
-            (.assistant, "Message 2 old",    -3),
-            (.user,      "Message 3 mid",    -2),
-            (.assistant, "Message 4 recent", -1),
-            (.user,      "Message 5 newest",  0),
+        let fixtures: [(String, String, TimeInterval)] = [
+            ("user",      "Message 1 old",    -4),
+            ("assistant", "Message 2 old",    -3),
+            ("user",      "Message 3 mid",    -2),
+            ("assistant", "Message 4 recent", -1),
+            ("user",      "Message 5 newest",  0),
         ]
         for (role, content, offset) in fixtures {
             let msg = KodaiChatMessage(role: role, content: content, createdAt: now.addingTimeInterval(offset))

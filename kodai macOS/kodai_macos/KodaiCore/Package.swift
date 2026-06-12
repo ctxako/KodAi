@@ -4,7 +4,8 @@ import PackageDescription
 let package = Package(
     name: "KodaiCore",
     platforms: [
-        .macOS(.v26)
+        .macOS(.v26),
+        .iOS(.v18)
     ],
     products: [
         .library(name: "KodaiCore", targets: ["KodaiCore"])
