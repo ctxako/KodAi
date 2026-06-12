@@ -39,6 +39,7 @@ actor InferenceService {
                 let constrainedPromptStack = ModelPromptStack(
                     settings: promptStack.settings,
                     runtimeConstraintPromptBlock: makeRuntimeConstraintPromptBlock(constraintSnapshot),
+                    localContextPromptBlock: promptStack.localContextPromptBlock,
                     ambientContext: promptStack.ambientContext
                 )
 

@@ -224,7 +224,11 @@ final class ChatViewModel: ObservableObject {
         sendStartedAt = Date()
         log.event("send tapped", since: sendStartedAt)
 
-        updateContextSnapshot(reason: "Sending message to local model")
+        let localContextPromptBlock = buildLightweightContextPrompt()
+        updateContextSnapshot(
+            reason: "Sending message to local model",
+            injectedPromptBlock: localContextPromptBlock
+        )
 
         messages.append(ChatMessage(role: .user, text: prompt))
         log.event("user message appended", since: sendStartedAt)
@@ -254,7 +258,7 @@ final class ChatViewModel: ObservableObject {
 
             do {
                 var hasReceivedFirstToken = false
-                let promptStack = makePromptStack()
+                let promptStack = makePromptStack(localContextPromptBlock: localContextPromptBlock)
                 let stream = await inferenceService.generate(
                     messages: promptMessages,
                     promptStack: promptStack,
@@ -777,7 +781,56 @@ final class ChatViewModel: ObservableObject {
         log.event("activity recorded kind=\(kind.rawValue) source=\(source.rawValue)")
     }
 
-    private func updateContextSnapshot(reason: String) {
+    // MARK: - Lightweight local context injection (per-request, not persisted)
+
+    private let maxContextProjectTasks = 8
+    private let maxContextDueTasks = 8
+
+    /// Builds a compact, deterministic context block describing the selected
+    /// project and today/overdue tasks. Returned per-request only — never
+    /// saved into chat history. Returns nil when there is nothing to inject.
+    func buildLightweightContextPrompt() -> String? {
+        var lines: [String] = []
+
+        if let project = selectedProject {
+            lines.append("Selected project: \(project.title)")
+            if let deadline = project.deadline {
+                lines.append("Project deadline: \(deadline.formatted(date: .abbreviated, time: .omitted))")
+            }
+            let activeTasks = project.incompleteTasks.prefix(maxContextProjectTasks)
+            if !activeTasks.isEmpty {
+                lines.append("Active tasks:")
+                for task in activeTasks {
+                    lines.append("- \(task.title)")
+                }
+            }
+        }
+
+        let dueItems = collectDueItems()
+        let dueList = Array((dueItems.overdue + dueItems.today).prefix(maxContextDueTasks))
+        if !dueList.isEmpty {
+            lines.append("Today / overdue:")
+            for item in dueList {
+                let label = item.isOverdue ? "Overdue" : "Today"
+                lines.append("- \(label): \(item.task.title) — \(item.projectTitle)")
+            }
+        }
+
+        guard !lines.isEmpty else { return nil }
+
+        let body = lines.joined(separator: "\n")
+        return """
+        [LOCAL KODAI CONTEXT]
+        \(body)
+        Rules:
+        - You may use this local context to answer.
+        - Do not claim to create, edit, delete, or complete tasks directly.
+        - For actions, suggest slash commands like /task, /done, or /propose task.
+        [/LOCAL KODAI CONTEXT]
+        """
+    }
+
+    private func updateContextSnapshot(reason: String, injectedPromptBlock: String? = nil) {
         var blocks: [ContextBlockLite] = []
 
         blocks.append(ContextBlockLite(
@@ -809,6 +862,19 @@ final class ChatViewModel: ObservableObject {
             detail: "\(messages.count) messages",
             estimatedTokens: estimatedTotalTokenCount
         ))
+
+        if let injectedPromptBlock {
+            blocks.append(ContextBlockLite(
+                title: "Local context",
+                detail: "Injected into latest prompt · visible to model · not saved as a chat message",
+                estimatedTokens: injectedPromptBlock.count / 4
+            ))
+        } else {
+            blocks.append(ContextBlockLite(
+                title: "Local context",
+                detail: "Nothing injected — no project or due-task context"
+            ))
+        }
 
         latestContextSnapshot = ContextSnapshotLite(reason: reason, blocks: blocks)
     }
@@ -1101,10 +1167,11 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    private func makePromptStack() -> ModelPromptStack {
+    private func makePromptStack(localContextPromptBlock: String? = nil) -> ModelPromptStack {
         ModelPromptStack(
             settings: ModelPromptSettings(assistantMode: activeAssistantMode),
-            runtimeConstraintPromptBlock: nil
+            runtimeConstraintPromptBlock: nil,
+            localContextPromptBlock: localContextPromptBlock
         )
     }
 
@@ -2184,6 +2251,7 @@ struct ModelPromptSettings: Codable, Equatable, Sendable {
 struct ModelPromptStack: Equatable, Sendable {
     var settings: ModelPromptSettings
     var runtimeConstraintPromptBlock: String?
+    var localContextPromptBlock: String?
     var ambientContext: AmbientContext?
 
     var runtimeSystemPrompt: String {
@@ -2191,6 +2259,7 @@ struct ModelPromptStack: Equatable, Sendable {
             ModelPromptSettings.compactRuntimePrompt,
             runtimeConstraintPromptBlock,
             settings.assistantMode.prompt,
+            localContextPromptBlock,
             ambientContext?.promptBlock
         ].compactMap { $0 }
             .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -2201,6 +2270,7 @@ struct ModelPromptStack: Equatable, Sendable {
         ModelPromptStack(
             settings: settings,
             runtimeConstraintPromptBlock: runtimeConstraintPromptBlock,
+            localContextPromptBlock: localContextPromptBlock,
             ambientContext: ambientContext
         )
     }
