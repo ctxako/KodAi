@@ -836,48 +836,60 @@ final class ChatViewModel: ObservableObject {
     }
 
     private func updateContextSnapshot(reason: String, injectedPromptBlock: String? = nil) {
-        var blocks: [ContextBlockLite] = []
+        var blocks: [ContextBlock] = []
 
-        blocks.append(ContextBlockLite(
-            title: "Assistant mode",
-            detail: activeAssistantMode.title
+        blocks.append(ContextBlock(
+            kind: "Assistant mode",
+            content: activeAssistantMode.title,
+            tokenEstimate: 0,
+            priority: blocks.count
         ))
 
         if let project = selectedProject {
             let activeTaskCount = project.incompleteTasks.count
-            blocks.append(ContextBlockLite(
-                title: "Selected project",
-                detail: "\(project.title) · \(activeTaskCount) active task\(activeTaskCount == 1 ? "" : "s")"
+            blocks.append(ContextBlock(
+                kind: "Selected project",
+                content: "\(project.title) · \(activeTaskCount) active task\(activeTaskCount == 1 ? "" : "s")",
+                tokenEstimate: 0,
+                priority: blocks.count
             ))
         } else {
-            blocks.append(ContextBlockLite(
-                title: "Selected project",
-                detail: "None"
+            blocks.append(ContextBlock(
+                kind: "Selected project",
+                content: "None",
+                tokenEstimate: 0,
+                priority: blocks.count
             ))
         }
 
         let dueItems = collectDueItems()
-        blocks.append(ContextBlockLite(
-            title: "Today / overdue",
-            detail: "\(dueItems.today.count) due today, \(dueItems.overdue.count) overdue"
+        blocks.append(ContextBlock(
+            kind: "Today / overdue",
+            content: "\(dueItems.today.count) due today, \(dueItems.overdue.count) overdue",
+            tokenEstimate: 0,
+            priority: blocks.count
         ))
 
-        blocks.append(ContextBlockLite(
-            title: "Current chat",
-            detail: "\(messages.count) messages",
-            estimatedTokens: estimatedTotalTokenCount
+        blocks.append(ContextBlock(
+            kind: "Current chat",
+            content: "\(messages.count) messages",
+            tokenEstimate: estimatedTotalTokenCount,
+            priority: blocks.count
         ))
 
         if let injectedPromptBlock {
-            blocks.append(ContextBlockLite(
-                title: "Local context",
-                detail: "Injected into latest prompt · visible to model · not saved as a chat message",
-                estimatedTokens: TokenEstimator.estimate(characterCount: injectedPromptBlock.count)
+            blocks.append(ContextBlock(
+                kind: "Local context",
+                content: "Injected into latest prompt · visible to model · not saved as a chat message",
+                tokenEstimate: TokenEstimator.estimate(characterCount: injectedPromptBlock.count),
+                priority: blocks.count
             ))
         } else {
-            blocks.append(ContextBlockLite(
-                title: "Local context",
-                detail: "Nothing injected — no project or due-task context"
+            blocks.append(ContextBlock(
+                kind: "Local context",
+                content: "Nothing injected — no project or due-task context",
+                tokenEstimate: 0,
+                priority: blocks.count
             ))
         }
 

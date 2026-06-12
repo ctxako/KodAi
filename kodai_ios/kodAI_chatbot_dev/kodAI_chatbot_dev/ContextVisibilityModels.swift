@@ -4,41 +4,25 @@
 //
 //  Lightweight in-memory context snapshot for glass-box visibility.
 //  Describes what local context surrounded the latest model turn —
-//  it does not change the prompt and is not the macOS ContextManifest.
+//  it does not change the prompt. Blocks are shared KodaiKernel
+//  ContextBlock values; this wrapper only adds UI-side identity,
+//  timestamp, and reason.
 //
 
 import Foundation
-
-struct ContextBlockLite: Identifiable, Equatable, Sendable {
-    let id: UUID
-    let title: String
-    let detail: String
-    let estimatedTokens: Int?
-
-    init(
-        id: UUID = UUID(),
-        title: String,
-        detail: String,
-        estimatedTokens: Int? = nil
-    ) {
-        self.id = id
-        self.title = title
-        self.detail = detail
-        self.estimatedTokens = estimatedTokens
-    }
-}
+import KodaiKernel
 
 struct ContextSnapshotLite: Identifiable, Equatable, Sendable {
     let id: UUID
     let createdAt: Date
     let reason: String
-    let blocks: [ContextBlockLite]
+    let blocks: [ContextBlock]
 
     init(
         id: UUID = UUID(),
         createdAt: Date = Date(),
         reason: String,
-        blocks: [ContextBlockLite]
+        blocks: [ContextBlock]
     ) {
         self.id = id
         self.createdAt = createdAt

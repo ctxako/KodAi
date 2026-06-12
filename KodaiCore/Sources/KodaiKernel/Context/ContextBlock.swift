@@ -1,6 +1,6 @@
 import Foundation
 
-public struct ContextBlock: Sendable {
+public struct ContextBlock: Codable, Equatable, Sendable {
     public var kind: String
     public var content: String
     public var tokenEstimate: Int

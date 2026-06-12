@@ -1513,10 +1513,10 @@ private struct SideMenuDrawer: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .drawerGlassRow(verticalPadding: 7)
 
-                            ForEach(snapshot.blocks) { block in
+                            ForEach(snapshot.blocks, id: \.kind) { block in
                                 settingsValueRow(
-                                    title: block.title,
-                                    value: block.estimatedTokens.map { "\(block.detail) · ~\($0) tok" } ?? block.detail,
+                                    title: block.kind,
+                                    value: block.tokenEstimate > 0 ? "\(block.content) · ~\(block.tokenEstimate) tok" : block.content,
                                     systemImage: "square.stack.3d.up"
                                 )
                             }

@@ -109,3 +109,40 @@ struct ContextAssemblerTests {
         #expect(prompt.contains("history"))
     }
 }
+
+@Suite("Context value types")
+struct ContextValueTypeTests {
+
+    // iOS uses ContextBlock as a plain value type for glass-box display;
+    // it must round-trip through Codable and compare by value.
+    @Test func contextBlockCodableRoundTrip() throws {
+        let block = ContextBlock(kind: "Local context", content: "Injected into latest prompt", tokenEstimate: 42, priority: 4, sourceID: UUID())
+        let data = try JSONEncoder().encode(block)
+        let decoded = try JSONDecoder().decode(ContextBlock.self, from: data)
+        #expect(decoded == block)
+    }
+
+    @Test func contextManifestRepresentsSmallBlockSet() throws {
+        let manifest = ContextManifest(
+            blocks: [
+                ContextBlockRecord(kind: "persona", tokenEstimate: 10, status: .included),
+                ContextBlockRecord(kind: "history", tokenEstimate: 200, status: .truncated, reason: "over budget"),
+            ],
+            totalTokens: 210,
+            budgetLimit: 220
+        )
+        let data = try JSONEncoder().encode(manifest)
+        let decoded = try JSONDecoder().decode(ContextManifest.self, from: data)
+        #expect(decoded.blocks.count == 2)
+        #expect(decoded.blocks[1].status == .truncated)
+        #expect(decoded.totalTokens == 210)
+    }
+
+    // The estimates feeding the iOS glass box must stay stable.
+    @Test func tokenEstimatesAreStable() {
+        #expect(TokenEstimator.estimate("abcdefgh") == 2)
+        #expect(TokenEstimator.estimate("") == 1)
+        #expect(TokenEstimator.estimate(characterCount: 0) == 0)
+        #expect(TokenEstimator.estimate(characterCount: 100) == 25)
+    }
+}
