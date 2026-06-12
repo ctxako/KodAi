@@ -36,6 +36,10 @@ final class FoundationModelsBackend: KodaiInferenceBackend {
     private(set) var currentInstructions = ""
     private var streamTask: Task<Void, Never>?
 
+    // Tools available in every session. CreateTaskTool proposes tasks without
+    // mutating app state; the user confirms via /task.
+    private let kodaiTools: [any Tool] = [CreateTaskTool()]
+
     // MARK: KodaiInferenceBackend
 
     var isAvailable: Bool {
@@ -52,7 +56,7 @@ final class FoundationModelsBackend: KodaiInferenceBackend {
         if currentSession == nil {
             let eff = currentInstructions.isEmpty ? instructions : currentInstructions
             currentInstructions = eff
-            let session = LanguageModelSession(instructions: eff)
+            let session = LanguageModelSession(tools: kodaiTools, instructions: eff)
             currentSession = session
             if let id = currentChatID { sessionCache[id] = session }
         }
@@ -158,7 +162,7 @@ final class FoundationModelsBackend: KodaiInferenceBackend {
         currentInstructions = instructions
         let resolvedID = chatID ?? currentChatID
         currentChatID = resolvedID
-        let session = LanguageModelSession(instructions: instructions)
+        let session = LanguageModelSession(tools: kodaiTools, instructions: instructions)
         currentSession = session
         if let id = resolvedID {
             sessionCache[id] = session
@@ -172,7 +176,7 @@ final class FoundationModelsBackend: KodaiInferenceBackend {
         if let cached = sessionCache[chatID] {
             currentSession = cached
         } else {
-            let session = LanguageModelSession(instructions: instructions)
+            let session = LanguageModelSession(tools: kodaiTools, instructions: instructions)
             currentSession = session
             sessionCache[chatID] = session
         }
