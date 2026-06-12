@@ -181,10 +181,8 @@ final class ChatViewModel: ObservableObject {
         sendStartedAt = Date()
         log.event("send tapped", since: sendStartedAt)
 
-        let localContextPromptBlock = buildLightweightContextPrompt()
-        updateContextSnapshot(
-            reason: "Sending message to local model",
-            injectedPromptBlock: localContextPromptBlock
+        let localContextPromptBlock = buildLocalContextAndUpdateSnapshot(
+            reason: "Sending message to local model"
         )
 
         messages.append(ChatMessage(role: .user, text: prompt))
@@ -744,112 +742,32 @@ final class ChatViewModel: ObservableObject {
 
     // MARK: - Lightweight local context injection (per-request, not persisted)
 
-    private let maxContextProjectTasks = 8
-    private let maxContextDueTasks = 8
-
-    /// Builds a compact, deterministic context block describing the selected
-    /// project and today/overdue tasks. Returned per-request only — never
-    /// saved into chat history. Returns nil when there is nothing to inject.
-    func buildLightweightContextPrompt() -> String? {
-        var lines: [String] = []
-
-        if let project = selectedProject {
-            lines.append("Selected project: \(project.title)")
-            if let deadline = project.deadline {
-                lines.append("Project deadline: \(deadline.formatted(date: .abbreviated, time: .omitted))")
-            }
-            let activeTasks = project.incompleteTasks.prefix(maxContextProjectTasks)
-            if !activeTasks.isEmpty {
-                lines.append("Active tasks:")
-                for task in activeTasks {
-                    lines.append("- \(task.title)")
-                }
-            }
-        }
-
-        let dueItems = collectDueItems()
-        let dueList = Array((dueItems.overdue + dueItems.today).prefix(maxContextDueTasks))
-        if !dueList.isEmpty {
-            lines.append("Today / overdue:")
-            for item in dueList {
-                let label = item.isOverdue ? "Overdue" : "Today"
-                lines.append("- \(label): \(item.task.title) — \(item.projectTitle)")
-            }
-        }
-
-        guard !lines.isEmpty else { return nil }
-
-        let body = lines.joined(separator: "\n")
-        return """
-        [LOCAL KODAI CONTEXT]
-        \(body)
-        Rules:
-        - You may use this local context to answer.
-        - Do not claim to create, edit, delete, or complete tasks directly.
-        - For actions, suggest slash commands like /task, /done, or /propose task.
-        [/LOCAL KODAI CONTEXT]
-        """
+    /// Gathers the app-local data (selected project, due tasks, assistant
+    /// mode, chat stats) for the shared KodaiKernel prompt builder. The
+    /// formatting and action-rule wording live in KodaiKernel.
+    private func makeLocalContextSnapshotValue() -> KodaiLocalContextSnapshotValue {
+        KodaiLocalContextSnapshotValue(
+            selectedProject: selectedProject,
+            todayAndOverdueTasks: todayAndOverdueTasks(),
+            assistantModeDescription: activeAssistantMode.title,
+            currentMessageCount: messages.count,
+            currentChatTokenEstimate: estimatedTotalTokenCount
+        )
     }
 
-    private func updateContextSnapshot(reason: String, injectedPromptBlock: String? = nil) {
-        var blocks: [ContextBlock] = []
+    /// Builds the compact per-request context prompt via the shared kernel
+    /// builder. Returned per-request only — never saved into chat history.
+    /// Returns nil when there is nothing to inject.
+    func buildLightweightContextPrompt() -> String? {
+        KodaiLocalContextPromptBuilder.build(snapshot: makeLocalContextSnapshotValue()).promptBlock
+    }
 
-        blocks.append(ContextBlock(
-            kind: "Assistant mode",
-            content: activeAssistantMode.title,
-            tokenEstimate: 0,
-            priority: blocks.count
-        ))
-
-        if let project = selectedProject {
-            let activeTaskCount = project.incompleteTasks.count
-            blocks.append(ContextBlock(
-                kind: "Selected project",
-                content: "\(project.title) · \(activeTaskCount) active task\(activeTaskCount == 1 ? "" : "s")",
-                tokenEstimate: 0,
-                priority: blocks.count
-            ))
-        } else {
-            blocks.append(ContextBlock(
-                kind: "Selected project",
-                content: "None",
-                tokenEstimate: 0,
-                priority: blocks.count
-            ))
-        }
-
-        let dueItems = collectDueItems()
-        blocks.append(ContextBlock(
-            kind: "Today / overdue",
-            content: "\(dueItems.today.count) due today, \(dueItems.overdue.count) overdue",
-            tokenEstimate: 0,
-            priority: blocks.count
-        ))
-
-        blocks.append(ContextBlock(
-            kind: "Current chat",
-            content: "\(messages.count) messages",
-            tokenEstimate: estimatedTotalTokenCount,
-            priority: blocks.count
-        ))
-
-        if let injectedPromptBlock {
-            blocks.append(ContextBlock(
-                kind: "Local context",
-                content: "Injected into latest prompt · visible to model · not saved as a chat message",
-                tokenEstimate: TokenEstimator.estimate(characterCount: injectedPromptBlock.count),
-                priority: blocks.count
-            ))
-        } else {
-            blocks.append(ContextBlock(
-                kind: "Local context",
-                content: "Nothing injected — no project or due-task context",
-                tokenEstimate: 0,
-                priority: blocks.count
-            ))
-        }
-
-        latestContextSnapshot = ContextSnapshotLite(reason: reason, blocks: blocks)
+    /// Builds the prompt block once and refreshes the glass-box snapshot
+    /// from the same kernel result.
+    private func buildLocalContextAndUpdateSnapshot(reason: String) -> String? {
+        let result = KodaiLocalContextPromptBuilder.build(snapshot: makeLocalContextSnapshotValue())
+        latestContextSnapshot = ContextSnapshotLite(reason: reason, blocks: result.contextBlocks)
+        return result.promptBlock
     }
 
     // MARK: - Projects & Tasks (lightweight iOS-local layer)
