@@ -112,6 +112,11 @@ final class ChatViewModel {
             triggerSessionSummary(context: context)
             return
         }
+        let lower = trimmed.lowercased()
+        if lower == "/task" || lower.hasPrefix("/task ") {
+            handleTaskCommand(trimmed, context: context)
+            return
+        }
         responseTask = Task {
             await runModel(context: context)
         }
@@ -1124,6 +1129,93 @@ final class ChatViewModel {
         case .medium: return 1
         case .low: return 2
         }
+    }
+
+    // MARK: – Slash command: /task
+
+    private func handleTaskCommand(_ input: String, context: ModelContext) {
+        inputText = ""
+        let currentSession = ensureCurrentChat(context: context)
+
+        messages.append(ChatMessage(role: .user, text: input))
+        saveStoredMessage(role: .user, content: input, in: currentSession, context: context)
+
+        func reply(_ text: String) {
+            messages.append(ChatMessage(role: .assistant, text: text))
+            saveStoredMessage(role: .assistant, content: text, in: currentSession, context: context)
+        }
+
+        let remainder = input.dropFirst(5).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !remainder.isEmpty else {
+            reply("Usage: `/task <title>` — optionally add `priority:high` or `due:Jun20`.")
+            return
+        }
+
+        let (title, priority, dueDate) = parseTaskFlags(remainder)
+
+        guard !title.isEmpty else {
+            reply("Usage: `/task <title>` — optionally add `priority:high` or `due:Jun20`.")
+            return
+        }
+
+        guard let project = selectedChat?.project else {
+            reply("No active project — open a project chat or use /project to create one.")
+            return
+        }
+
+        createTask(in: project, title: title, priority: priority, dueDate: dueDate, context: context)
+
+        var parts: [String] = [priority.rawValue]
+        if let due = dueDate { parts.append("due \(shortDateString(due))") }
+        reply("Created task: \(title) (\(parts.joined(separator: ", ")))")
+    }
+
+    private func parseTaskFlags(_ text: String) -> (title: String, priority: TaskPriority, dueDate: Date?) {
+        var mutable = text
+        var priority: TaskPriority = .medium
+        var dueDate: Date? = nil
+
+        if let range = mutable.range(of: #"\bpriority:(low|medium|high)\b"#, options: .regularExpression) {
+            let match = String(mutable[range])
+            let value = String(match.dropFirst("priority:".count))
+            priority = TaskPriority(rawValue: value.lowercased()) ?? .medium
+            mutable.removeSubrange(range)
+        }
+
+        if let range = mutable.range(of: #"\bdue:\S+"#, options: .regularExpression) {
+            let match = String(mutable[range])
+            let dateStr = String(match.dropFirst("due:".count))
+            dueDate = parseInlineDate(dateStr)
+            mutable.removeSubrange(range)
+        }
+
+        return (mutable.trimmingCharacters(in: .whitespacesAndNewlines), priority, dueDate)
+    }
+
+    private func parseInlineDate(_ raw: String) -> Date? {
+        // Normalize "Jun20" → "Jun 20" for formatters that require a space
+        let spaced = raw.replacingOccurrences(
+            of: #"([a-zA-Z])(\d)"#, with: "$1 $2", options: .regularExpression
+        )
+        let formats = ["MMM d", "MMM dd", "MMM d yyyy", "MMM dd yyyy", "yyyy-MM-dd", "M/d/yyyy", "M/d"]
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US")
+        let calendar = Calendar.current
+        let currentYear = calendar.component(.year, from: Date())
+
+        for fmt in formats {
+            formatter.dateFormat = fmt
+            if let date = formatter.date(from: spaced) {
+                if !fmt.contains("y") {
+                    var comps = calendar.dateComponents([.month, .day], from: date)
+                    comps.year = currentYear
+                    return calendar.date(from: comps)
+                }
+                return date
+            }
+        }
+        return nil
     }
 
     private func recentConversationHistory(limit: Int = 10) -> String {
