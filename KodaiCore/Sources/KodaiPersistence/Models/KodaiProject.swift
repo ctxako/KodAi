@@ -16,9 +16,9 @@ public final class KodaiProject {
     public var createdAt: Date
     public var updatedAt: Date
 
-    @Relationship(deleteRule: .cascade, inverse: \KodaiChatSession.project)
-    public var sessions: [KodaiChatSession]
-
+    // No relationship to KodaiChatSession: chat sessions reference projects
+    // by scalar `projectID` so the workspace schema (project/task) stays
+    // independent of the chat schema. See docs/k2e-persistence-boundary.md.
     @Relationship(deleteRule: .cascade, inverse: \KodaiTask.project)
     public var tasks: [KodaiTask]
 
@@ -32,7 +32,6 @@ public final class KodaiProject {
         deadline: Date? = nil,
         createdAt: Date = .now,
         updatedAt: Date = .now,
-        sessions: [KodaiChatSession] = [],
         tasks: [KodaiTask] = []
     ) {
         self.id = id
@@ -44,7 +43,6 @@ public final class KodaiProject {
         self.deadline = deadline
         self.createdAt = createdAt
         self.updatedAt = updatedAt
-        self.sessions = sessions
         self.tasks = tasks
     }
 }

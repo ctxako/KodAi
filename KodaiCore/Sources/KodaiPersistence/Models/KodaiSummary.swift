@@ -11,7 +11,9 @@ public final class KodaiSummary {
     public var tokenCount: Int
     public var createdAt: Date
     public var session: KodaiChatSession?
-    public var project: KodaiProject?
+    // Scalar reference (see KodaiChatSession.projectID): no SwiftData
+    // relationship across the chat/workspace schema boundary.
+    public var projectID: UUID?
 
     public init(
         id: UUID = UUID(),
@@ -20,7 +22,7 @@ public final class KodaiSummary {
         previousContent: String? = nil,
         createdAt: Date = .now,
         session: KodaiChatSession? = nil,
-        project: KodaiProject? = nil
+        projectID: UUID? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -29,6 +31,6 @@ public final class KodaiSummary {
         self.tokenCount = max(1, Int(ceil(Double(content.count) / 4.0)))
         self.createdAt = createdAt
         self.session = session
-        self.project = project
+        self.projectID = projectID
     }
 }

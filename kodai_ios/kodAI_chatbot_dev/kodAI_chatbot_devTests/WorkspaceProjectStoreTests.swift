@@ -230,23 +230,21 @@ struct WorkspaceProjectStoreTests {
         let loaded = try await store.loadProjects()
         #expect(loaded.count == 2)
 
-        // Chats stay in ChatStore JSON: the chat models are schema-only and
-        // must never gain rows from workspace migration or saves.
-        let context = ModelContext(container)
-        #expect(try context.fetch(FetchDescriptor<KodaiChatSession>()).isEmpty)
-        #expect(try context.fetch(FetchDescriptor<KodaiChatMessage>()).isEmpty)
-        #expect(try context.fetch(FetchDescriptor<KodaiStream>()).isEmpty)
-        #expect(try context.fetch(FetchDescriptor<KodaiSummary>()).isEmpty)
+        // Chats stay in ChatStore JSON. Since K2E the chat models are not in
+        // the workspace schema at all, so chat rows are impossible here by
+        // construction — only the workspace entities exist.
+        let entityNames = Set(container.schema.entities.map(\.name))
+        #expect(entityNames == ["KodaiProject", "KodaiTask"])
     }
 
     @Test func projectValuesFromSwiftDataExcludeChatSessions() async throws {
         let container = try WorkspaceModelContainer.makeInMemory()
-        // Even if a project somehow carried a session, the value layer the
-        // app consumes has no chat fields at all.
+        // Chats reference projects only by scalar projectID and live in a
+        // separate (JSON) store on iOS; the value layer the app consumes has
+        // no chat fields at all.
         let context = ModelContext(container)
         let project = KodaiProject(title: "With session")
         context.insert(project)
-        project.sessions.append(KodaiChatSession(title: "Stray chat"))
         try context.save()
 
         let directory = try makeTempDirectory()
@@ -261,7 +259,7 @@ struct WorkspaceProjectStoreTests {
         // KodaiProjectValue is Codable with no session key; encoding proves
         // no chat content leaks through the workspace value path.
         let encoded = String(decoding: try JSONEncoder().encode(value), as: UTF8.self)
-        #expect(!encoded.contains("Stray chat"))
+        #expect(!encoded.contains("session"))
     }
 
     // MARK: - SwiftData as source of truth

@@ -9,18 +9,14 @@ import SwiftData
 /// access). ChatStore still owns the chat/stream/prompt-settings JSON;
 /// chats stay JSON-only.
 ///
-/// The schema must include the full relationship closure of KodaiProject:
-/// KodaiProject.sessions pulls in KodaiChatSession, which pulls in
-/// KodaiChatMessage, KodaiSummary, and KodaiStream. They are registered so the
-/// schema is valid, but nothing writes chat data through this container.
+/// Since K2E the workspace graph is Project → Task only: chat sessions
+/// reference projects by scalar projectID instead of a SwiftData
+/// relationship, so this container registers only the workspace models and
+/// the chat models stay out of the schema entirely.
 enum WorkspaceModelContainer {
     static let schema = Schema([
         KodaiProject.self,
-        KodaiTask.self,
-        KodaiChatSession.self,
-        KodaiChatMessage.self,
-        KodaiSummary.self,
-        KodaiStream.self
+        KodaiTask.self
     ])
 
     static let storeFileName = "KodaiWorkspace.store"

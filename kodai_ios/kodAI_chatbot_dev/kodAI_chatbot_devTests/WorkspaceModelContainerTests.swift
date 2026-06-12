@@ -20,4 +20,19 @@ struct WorkspaceModelContainerTests {
         #expect(projects.count == 1)
         #expect(projects.first?.tasks.count == 1)
     }
+
+    // K2E: the workspace schema is Project → Task only. The chat models must
+    // not be pulled in — neither registered explicitly nor dragged in through
+    // a relationship closure.
+    @Test func schemaRegistersOnlyWorkspaceModels() throws {
+        let entityNames = Set(WorkspaceModelContainer.schema.entities.map(\.name))
+        #expect(entityNames == ["KodaiProject", "KodaiTask"])
+    }
+
+    @Test func schemaContainsNoChatEntities() throws {
+        let entityNames = Set(WorkspaceModelContainer.schema.entities.map(\.name))
+        for chatEntity in ["KodaiChatSession", "KodaiChatMessage", "KodaiSummary", "KodaiStream"] {
+            #expect(!entityNames.contains(chatEntity))
+        }
+    }
 }

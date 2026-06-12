@@ -179,14 +179,26 @@ final class WorkspaceModelAdapterTests: XCTestCase {
     }
 
     func testProjectValueRepresentationExcludesChatSessions() throws {
-        let container = try makeInMemoryContainer()
-        let context = ModelContext(container)
+        // Chats reference projects only by scalar projectID and live in their
+        // own schema; the project model carries no sessions, and
+        // KodaiProjectValue has no chat fields at all.
+        let workspaceContainer = try makeInMemoryContainer()
+        let workspaceContext = ModelContext(workspaceContainer)
         let model = KodaiProject(title: "With chat")
-        context.insert(model)
-        model.sessions.append(KodaiChatSession(title: "Chat"))
+        workspaceContext.insert(model)
+
+        let chatSchema = Schema([
+            KodaiChatSession.self, KodaiChatMessage.self, KodaiSummary.self, KodaiStream.self
+        ])
+        let chatContainer = try ModelContainer(
+            for: chatSchema,
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        let chatContext = ModelContext(chatContainer)
+        chatContext.insert(KodaiChatSession(title: "Chat", projectID: model.id))
+        try chatContext.save()
+
         let value = model.valueRepresentation
-        // KodaiProjectValue has no chat fields at all; this guards that the
-        // workspace value stays chat-free even as the model carries sessions.
         XCTAssertEqual(value.tasks, [])
         XCTAssertEqual(value.title, "With chat")
     }
@@ -225,8 +237,11 @@ final class WorkspaceModelAdapterTests: XCTestCase {
 
     // MARK: - Helpers
 
+    // Workspace models only: since K2E the project/task graph no longer pulls
+    // in the chat models, so this is the same shape the iOS workspace
+    // container registers.
     private func makeInMemoryContainer() throws -> ModelContainer {
-        let schema = Schema([KodaiProject.self, KodaiTask.self, KodaiChatSession.self])
+        let schema = Schema([KodaiProject.self, KodaiTask.self])
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])
     }

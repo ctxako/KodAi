@@ -11,9 +11,9 @@
 //  created or the migration fails, the store falls back to the JSON
 //  ProjectTaskStore so the user never loses projects/tasks.
 //
-//  Chats stay JSON-only: this store never reads or writes KodaiChatSession,
-//  KodaiChatMessage, KodaiSummary, or KodaiStream, even though the closed
-//  SwiftData relationship graph forces them into the container schema.
+//  Chats stay JSON-only: since K2E the workspace container registers only
+//  KodaiProject and KodaiTask, so the chat models are not even part of this
+//  store's schema.
 //
 
 import Foundation
@@ -131,8 +131,8 @@ actor WorkspaceProjectStore {
             }
         }
 
-        // Cascade also removes the project's tasks; sessions are never
-        // populated on iOS (chats are JSON-only), so nothing else is touched.
+        // Cascade also removes the project's tasks; chats live outside this
+        // schema entirely (JSON-only on iOS), so nothing else is touched.
         for removed in projectsByID.values {
             context.delete(removed)
         }

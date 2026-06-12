@@ -14,7 +14,7 @@ struct ContentView: View {
 
     // Loose chats: no project, no stream
     @Query(
-        filter: #Predicate<KodaiChatSession> { $0.project == nil && $0.stream == nil },
+        filter: #Predicate<KodaiChatSession> { $0.projectID == nil && $0.stream == nil },
         sort: \KodaiChatSession.updatedAt,
         order: .reverse
     )
@@ -47,7 +47,8 @@ struct ContentView: View {
     }
 
     private var activeProject: KodaiProject? {
-        viewModel.selectedChat?.project
+        guard let projectID = viewModel.selectedChat?.projectID else { return nil }
+        return projects.first { $0.id == projectID }
     }
 
     var body: some View {
@@ -154,6 +155,7 @@ struct ContentView: View {
             isLoading: viewModel.isLoading,
             estimatedContextPercent: viewModel.estimatedContextPercent,
             chatSessions: chatSessions,
+            allSessions: allChatSessions,
             streams: streams,
             projects: projects,
             todaysTasks: viewModel.todaysTasks(from: projects),

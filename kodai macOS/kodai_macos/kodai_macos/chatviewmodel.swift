@@ -281,6 +281,31 @@ final class ChatViewModel {
 
     // MARK: – Project CRUD
 
+    // Chat→project membership is a scalar projectID (no SwiftData
+    // relationship across the chat/workspace boundary), so project objects
+    // are resolved from the queried projects array or fetched on demand.
+    private func currentProject(in projects: [KodaiProject]) -> KodaiProject? {
+        guard let projectID = selectedChat?.projectID else { return nil }
+        return projects.first { $0.id == projectID }
+    }
+
+    private func currentProject(context: ModelContext) -> KodaiProject? {
+        guard let projectID = selectedChat?.projectID else { return nil }
+        var descriptor = FetchDescriptor<KodaiProject>(
+            predicate: #Predicate { $0.id == projectID }
+        )
+        descriptor.fetchLimit = 1
+        return try? context.fetch(descriptor).first
+    }
+
+    private func sessions(in project: KodaiProject, context: ModelContext) -> [KodaiChatSession] {
+        let projectID = project.id
+        let descriptor = FetchDescriptor<KodaiChatSession>(
+            predicate: #Predicate { $0.projectID == projectID }
+        )
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
     @discardableResult
     func createProject(title: String = "New project", details: String = "", context: ModelContext) -> KodaiProject {
         let project = KodaiProject(title: title, details: details)
@@ -311,9 +336,13 @@ final class ChatViewModel {
     }
 
     func deleteProject(_ project: KodaiProject, context: ModelContext) {
-        let wasSelectedInProject = project.sessions.contains { $0.id == selectedChat?.id }
-        for session in project.sessions {
+        // The old relationship cascade deleted a project's chats with it;
+        // with scalar projectID linkage that cleanup is explicit.
+        let projectSessions = sessions(in: project, context: context)
+        let wasSelectedInProject = projectSessions.contains { $0.id == selectedChat?.id }
+        for session in projectSessions {
             backend.evictSession(for: session.id)
+            context.delete(session)
         }
         context.delete(project)
         saveModelContext(context)
@@ -334,7 +363,7 @@ final class ChatViewModel {
     }
 
     func assignChatToProject(_ session: KodaiChatSession, project: KodaiProject?, context: ModelContext) {
-        session.project = project
+        session.projectID = project?.id
         project?.updatedAt = .now
         saveModelContext(context)
     }
@@ -459,7 +488,7 @@ final class ChatViewModel {
 
         let title = project.title
         let existing = project.summary
-        let sessionSummaries = project.sessions
+        let sessionSummaries = sessions(in: project, context: context)
             .flatMap { $0.summaries }
             .sorted { $0.createdAt < $1.createdAt }
             .map { $0.content }
@@ -715,7 +744,7 @@ final class ChatViewModel {
     }
 
     private func makeStoredChatSession(context: ModelContext, project: KodaiProject? = nil) -> KodaiChatSession {
-        let session = KodaiChatSession(project: project)
+        let session = KodaiChatSession(projectID: project?.id)
         context.insert(session)
         return session
     }
@@ -1002,7 +1031,7 @@ final class ChatViewModel {
         }
 
         // Project summary — injected for every turn in a project chat
-        if let project = selectedChat?.project, let projSummary = project.summary, !projSummary.isEmpty {
+        if let project = currentProject(in: projects), let projSummary = project.summary, !projSummary.isEmpty {
             let content = "Project (\(project.title)):\n\(projSummary)"
             blocks.append(ContextBlock(
                 kind: "project_summary",
@@ -1013,7 +1042,7 @@ final class ChatViewModel {
         }
 
         // Active tasks — titles-only, ≤3 highest priority, injected when project has open tasks
-        if let project = selectedChat?.project {
+        if let project = currentProject(in: projects) {
             let activeTitles = project.tasks
                 .filter { !$0.isCompleted }
                 .sorted { $0.priority.sortOrder < $1.priority.sortOrder }
@@ -1044,7 +1073,7 @@ final class ChatViewModel {
         }
 
         // Project deadline — shown when current project has a deadline
-        if let project = selectedChat?.project, project.deadline != nil {
+        if let project = currentProject(in: projects), project.deadline != nil {
             let content = formattedProjectDeadlineContext(project)
             if !content.isEmpty {
                 blocks.append(ContextBlock(
@@ -1184,7 +1213,7 @@ final class ChatViewModel {
             return
         }
 
-        guard let project = selectedChat?.project else {
+        guard let project = currentProject(context: context) else {
             reply("No active project — open a project chat or use /project to create one.")
             return
         }
@@ -1255,7 +1284,7 @@ final class ChatViewModel {
                 if let id = p.projectID {
                     return projects.first { $0.id == id }
                 }
-                return selectedChat?.project
+                return currentProject(in: projects)
             }()
 
             guard let project else {
@@ -1358,7 +1387,7 @@ final class ChatViewModel {
             saveStoredMessage(role: .assistant, content: text, in: currentSession, context: context)
         }
 
-        guard let project = selectedChat?.project else {
+        guard let project = currentProject(context: context) else {
             reply("No active project — open a project chat or use /project to create one.")
             return
         }

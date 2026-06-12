@@ -13,23 +13,28 @@ import KodaiCore
 
 @main
 struct kodai_macosApp: App {
+    // K2E: the container is built through KodaiLocalStoreMigrationPlan so
+    // existing stores migrate their session→project relationship data into
+    // the scalar projectID fields instead of silently dropping it.
+    let container: ModelContainer = {
+        let schema = Schema(versionedSchema: KodaiLocalStoreSchemaV2.self)
+        do {
+            return try ModelContainer(
+                for: schema,
+                migrationPlan: KodaiLocalStoreMigrationPlan.self,
+                configurations: ModelConfiguration(schema: schema, cloudKitDatabase: .none)
+            )
+        } catch {
+            fatalError("Failed to create model container: \(error)")
+        }
+    }()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .background(.clear)
         }
         .windowStyle(.hiddenTitleBar)
-        .modelContainer(for: [
-            KodaiChatSession.self,
-            KodaiChatMessage.self,
-            KodaiStream.self,
-            KodaiProject.self,
-            KodaiTask.self,
-            KodaiSummary.self,
-            TurnRecord.self,
-            ActivityEvent.self,
-            ModelPerformanceMetric.self,
-            ToolCall.self,
-        ])
+        .modelContainer(container)
     }
 }

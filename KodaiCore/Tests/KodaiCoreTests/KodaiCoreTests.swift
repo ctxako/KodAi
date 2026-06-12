@@ -140,14 +140,13 @@ struct ModelCreationTests {
         #expect(project.details == "")
         #expect(project.summary == nil)
         #expect(project.deadline == nil)
-        #expect(project.sessions.isEmpty)
         #expect(project.tasks.isEmpty)
     }
 
     @Test func sessionDefaults() throws {
         let session = KodaiChatSession()
         #expect(session.title == "New chat")
-        #expect(session.project == nil)
+        #expect(session.projectID == nil)
         #expect(session.stream == nil)
         #expect(session.summarizedThroughMessageID == nil)
         #expect(session.messages.isEmpty)
@@ -191,20 +190,27 @@ struct ModelCreationTests {
 
 @Suite("Relationship wiring")
 struct RelationshipTests {
-    @Test func sessionBelongsToProject() throws {
+    // Chat→project linkage is a scalar id, not a SwiftData relationship:
+    // the workspace and chat schemas stay independent.
+    @Test func sessionBelongsToProjectViaScalarProjectID() throws {
         let container = try makeContainer()
         let context = ModelContext(container)
 
         let project = KodaiProject(title: "Kodai macOS")
-        let session = KodaiChatSession(title: "Sprint 1")
-        project.sessions.append(session)
-        session.project = project
+        let session = KodaiChatSession(title: "Sprint 1", projectID: project.id)
         context.insert(project)
         context.insert(session)
         try context.save()
 
-        #expect(session.project?.title == "Kodai macOS")
-        #expect(project.sessions.count == 1)
+        let projectID = project.id
+        let sessions = try context.fetch(
+            FetchDescriptor<KodaiChatSession>(predicate: #Predicate { $0.projectID == projectID })
+        )
+        #expect(sessions.count == 1)
+        #expect(sessions.first?.title == "Sprint 1")
+
+        let projects = try context.fetch(FetchDescriptor<KodaiProject>())
+        #expect(projects.first { $0.id == sessions.first?.projectID }?.title == "Kodai macOS")
     }
 
     @Test func messagesAppendToSession() throws {
@@ -307,7 +313,7 @@ struct MigrationHelperTests {
 
         #expect(session.id == id)
         #expect(session.title == "Old chat")
-        #expect(session.project == nil)
+        #expect(session.projectID == nil)
     }
 
     @Test func migratesKnownRoles() {

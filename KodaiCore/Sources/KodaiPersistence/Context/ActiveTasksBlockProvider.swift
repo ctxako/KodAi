@@ -1,11 +1,18 @@
 import Foundation
 import KodaiKernel
 
-public struct ActiveTasksBlockProvider: ContextBlockProvider, Sendable {
-    public init() {}
+public struct ActiveTasksBlockProvider: ContextBlockProvider {
+    // Chat sessions reference projects by scalar projectID (no SwiftData
+    // relationship across the chat/workspace boundary), so the caller supplies
+    // the lookup — typically a fetch against the workspace store.
+    private let resolveProject: (UUID) -> KodaiProject?
+
+    public init(resolveProject: @escaping (UUID) -> KodaiProject? = { _ in nil }) {
+        self.resolveProject = resolveProject
+    }
 
     public func provide(for chat: KodaiChatSession, query: String) -> ContextBlock? {
-        guard let project = chat.project else { return nil }
+        guard let projectID = chat.projectID, let project = resolveProject(projectID) else { return nil }
         let openTasks = project.tasks.filter { !$0.isCompleted }
         guard !openTasks.isEmpty else { return nil }
 
