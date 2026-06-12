@@ -762,7 +762,7 @@ private struct SideMenuDrawer: View {
 
                     Section {
                         if projects.isEmpty {
-                            DrawerEmptyRow(text: "No Projects")
+                            DrawerEmptyRow(text: "No projects yet")
                                 .listRowInsets(.init(top: 4, leading: 0, bottom: 8, trailing: 0))
                                 .listRowSeparator(.hidden)
                                 .listRowBackground(Color.clear)
@@ -780,6 +780,17 @@ private struct SideMenuDrawer: View {
                                     }
                                 )
                                 .contextMenu {
+                                    Button {
+                                        onSelectProject(project.id)
+                                        withAnimation(.smooth(duration: 0.22)) {
+                                            drawerMode = .projectDetail(project.id)
+                                        }
+                                        newTaskTitle = ""
+                                        isCreatingTask = true
+                                    } label: {
+                                        Label("Add Task", systemImage: "plus.circle")
+                                    }
+
                                     Button {
                                         projectToRename = project
                                         renameProjectTitle = project.title
@@ -1090,7 +1101,7 @@ private struct SideMenuDrawer: View {
                 List {
                     Section {
                         if incompleteTasks.isEmpty {
-                            DrawerEmptyRow(text: "No open tasks")
+                            DrawerEmptyRow(text: "No tasks yet — tap + or use /task")
                                 .listRowInsets(.init(top: 3, leading: 0, bottom: 3, trailing: 0))
                                 .listRowSeparator(.hidden)
                                 .listRowBackground(Color.clear)
@@ -1100,6 +1111,19 @@ private struct SideMenuDrawer: View {
                                     task: task,
                                     onToggle: { onToggleTask(task.id, project.id) }
                                 )
+                                .contextMenu {
+                                    Button {
+                                        onToggleTask(task.id, project.id)
+                                    } label: {
+                                        Label("Complete", systemImage: "checkmark.circle")
+                                    }
+
+                                    Button(role: .destructive) {
+                                        onDeleteTask(task.id, project.id)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                     Button(role: .destructive) {
                                         onDeleteTask(task.id, project.id)
@@ -1125,6 +1149,19 @@ private struct SideMenuDrawer: View {
                                     task: task,
                                     onToggle: { onToggleTask(task.id, project.id) }
                                 )
+                                .contextMenu {
+                                    Button {
+                                        onToggleTask(task.id, project.id)
+                                    } label: {
+                                        Label("Uncomplete", systemImage: "arrow.uturn.backward.circle")
+                                    }
+
+                                    Button(role: .destructive) {
+                                        onDeleteTask(task.id, project.id)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                     Button(role: .destructive) {
                                         onDeleteTask(task.id, project.id)
@@ -1782,33 +1819,34 @@ private struct ProjectRow: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(isSelected ? ChatPalette.accentBlue.opacity(0.92) : .secondary.opacity(0.78))
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(project.title)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-
-                    Text(openTasksText)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary.opacity(0.72))
-                        .lineLimit(1)
-                }
+                Text(project.title)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
 
                 Spacer()
+
+                if openCount > 0 {
+                    Text("\(openCount)")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white.opacity(0.88))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(ChatPalette.accentBlue.opacity(0.42), in: Capsule())
+                }
 
                 Image(systemName: "chevron.right")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary.opacity(0.48))
             }
-            .frame(minHeight: 46)
+            .frame(minHeight: 44)
         }
         .buttonStyle(.plain)
         .drawerGlassRow(isSelected: isSelected)
     }
 
-    private var openTasksText: String {
-        let openCount = project.incompleteTasks.count
-        return "\(openCount) open \(openCount == 1 ? "task" : "tasks")"
+    private var openCount: Int {
+        project.incompleteTasks.count
     }
 }
 
@@ -2385,13 +2423,21 @@ struct InputBar: View {
     }
 
     private var shouldShowCommandPicker: Bool {
-        text.hasPrefix("/") && !isGenerating
+        guard text.hasPrefix("/"), !isGenerating else { return false }
+        let parts = text.split(separator: " ", maxSplits: 1)
+        guard let first = parts.first else { return true }
+        let commandPart = String(first).lowercased()
+        if parts.count > 1 {
+            return SlashCommand.all.contains { $0.name == commandPart && $0.acceptsArgument }
+                ? false
+                : true
+        }
+        return true
     }
 
     private var filteredCommands: [SlashCommand] {
-        let query = text.lowercased()
+        let query = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         guard query.count > 1 else { return SlashCommand.all }
-
         return SlashCommand.all.filter { $0.name.lowercased().hasPrefix(query) }
     }
 
@@ -2502,7 +2548,7 @@ struct InputBar: View {
                             Text(command.name)
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.white)
-                                .frame(width: 68, alignment: .leading)
+                                .frame(width: 84, alignment: .leading)
 
                             Text(command.description)
                                 .font(.caption)

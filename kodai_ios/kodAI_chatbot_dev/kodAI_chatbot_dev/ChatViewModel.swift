@@ -12,18 +12,47 @@ import UIKit
 struct SlashCommand: Identifiable, Equatable {
     let name: String
     let description: String
+    let acceptsArgument: Bool
 
     var id: String { name }
 
+    init(name: String, description: String, acceptsArgument: Bool = false) {
+        self.name = name
+        self.description = description
+        self.acceptsArgument = acceptsArgument
+    }
+
     static let all: [SlashCommand] = [
+        SlashCommand(name: "/project", description: "Create a new project", acceptsArgument: true),
+        SlashCommand(name: "/task", description: "Create a task in current project", acceptsArgument: true),
+        SlashCommand(name: "/done", description: "Complete a task by name", acceptsArgument: true),
+        SlashCommand(name: "/help", description: "Show available commands"),
+        SlashCommand(name: "/commands", description: "Show available commands"),
         SlashCommand(name: "/export", description: "Export current chat as Markdown"),
         SlashCommand(name: "/summary", description: "Summarize current chat"),
         SlashCommand(name: "/stats", description: "Show chat/session stats"),
         SlashCommand(name: "/tools", description: "Show local tool status")
     ]
 
-    static func exactMatch(for input: String) -> SlashCommand? {
-        all.first { $0.name == input }
+    static func match(for input: String) -> (command: SlashCommand, argument: String?)? {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        for command in all {
+            if command.acceptsArgument {
+                let prefix = command.name + " "
+                if trimmed.hasPrefix(prefix) {
+                    let arg = String(trimmed.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                    return (command, arg.isEmpty ? nil : arg)
+                }
+                if trimmed == command.name {
+                    return (command, nil)
+                }
+            } else {
+                if trimmed == command.name {
+                    return (command, nil)
+                }
+            }
+        }
+        return nil
     }
 }
 
@@ -868,12 +897,22 @@ final class ChatViewModel: ObservableObject {
     }
 
     private func runSlashCommand(_ prompt: String) {
-        guard let command = SlashCommand.exactMatch(for: prompt) else {
+        guard let match = SlashCommand.match(for: prompt) else {
             log.event("unknown slash command ignored command=\(prompt)")
+            appendSystemMessage("Unknown command. Type /help to see available commands.")
+            inputText = ""
             return
         }
 
-        switch command.name {
+        switch match.command.name {
+        case "/project":
+            handleProjectCommand(argument: match.argument)
+        case "/task":
+            handleTaskCommand(argument: match.argument)
+        case "/done":
+            handleDoneCommand(argument: match.argument)
+        case "/help", "/commands":
+            handleHelpCommand()
         case "/export":
             openExportSheet()
         case "/summary":
@@ -883,8 +922,120 @@ final class ChatViewModel: ObservableObject {
         case "/tools":
             showToolsMessage()
         default:
-            log.event("unhandled slash command command=\(command.name)")
+            log.event("unhandled slash command command=\(match.command.name)")
         }
+    }
+
+    private func handleProjectCommand(argument: String?) {
+        inputText = ""
+        guard let title = argument, !title.isEmpty else {
+            appendSystemMessage("Usage: /project <title>")
+            return
+        }
+        let project = createProject(title: title)
+        selectProject(projectID: project.id)
+        appendSystemMessage("Created project: \(project.title)")
+        updateActiveSession()
+        saveSessions()
+    }
+
+    private func handleTaskCommand(argument: String?) {
+        inputText = ""
+        guard let title = argument, !title.isEmpty else {
+            appendSystemMessage("Usage: /task <title>")
+            return
+        }
+
+        let projectID: UUID
+        if let selected = selectedProjectID, projects.contains(where: { $0.id == selected }) {
+            projectID = selected
+        } else {
+            if let inbox = projects.first(where: { $0.title == "Inbox" }) {
+                projectID = inbox.id
+            } else {
+                let inbox = createProject(title: "Inbox")
+                projectID = inbox.id
+                selectProject(projectID: inbox.id)
+            }
+        }
+
+        createTask(title: title, projectID: projectID)
+        let projectTitle = projects.first(where: { $0.id == projectID })?.title ?? "Unknown"
+        appendSystemMessage("Created task: \(title)\nProject: \(projectTitle)")
+        updateActiveSession()
+        saveSessions()
+    }
+
+    private func handleDoneCommand(argument: String?) {
+        inputText = ""
+        guard let query = argument, !query.isEmpty else {
+            appendSystemMessage("Usage: /done <task title>")
+            return
+        }
+
+        let queryLower = query.lowercased()
+
+        if let selectedProjectID,
+           let projectIndex = projects.firstIndex(where: { $0.id == selectedProjectID }),
+           let taskIndex = projects[projectIndex].tasks.firstIndex(where: {
+               !$0.isCompleted && $0.title.lowercased().contains(queryLower)
+           }) {
+            let task = projects[projectIndex].tasks[taskIndex]
+            projects[projectIndex].tasks[taskIndex].isCompleted = true
+            projects[projectIndex].tasks[taskIndex].completedAt = Date()
+            projects[projectIndex].tasks[taskIndex].updatedAt = Date()
+            projects[projectIndex].updatedAt = Date()
+            saveProjects()
+            appendSystemMessage("Completed task: \(task.title)")
+            updateActiveSession()
+            saveSessions()
+            return
+        }
+
+        for projectIndex in projects.indices {
+            if let taskIndex = projects[projectIndex].tasks.firstIndex(where: {
+                !$0.isCompleted && $0.title.lowercased().contains(queryLower)
+            }) {
+                let task = projects[projectIndex].tasks[taskIndex]
+                projects[projectIndex].tasks[taskIndex].isCompleted = true
+                projects[projectIndex].tasks[taskIndex].completedAt = Date()
+                projects[projectIndex].tasks[taskIndex].updatedAt = Date()
+                projects[projectIndex].updatedAt = Date()
+                saveProjects()
+                appendSystemMessage("Completed task: \(task.title)\nProject: \(projects[projectIndex].title)")
+                updateActiveSession()
+                saveSessions()
+                return
+            }
+        }
+
+        appendSystemMessage("No incomplete task matching \"\(query)\" was found.")
+        updateActiveSession()
+        saveSessions()
+    }
+
+    private func handleHelpCommand() {
+        inputText = ""
+        let helpText = [
+            "Available commands:",
+            "",
+            "/project <title> — Create a new project",
+            "/task <title> — Create a task in the current project",
+            "/done <title> — Complete a task by name",
+            "/help — Show this list",
+            "/commands — Show this list",
+            "/summary — Summarize current chat",
+            "/export — Export chat as Markdown",
+            "/stats — Show chat/session stats",
+            "/tools — Show local tool status"
+        ].joined(separator: "\n")
+        appendSystemMessage(helpText)
+        updateActiveSession()
+        saveSessions()
+    }
+
+    private func appendSystemMessage(_ text: String) {
+        messages.append(ChatMessage(role: .assistant, text: text))
     }
 
     private func summarizeCurrentChat() {
