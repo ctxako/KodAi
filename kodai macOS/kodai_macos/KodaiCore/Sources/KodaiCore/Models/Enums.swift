@@ -58,6 +58,7 @@ public enum ActivityKind: String, Codable, CaseIterable, Sendable {
     case reminderScheduled = "reminderScheduled"
     case fetch = "fetch"
     case error = "error"
+    case toolProposal = "toolProposal"
 }
 
 public enum ToolOutcome: String, Codable, CaseIterable, Sendable {

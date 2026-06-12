@@ -51,6 +51,7 @@ final class ChatViewModel {
     }
     var estimatedContextPercent: Int = 0
     var turnRecords: [UUID: TurnRecord] = [:]
+    var pendingToolProposal: PendingToolProposal?
     var isSummarizing = false
 
     private let backend = FoundationModelsBackend()
@@ -152,6 +153,7 @@ final class ChatViewModel {
             stopGeneration()
         }
 
+        pendingToolProposal = nil
         backend.reset()
 
         let session = makeStoredChatSession(context: context, project: project)
@@ -176,6 +178,7 @@ final class ChatViewModel {
             stopGeneration()
         }
 
+        pendingToolProposal = nil
         selectedChat = session
         messages = messagesForSession(session)
         turnRecords = [:]
@@ -529,6 +532,7 @@ final class ChatViewModel {
         let currentSession = ensureCurrentChat(context: context)
 
         metricsTask?.cancel()
+        pendingToolProposal = nil
 
         inputText = ""
         isLoading = true
@@ -674,6 +678,15 @@ final class ChatViewModel {
                     context: context
                 )
                 turnRecords[assistantID] = turn
+
+                if let proposal = backend.proposalCollector.take() {
+                    pendingToolProposal = proposal
+                    ledgerRecorder.recordActivity(
+                        kind: .toolProposal,
+                        summary: proposalSummary(proposal),
+                        context: context
+                    )
+                }
             }
         }
 
@@ -1228,6 +1241,15 @@ final class ChatViewModel {
             }
         }
         return nil
+    }
+
+    private func proposalSummary(_ proposal: PendingToolProposal) -> String {
+        switch proposal.kind {
+        case .createTask(let p):
+            var parts = ["proposed task: \(p.title)"]
+            if let name = p.projectName { parts.append("project: \(name)") }
+            return parts.joined(separator: ", ")
+        }
     }
 
     private func recentConversationHistory(limit: Int = 10) -> String {

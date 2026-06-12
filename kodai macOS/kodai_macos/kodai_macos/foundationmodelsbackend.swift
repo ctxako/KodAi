@@ -36,9 +36,12 @@ final class FoundationModelsBackend: KodaiInferenceBackend {
     private(set) var currentInstructions = ""
     private var streamTask: Task<Void, Never>?
 
-    // Tools available in every session. CreateTaskTool proposes tasks without
-    // mutating app state; the user confirms via /task.
-    private let kodaiTools: [any Tool] = [CreateTaskTool()]
+    let proposalCollector = ToolProposalCollector()
+    private let kodaiTools: [any Tool]
+
+    init() {
+        kodaiTools = [CreateTaskTool(collector: proposalCollector)]
+    }
 
     // MARK: KodaiInferenceBackend
 
