@@ -586,7 +586,7 @@
 /* Begin XCLocalSwiftPackageReference section */
 		3C44A7152FDA8FCE00E5EA04 /* XCLocalSwiftPackageReference "KodaiCore" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = KodaiCore;
+			relativePath = ../../KodaiCore;
 		};
 /* End XCLocalSwiftPackageReference section */
 
