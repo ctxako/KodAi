@@ -17,7 +17,32 @@ struct ComposerView: View {
     let onSend: () -> Void
     let onStop: () -> Void
 
+    @AppStorage("composerHintDismissed") private var hintDismissed = false
+
     var body: some View {
+        VStack(spacing: 0) {
+            if !hintDismissed {
+                HStack(spacing: 6) {
+                    Text("Tip: Use /task to create tasks from chat")
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.4))
+                    Spacer(minLength: 0)
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            hintDismissed = true
+                        }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.3))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 6)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+
         HStack(spacing: 10) {
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
@@ -102,6 +127,7 @@ struct ComposerView: View {
         .padding(.horizontal, 16)
         .padding(.top, 12)
         .padding(.bottom, 16)
+        } // VStack
     }
 }
 

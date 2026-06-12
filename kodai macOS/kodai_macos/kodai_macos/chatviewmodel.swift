@@ -134,6 +134,10 @@ final class ChatViewModel {
             handleDoneCommand(trimmed, context: context)
             return
         }
+        if lower == "/help" || lower == "/commands" {
+            handleHelpCommand(trimmed, context: context)
+            return
+        }
         responseTask = Task {
             await runModel(context: context)
         }
@@ -1326,5 +1330,29 @@ final class ChatViewModel {
             let titles = matches.map { "• \($0.title)" }.joined(separator: "\n")
             reply("Multiple tasks matched \"\(remainder)\" — be more specific:\n\(titles)")
         }
+    }
+
+    // MARK: – Slash command: /help, /commands
+
+    private func handleHelpCommand(_ input: String, context: ModelContext) {
+        inputText = ""
+        let currentSession = ensureCurrentChat(context: context)
+
+        messages.append(ChatMessage(role: .user, text: input))
+        saveStoredMessage(role: .user, content: input, in: currentSession, context: context)
+
+        let reply = """
+        **Available slash commands**
+
+        `/task <title>` — create a task in the current project
+        `/task <title> priority:high due:Jun20` — create a task with priority and due date
+        `/project <name>` — create a new project and switch into it
+        `/done <task>` — complete a matching open task
+        `/done` — list open tasks in the current project
+        `/help` or `/commands` — show this list
+        """
+
+        messages.append(ChatMessage(role: .assistant, text: reply))
+        saveStoredMessage(role: .assistant, content: reply, in: currentSession, context: context)
     }
 }
