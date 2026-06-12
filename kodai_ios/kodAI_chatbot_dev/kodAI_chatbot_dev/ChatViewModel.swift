@@ -778,11 +778,11 @@ final class ChatViewModel: ObservableObject {
         selectedProjectID = projectID
     }
 
-    func createTask(title: String, projectID: UUID) {
+    func createTask(title: String, projectID: UUID, dueDate: Date? = nil) {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty,
               let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
-        let task = KodaiTaskLite(title: trimmedTitle)
+        let task = KodaiTaskLite(title: trimmedTitle, dueDate: dueDate)
         projects[index].tasks.append(task)
         projects[index].updatedAt = Date()
         saveProjects()
@@ -806,6 +806,106 @@ final class ChatViewModel: ObservableObject {
         projects[projectIndex].updatedAt = Date()
         saveProjects()
         log.event("task deleted id=\(taskID) projectID=\(projectID)")
+    }
+
+    func setProjectDeadline(projectID: UUID, deadline: Date?) {
+        guard let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
+        projects[index].deadline = deadline
+        projects[index].updatedAt = Date()
+        saveProjects()
+        log.event("project deadline updated id=\(projectID) hasDeadline=\(deadline != nil)")
+    }
+
+    // MARK: - Today / Overdue
+
+    func overdueTasks() -> [DueTaskItem] {
+        collectDueItems().overdue
+    }
+
+    func tasksDueToday() -> [DueTaskItem] {
+        collectDueItems().today
+    }
+
+    func todayAndOverdueTasks() -> [DueTaskItem] {
+        let items = collectDueItems()
+        return items.overdue + items.today
+    }
+
+    private func collectDueItems() -> (overdue: [DueTaskItem], today: [DueTaskItem]) {
+        let calendar = Calendar.current
+        let startOfToday = calendar.startOfDay(for: Date())
+        var overdue: [DueTaskItem] = []
+        var today: [DueTaskItem] = []
+
+        for project in projects {
+            for task in project.tasks where !task.isCompleted {
+                guard let dueDate = task.dueDate else { continue }
+                if dueDate < startOfToday {
+                    overdue.append(DueTaskItem(task: task, projectID: project.id, projectTitle: project.title, isOverdue: true))
+                } else if calendar.isDateInToday(dueDate) {
+                    today.append(DueTaskItem(task: task, projectID: project.id, projectTitle: project.title, isOverdue: false))
+                }
+            }
+        }
+
+        let byDueDate: (DueTaskItem, DueTaskItem) -> Bool = {
+            ($0.task.dueDate ?? .distantPast) < ($1.task.dueDate ?? .distantPast)
+        }
+        return (overdue.sorted(by: byDueDate), today.sorted(by: byDueDate))
+    }
+
+    /// Splits a trailing `due:` token off a /task argument. Supports only
+    /// `due:today`, `due:tomorrow`, `due:Jun20`, and `due:6/20`; anything else
+    /// stays in the title unchanged.
+    static func splitDueArgument(_ argument: String, now: Date = Date()) -> (title: String, dueDate: Date?) {
+        var tokens = argument.split(separator: " ").map(String.init)
+        guard let index = tokens.lastIndex(where: { $0.lowercased().hasPrefix("due:") }) else {
+            return (argument, nil)
+        }
+        guard let dueDate = parseDueValue(String(tokens[index].dropFirst(4)), now: now) else {
+            return (argument, nil)
+        }
+        tokens.remove(at: index)
+        let title = tokens.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+        return (title.isEmpty ? argument : title, dueDate)
+    }
+
+    static func parseDueValue(_ raw: String, now: Date = Date()) -> Date? {
+        let calendar = Calendar.current
+        let value = raw.lowercased()
+
+        switch value {
+        case "today":
+            return calendar.startOfDay(for: now)
+        case "tomorrow":
+            return calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))
+        default:
+            break
+        }
+
+        let year = calendar.component(.year, from: now)
+
+        // Numeric form: 6/20 or 6-20
+        let numericParts = value.split(whereSeparator: { $0 == "/" || $0 == "-" })
+        if numericParts.count == 2,
+           let month = Int(numericParts[0]),
+           let day = Int(numericParts[1]) {
+            let components = DateComponents(year: year, month: month, day: day)
+            guard calendar.date(from: components) != nil, (1...12).contains(month), (1...31).contains(day) else { return nil }
+            return calendar.date(from: components)
+        }
+
+        // Month-name form: Jun20 or June20
+        let letters = String(value.prefix(while: { $0.isLetter }))
+        guard letters.count >= 3,
+              let day = Int(value.dropFirst(letters.count)),
+              (1...31).contains(day) else { return nil }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        let fullNames = formatter.monthSymbols.map { $0.lowercased() }
+        guard let monthIndex = fullNames.firstIndex(where: { $0.hasPrefix(letters) }) else { return nil }
+        return calendar.date(from: DateComponents(year: year, month: monthIndex + 1, day: day))
     }
 
     private func loadProjects() async {
@@ -941,10 +1041,12 @@ final class ChatViewModel: ObservableObject {
 
     private func handleTaskCommand(argument: String?) {
         inputText = ""
-        guard let title = argument, !title.isEmpty else {
-            appendSystemMessage("Usage: /task <title>")
+        guard let argument, !argument.isEmpty else {
+            appendSystemMessage("Usage: /task <title> [due:today|tomorrow|Jun20|6/20]")
             return
         }
+
+        let (title, dueDate) = Self.splitDueArgument(argument)
 
         let projectID: UUID
         if let selected = selectedProjectID, projects.contains(where: { $0.id == selected }) {
@@ -959,9 +1061,13 @@ final class ChatViewModel: ObservableObject {
             }
         }
 
-        createTask(title: title, projectID: projectID)
+        createTask(title: title, projectID: projectID, dueDate: dueDate)
         let projectTitle = projects.first(where: { $0.id == projectID })?.title ?? "Unknown"
-        appendSystemMessage("Created task: \(title)\nProject: \(projectTitle)")
+        var lines = ["Created task: \(title)", "Project: \(projectTitle)"]
+        if let dueDate {
+            lines.append("Due: \(dueDate.formatted(date: .abbreviated, time: .omitted))")
+        }
+        appendSystemMessage(lines.joined(separator: "\n"))
         updateActiveSession()
         saveSessions()
     }
@@ -1021,6 +1127,10 @@ final class ChatViewModel: ObservableObject {
             "",
             "/project <title> — Create a new project",
             "/task <title> — Create a task in the current project",
+            "/task <title> due:today — Create a task due today",
+            "/task <title> due:tomorrow — Create a task due tomorrow",
+            "/task <title> due:Jun20 — Create a task due on a date",
+            "/task <title> due:6/20 — Create a task due on a date",
             "/done <title> — Complete a task by name",
             "/help — Show this list",
             "/commands — Show this list",

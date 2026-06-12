@@ -74,6 +74,16 @@ struct KodaiTaskLite: Identifiable, Equatable, Codable, Sendable {
     }
 }
 
+/// A due/overdue task paired with its owning project, for the Today view.
+struct DueTaskItem: Identifiable, Equatable, Sendable {
+    let task: KodaiTaskLite
+    let projectID: UUID
+    let projectTitle: String
+    let isOverdue: Bool
+
+    var id: UUID { task.id }
+}
+
 struct KodaiProjectLite: Identifiable, Equatable, Codable, Sendable {
     let id: UUID
     var title: String

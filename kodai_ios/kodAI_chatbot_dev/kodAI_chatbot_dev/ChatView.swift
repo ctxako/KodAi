@@ -235,6 +235,10 @@ struct ChatView: View {
             onDeleteTask: { taskID, projectID in
                 viewModel.deleteTask(taskID: taskID, projectID: projectID)
             },
+            dueItems: viewModel.todayAndOverdueTasks(),
+            onSetProjectDeadline: { projectID, deadline in
+                viewModel.setProjectDeadline(projectID: projectID, deadline: deadline)
+            },
             onClose: closeMenu
         )
         .transition(.move(edge: .leading).combined(with: .opacity))
@@ -437,6 +441,8 @@ private struct SideMenuDrawer: View {
     let onCreateTask: (String, UUID) -> Void
     let onToggleTask: (UUID, UUID) -> Void
     let onDeleteTask: (UUID, UUID) -> Void
+    let dueItems: [DueTaskItem]
+    let onSetProjectDeadline: (UUID, Date?) -> Void
     let onClose: () -> Void
 
     private let log = AppLog(category: "StreamUI")
@@ -455,6 +461,7 @@ private struct SideMenuDrawer: View {
     @State private var projectToDelete: KodaiProjectLite?
     @State private var isCreatingTask = false
     @State private var newTaskTitle = ""
+    @State private var isEditingDeadline = false
     @State private var expandedStreamSummaryIDs: Set<Stream.ID> = []
     @State private var showPhaseTimeline = true
     @State private var showTokenCounters = true
@@ -698,6 +705,32 @@ private struct SideMenuDrawer: View {
 
             VStack(spacing: 6) {
                 List {
+                    Section {
+                        if dueItems.isEmpty {
+                            DrawerEmptyRow(text: "Nothing due today")
+                                .listRowInsets(.init(top: 4, leading: 0, bottom: 8, trailing: 0))
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.clear)
+                        } else {
+                            ForEach(dueItems) { item in
+                                TodayTaskRow(item: item) {
+                                    log.event("today task selected taskID=\(item.task.id) projectID=\(item.projectID)")
+                                    onSelectProject(item.projectID)
+                                    withAnimation(.smooth(duration: 0.22)) {
+                                        drawerMode = .projectDetail(item.projectID)
+                                    }
+                                }
+                                .listRowInsets(.init(top: 3, leading: 0, bottom: 3, trailing: 0))
+                                .listRowSeparator(.hidden)
+                                .listRowBackground(Color.clear)
+                            }
+                        }
+                    } header: {
+                        Text("Today")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary.opacity(0.72))
+                    }
+
                     Section {
                         if streams.isEmpty {
                             DrawerEmptyRow(text: "No Streams")
@@ -1080,6 +1113,12 @@ private struct SideMenuDrawer: View {
                         Text("\(incompleteTasks.count) open · \(completedTasks.count) done")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+
+                        if let deadline = project.deadline {
+                            Text("Deadline: \(deadline.formatted(date: .abbreviated, time: .omitted))")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     Spacer()
@@ -1097,6 +1136,23 @@ private struct SideMenuDrawer: View {
                         .drawerGlassRow(verticalPadding: 7)
                 }
                 .buttonStyle(.plain)
+
+                Button {
+                    log.event("project deadline tapped id=\(projectID)")
+                    isEditingDeadline = true
+                } label: {
+                    Label(project.deadline == nil ? "Set Deadline" : "Edit Deadline", systemImage: "calendar.badge.clock")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.82))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .drawerGlassRow(verticalPadding: 7)
+                }
+                .buttonStyle(.plain)
+                .sheet(isPresented: $isEditingDeadline) {
+                    ProjectDeadlineSheet(initialDeadline: project.deadline) { deadline in
+                        onSetProjectDeadline(projectID, deadline)
+                    }
+                }
 
                 List {
                     Section {
@@ -1867,15 +1923,131 @@ private struct ProjectTaskRow: View {
             }
             .buttonStyle(.plain)
 
-            Text(task.title)
-                .font(.subheadline)
-                .foregroundStyle(task.isCompleted ? .secondary : Color.white)
-                .strikethrough(task.isCompleted, color: .secondary)
-                .lineLimit(2)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(task.title)
+                    .font(.subheadline)
+                    .foregroundStyle(task.isCompleted ? .secondary : Color.white)
+                    .strikethrough(task.isCompleted, color: .secondary)
+                    .lineLimit(2)
+
+                if let dueDate = task.dueDate, !task.isCompleted {
+                    Text(dueLabel(for: dueDate))
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(dueColor(for: dueDate))
+                        .lineLimit(1)
+                }
+            }
 
             Spacer()
         }
         .drawerGlassRow(isDimmed: task.isCompleted)
+    }
+
+    private func dueLabel(for dueDate: Date) -> String {
+        let calendar = Calendar.current
+        let formatted = dueDate.formatted(.dateTime.month(.abbreviated).day())
+        if dueDate < calendar.startOfDay(for: Date()) {
+            return "Overdue · \(formatted)"
+        }
+        if calendar.isDateInToday(dueDate) {
+            return "Today"
+        }
+        return formatted
+    }
+
+    private func dueColor(for dueDate: Date) -> Color {
+        let calendar = Calendar.current
+        if dueDate < calendar.startOfDay(for: Date()) {
+            return .red.opacity(0.82)
+        }
+        if calendar.isDateInToday(dueDate) {
+            return ChatPalette.accentBlue.opacity(0.92)
+        }
+        return Color.secondary
+    }
+}
+
+private struct TodayTaskRow: View {
+    let item: DueTaskItem
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button {
+            onSelect()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: item.isOverdue ? "exclamationmark.circle" : "calendar")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(item.isOverdue ? Color.red.opacity(0.85) : ChatPalette.accentBlue.opacity(0.92))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.task.title)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+
+                    Text(item.isOverdue ? "Overdue · \(item.projectTitle)" : item.projectTitle)
+                        .font(.caption2)
+                        .foregroundStyle(item.isOverdue ? Color.red.opacity(0.75) : .secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary.opacity(0.48))
+            }
+            .frame(minHeight: 40)
+        }
+        .buttonStyle(.plain)
+        .drawerGlassRow()
+    }
+}
+
+private struct ProjectDeadlineSheet: View {
+    let initialDeadline: Date?
+    let onSave: (Date?) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var deadline = Date()
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                DatePicker("Deadline", selection: $deadline, displayedComponents: .date)
+                    .datePickerStyle(.graphical)
+
+                if initialDeadline != nil {
+                    Button("Clear Deadline", role: .destructive) {
+                        onSave(nil)
+                        dismiss()
+                    }
+                }
+            }
+            .navigationTitle("Project Deadline")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        onSave(Calendar.current.startOfDay(for: deadline))
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear {
+                if let initialDeadline {
+                    deadline = initialDeadline
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
 
