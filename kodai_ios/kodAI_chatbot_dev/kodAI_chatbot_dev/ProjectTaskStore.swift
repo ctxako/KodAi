@@ -13,11 +13,23 @@ actor ProjectTaskStore {
     private let projectsFileURL: URL
     private let log = AppLog(category: "ProjectTaskStore")
 
-    init(fileManager: FileManager = .default) {
+    /// Canonical location of Projects.json. Shared with the K2D SwiftData
+    /// migration so it reads exactly the file this store writes.
+    static func defaultProjectsFileURL(fileManager: FileManager = .default) -> URL {
         let supportDirectory = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let bundleIdentifier = Bundle.main.bundleIdentifier ?? "kodAI_chatbot_dev"
         let directoryURL = supportDirectory.appendingPathComponent(bundleIdentifier, isDirectory: true)
-        projectsFileURL = directoryURL.appendingPathComponent("Projects.json")
+        return directoryURL.appendingPathComponent("Projects.json")
+    }
+
+    init(fileManager: FileManager = .default) {
+        projectsFileURL = Self.defaultProjectsFileURL(fileManager: fileManager)
+    }
+
+    /// Explicit file location, used by tests and the JSON fallback path of
+    /// WorkspaceProjectStore.
+    init(projectsFileURL: URL) {
+        self.projectsFileURL = projectsFileURL
     }
 
     func loadProjects() async throws -> [KodaiProjectLite] {

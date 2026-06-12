@@ -150,6 +150,34 @@ final class WorkspaceModelAdapterTests: XCTestCase {
         XCTAssertNil(model.valueRepresentation.details)
     }
 
+    func testProjectApplyValueUpdatesScalarFieldsOnly() throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        let createdAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let model = KodaiProject(title: "Old", details: "old details", createdAt: createdAt)
+        context.insert(model)
+        model.tasks.append(KodaiTask(title: "Keep me"))
+        let originalID = model.id
+        let originalTaskID = model.tasks[0].id
+
+        var value = model.valueRepresentation
+        value.title = "New"
+        value.details = nil
+        value.deadline = Date(timeIntervalSince1970: 1_910_000_000)
+        value.updatedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        value.tasks = []
+        model.apply(value)
+
+        XCTAssertEqual(model.id, originalID)
+        XCTAssertEqual(model.createdAt, createdAt)
+        XCTAssertEqual(model.title, "New")
+        XCTAssertEqual(model.details, "")
+        XCTAssertEqual(model.deadline, Date(timeIntervalSince1970: 1_910_000_000))
+        XCTAssertEqual(model.updatedAt, Date(timeIntervalSince1970: 1_800_000_000))
+        // Tasks are reconciled by the caller, not replaced by apply.
+        XCTAssertEqual(model.tasks.map(\.id), [originalTaskID])
+    }
+
     func testProjectValueRepresentationExcludesChatSessions() throws {
         let container = try makeInMemoryContainer()
         let context = ModelContext(container)

@@ -2,11 +2,12 @@ import Foundation
 import KodaiPersistence
 import SwiftData
 
-/// Local-only SwiftData container scaffold for workspace data (projects/tasks).
+/// Local-only SwiftData container for workspace data (projects/tasks).
 ///
-/// Not yet the source of truth: ProjectTaskStore still owns Projects.json and
-/// ChatStore still owns the chat/stream/prompt-settings JSON. K2D will import
-/// Projects.json into this container; chats stay JSON-only.
+/// Since K2D this is the source of truth for projects/tasks, accessed through
+/// WorkspaceProjectStore (which imports any legacy Projects.json on first
+/// access). ChatStore still owns the chat/stream/prompt-settings JSON;
+/// chats stay JSON-only.
 ///
 /// The schema must include the full relationship closure of KodaiProject:
 /// KodaiProject.sessions pulls in KodaiChatSession, which pulls in

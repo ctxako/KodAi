@@ -138,7 +138,8 @@ final class ChatViewModel: ObservableObject {
     private let log = AppLog(category: "Chat")
     private let inferenceService = InferenceService()
     private let chatStore = ChatStore()
-    private let projectTaskStore = ProjectTaskStore()
+    // K2D: SwiftData-backed workspace store (falls back to JSON internally).
+    private let projectTaskStore = WorkspaceProjectStore()
     private var generationTask: Task<Void, Never>?
     private var flushTask: Task<Void, Never>?
     private var hideStatusTask: Task<Void, Never>?

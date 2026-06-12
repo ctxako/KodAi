@@ -119,4 +119,15 @@ extension KodaiProject {
         )
         tasks = value.tasks.map { KodaiTask(value: $0) }
     }
+
+    /// Applies the mutable scalar fields of a kernel value onto this model.
+    /// Identity and `createdAt` are intentionally not changed, and the task
+    /// relationship is left alone: callers reconcile tasks by id so existing
+    /// KodaiTask rows keep their identity instead of being replaced.
+    public func apply(_ value: KodaiProjectValue) {
+        title = value.title
+        details = value.details ?? ""
+        deadline = value.deadline
+        updatedAt = value.updatedAt
+    }
 }
