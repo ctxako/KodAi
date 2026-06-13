@@ -4,9 +4,9 @@ import SwiftData
 
 /// SwiftData configuration for workspace data (KodaiProject, KodaiTask).
 ///
-/// K2G-A: CloudKit is disabled. The workspace store uses a dedicated SQLite
-/// file (KodaiWorkspace.store) separate from the local chat store (default.store).
-/// CloudKit sync for macOS is deferred to a later milestone.
+/// K2G-B: The workspace store uses a dedicated SQLite file
+/// (KodaiWorkspace.store) and syncs through CloudKit. The local chat store
+/// remains separate and device-only.
 enum WorkspaceModelContainer {
     static let schema = Schema([
         KodaiProject.self,
@@ -17,7 +17,7 @@ enum WorkspaceModelContainer {
         ModelConfiguration(
             "KodaiWorkspace",
             schema: schema,
-            cloudKitDatabase: .none
+            cloudKitDatabase: .automatic
         )
     }
 }

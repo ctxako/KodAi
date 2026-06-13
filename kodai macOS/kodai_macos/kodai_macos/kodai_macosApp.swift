@@ -15,7 +15,7 @@ import KodaiCore
 struct kodai_macosApp: App {
     private let container: ModelContainer = {
         // Workspace store: KodaiProject and KodaiTask.
-        // Isolated for eventual CloudKit sync (deferred — cloudKitDatabase: .none for now).
+        // Isolated in a CloudKit-backed store shared with iOS.
         let workspaceConfig = WorkspaceModelContainer.makeConfiguration()
 
         // Local store: chat sessions, messages, summaries, streams, and telemetry.
