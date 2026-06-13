@@ -383,12 +383,12 @@ struct ExportChatSheet: View {
     }
 }
 
-struct ExportShareItem: Identifiable {
+private struct ExportShareItem: Identifiable {
     let id = UUID()
     let fileURL: URL
 }
 
-struct ActivityView: UIViewControllerRepresentable {
+private struct ActivityView: UIViewControllerRepresentable {
     let activityItems: [Any]
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
@@ -398,7 +398,7 @@ struct ActivityView: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
-extension ChatRole {
+private extension ChatRole {
     var previewTitle: String {
         switch self {
         case .user:

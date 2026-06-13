@@ -201,7 +201,7 @@ struct MessageBubble: View {
     }
 }
 
-struct ThinkingDotsView: View {
+private struct ThinkingDotsView: View {
     let isAnimated: Bool
 
     var body: some View {
@@ -214,7 +214,7 @@ struct ThinkingDotsView: View {
     }
 }
 
-struct BouncingDot: View {
+private struct BouncingDot: View {
     let delay: Double
     let isAnimated: Bool
     @State private var isUp = false

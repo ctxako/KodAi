@@ -15,7 +15,7 @@ struct LiquidGlassBackground: View {
     }
 }
 
-struct LiquidGlassPanel: ViewModifier {
+private struct LiquidGlassPanel: ViewModifier {
     let tint: Color
     let cornerRadius: CGFloat
 
@@ -32,7 +32,7 @@ struct LiquidGlassPanel: ViewModifier {
     }
 }
 
-struct DrawerGlassRow: ViewModifier {
+private struct DrawerGlassRow: ViewModifier {
     let isSelected: Bool
     let isDimmed: Bool
     let verticalPadding: CGFloat
@@ -56,7 +56,7 @@ struct DrawerGlassRow: ViewModifier {
     }
 }
 
-struct MessageBubbleGlass: ViewModifier {
+private struct MessageBubbleGlass: ViewModifier {
     let tint: Color
     let isUser: Bool
 
