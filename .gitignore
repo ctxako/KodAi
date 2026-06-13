@@ -6,3 +6,37 @@ xcuserdata/
 *.xcuserdatad
 .build/
 .swiftpm/
+
+# macOS / Xcode / Swift build noise
+.DS_Store
+.build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+ModuleCache/
+Index.noindex/
+*.pcm
+*.o
+*.dia
+*.swiftmodule
+*.swiftdoc
+*.abi.json
+
+# Xcode local build artifacts
+**/.derivedData/
+**/.build-cache/
+**/.sourcePackages/
+*.xcresult/
+*.xcactivitylog
+*.pcm
+*.o
+*.dia
+*.swiftmodule
+*.swiftdoc
+*.abi.json
+DerivedData/
+.build/
+xcuserdata/
+*.xcuserstate
+ModuleCache/
+Index.noindex/

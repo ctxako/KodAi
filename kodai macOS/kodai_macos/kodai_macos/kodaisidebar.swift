@@ -69,12 +69,12 @@ struct KodaiSidebar: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: sidebarOpen ? 10 : 12) {
+        VStack(alignment: .leading, spacing: sidebarOpen ? 7 : 12) {
             sidebarHeader
 
             if sidebarOpen {
                 ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(alignment: .leading, spacing: 10) {
+                    LazyVStack(alignment: .leading, spacing: 7) {
                         KodaiSidebarGlassBox(
                             signalState: glassBoxSignalState,
                             isSelected: glassBoxSelected,
@@ -110,7 +110,7 @@ struct KodaiSidebar: View {
             sidebarFooter
         }
         .padding(.horizontal, sidebarOpen ? 4 : 12)
-        .padding(.vertical, sidebarOpen ? 10 : 12)
+        .padding(.vertical, sidebarOpen ? 8 : 12)
         .frame(width: sidebarOpen ? Self.openWidth : Self.closedWidth)
         .frame(maxHeight: .infinity)
         .background {
@@ -123,7 +123,7 @@ struct KodaiSidebar: View {
         }
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(theme.glassBorder, lineWidth: 1)
+                .stroke(theme.glassBorder.opacity(0.65), lineWidth: 0.75)
         }
         .padding(.leading, 8)
         .padding(.vertical, 10)
@@ -167,8 +167,8 @@ struct KodaiSidebar: View {
     private var todaySectionView: some View {
         VStack(alignment: .leading, spacing: 4) {
             Divider()
-                .opacity(0.25)
-                .padding(.vertical, 4)
+                .opacity(0.18)
+                .padding(.vertical, 2)
 
             Text("Today")
                 .font(.system(size: 12, weight: .medium, design: .rounded))
@@ -187,7 +187,7 @@ struct KodaiSidebar: View {
                     .font(.system(size: 12, weight: .regular, design: .rounded))
                     .foregroundStyle(.white.opacity(0.32))
                     .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
+                    .padding(.vertical, 2)
             }
         } else if todaysTasks.count <= 5 {
             VStack(alignment: .leading, spacing: 2) {
@@ -310,8 +310,8 @@ struct KodaiSidebar: View {
     private var projectsSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Divider()
-                .opacity(0.25)
-                .padding(.vertical, 6)
+                .opacity(0.18)
+                .padding(.vertical, 3)
 
             HStack(spacing: 4) {
                 Text("Projects")
@@ -565,8 +565,8 @@ struct KodaiSidebar: View {
     private var streamsSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Divider()
-                .opacity(0.25)
-                .padding(.vertical, 6)
+                .opacity(0.18)
+                .padding(.vertical, 3)
 
             HStack(spacing: 4) {
                 Text("Streams")
@@ -724,8 +724,8 @@ struct KodaiSidebar: View {
     private var chatHistorySection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Divider()
-                .opacity(0.25)
-                .padding(.vertical, 6)
+                .opacity(0.18)
+                .padding(.vertical, 3)
 
             Text("Loose Chats")
                 .font(.system(size: 12, weight: .medium, design: .rounded))
@@ -787,7 +787,7 @@ struct KodaiSidebar: View {
                 Spacer()
             }
         }
-        .frame(height: sidebarOpen ? 48 : 42)
+        .frame(height: sidebarOpen ? 44 : 42)
         .onChange(of: glassBoxSignalState.isActive) { _, loading in
             if loading {
                 withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
@@ -1009,7 +1009,7 @@ private struct KodaiSidebarGlassBox: View {
 
     var body: some View {
         Button(action: onOpen) {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text("Glass Box")
                         .font(.system(size: 11, weight: .medium, design: .rounded))
@@ -1033,15 +1033,12 @@ private struct KodaiSidebarGlassBox: View {
                     }
                 }
 
-                Spacer(minLength: 0)
-
                 WorkloadBloomView(
                     signalState: signalState
                 )
-                .scaleEffect(1.0)
+                .scaleEffect(0.72)
+                .frame(height: 76)
                 .frame(maxWidth: .infinity)
-
-                Spacer(minLength: 0)
 
                 HStack(spacing: 5) {
                     Text("Local")
@@ -1059,23 +1056,26 @@ private struct KodaiSidebarGlassBox: View {
                 .frame(maxWidth: .infinity)
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 9)
-            .frame(width: 184, height: 184, alignment: .topLeading)
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .padding(.vertical, 8)
+            .frame(width: 184, height: 132, alignment: .topLeading)
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
-        .kodaiGlass(cornerRadius: 14)
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(theme.glassSurface)
+        }
         .background {
             if isSelected {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(theme.primaryAccent.opacity(0.055))
             }
         }
         .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(
-                    theme.primaryAccent.opacity(isSelected ? 0.42 : (isHovering ? 0.20 : 0)),
-                    lineWidth: isSelected ? 1.25 : 1
+                    theme.primaryAccent.opacity(isSelected ? 0.34 : (isHovering ? 0.16 : 0.06)),
+                    lineWidth: isSelected ? 1 : 0.75
                 )
         }
         .opacity(isHovering && !isSelected ? 0.96 : 1)

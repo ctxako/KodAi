@@ -9,6 +9,8 @@ import SwiftUI
 
 struct KodaiMarkdownText: View {
     let text: String
+    let bodyFont: Font
+    let sectionTitleFont: Font
 
     private enum Block {
         case paragraph(String)
@@ -21,15 +23,15 @@ struct KodaiMarkdownText: View {
                 switch block {
                 case .paragraph(let content):
                     Text(attributed(content))
-                        .font(.system(.body, design: .rounded))
+                        .font(bodyFont)
                         .lineSpacing(4)
                 case .section(let title, let body):
                     VStack(alignment: .leading, spacing: 3) {
                         Text(title)
-                            .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                            .font(sectionTitleFont)
                         if !body.isEmpty {
                             Text(attributed(body))
-                                .font(.system(.body, design: .rounded))
+                                .font(bodyFont)
                                 .lineSpacing(4)
                                 .foregroundStyle(.primary.opacity(0.85))
                         }

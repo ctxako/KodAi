@@ -5,6 +5,13 @@
 import SwiftUI
 import KodaiCore
 
+private enum ChatTypography {
+    static let assistantBody = Font.system(size: 15.5, weight: .regular, design: .monospaced)
+    static let assistantSectionTitle = Font.system(size: 15.5, weight: .semibold, design: .monospaced)
+    static let userBody = Font.system(size: 14.5, weight: .regular, design: .default)
+    static let userSectionTitle = Font.system(size: 14.5, weight: .semibold, design: .default)
+}
+
 struct ChatBubble: View {
     @Environment(\.kodaiTheme) private var theme
 
@@ -17,6 +24,14 @@ struct ChatBubble: View {
         message.role == .user
     }
 
+    private var bodyFont: Font {
+        isUser ? ChatTypography.userBody : ChatTypography.assistantBody
+    }
+
+    private var sectionTitleFont: Font {
+        isUser ? ChatTypography.userSectionTitle : ChatTypography.assistantSectionTitle
+    }
+
     var body: some View {
         HStack(alignment: .bottom) {
             if isUser {
@@ -24,7 +39,11 @@ struct ChatBubble: View {
             }
 
             VStack(alignment: .leading, spacing: 0) {
-                KodaiMarkdownText(text: message.text)
+                KodaiMarkdownText(
+                    text: message.text,
+                    bodyFont: bodyFont,
+                    sectionTitleFont: sectionTitleFont
+                )
                     .foregroundStyle(.primary)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
@@ -82,7 +101,10 @@ struct ChatBubble: View {
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(isUser ? theme.primaryAccent.opacity(0.30) : theme.glassBorder, lineWidth: 1)
+                    .stroke(
+                        isUser ? theme.primaryAccent.opacity(0.22) : .white.opacity(0.045),
+                        lineWidth: 0.75
+                    )
             }
             .frame(maxWidth: 560, alignment: isUser ? .trailing : .leading)
 
