@@ -5,9 +5,9 @@
 //  Created by Charles Thomas Xavier Austin III on 6/6/26.
 //
 
-import Combine
 import Foundation
 import KodaiKernel
+import Observation
 import UIKit
 
 /// Slash command vocabulary, parsing, and picker metadata live in KodaiKernel;
@@ -20,26 +20,27 @@ struct PendingSummaryConfirmation: Identifiable, Equatable {
     let summary: String
 }
 
+@Observable
 @MainActor
-final class ChatViewModel: ObservableObject {
-    @Published private(set) var sessions: [ChatSession] = []
-    @Published private(set) var streams: [Stream] = []
-    @Published private(set) var activeSessionID: UUID?
-    @Published var messages: [ChatMessage] = []
-    @Published var inputText: String = ""
-    @Published var isGenerating: Bool = false
-    @Published private(set) var phase: InferencePhase = .idle
-    @Published private(set) var activeAssistantMessageID: ChatMessage.ID?
-    @Published private(set) var generatedTokenCount: Int = 0
-    @Published private(set) var summaryPhase: SummaryPhase?
-    @Published private(set) var exportSnapshot: ChatExportSnapshot?
-    @Published private(set) var warmupStatus: WarmupStatus?
-    @Published private(set) var pendingSummaryConfirmation: PendingSummaryConfirmation?
-    @Published private(set) var projects: [KodaiProjectLite] = []
-    @Published private(set) var selectedProjectID: UUID?
-    @Published private(set) var pendingToolProposal: PendingToolProposalLite?
-    @Published private(set) var recentActivityEvents: [ActivityEventLite] = []
-    @Published private(set) var latestContextSnapshot: ContextSnapshotLite?
+final class ChatViewModel {
+    private(set) var sessions: [ChatSession] = []
+    private(set) var streams: [Stream] = []
+    private(set) var activeSessionID: UUID?
+    var messages: [ChatMessage] = []
+    var inputText: String = ""
+    var isGenerating: Bool = false
+    private(set) var phase: InferencePhase = .idle
+    private(set) var activeAssistantMessageID: ChatMessage.ID?
+    private(set) var generatedTokenCount: Int = 0
+    private(set) var summaryPhase: SummaryPhase?
+    private(set) var exportSnapshot: ChatExportSnapshot?
+    private(set) var warmupStatus: WarmupStatus?
+    private(set) var pendingSummaryConfirmation: PendingSummaryConfirmation?
+    private(set) var projects: [KodaiProjectLite] = []
+    private(set) var selectedProjectID: UUID?
+    private(set) var pendingToolProposal: PendingToolProposalLite?
+    private(set) var recentActivityEvents: [ActivityEventLite] = []
+    private(set) var latestContextSnapshot: ContextSnapshotLite?
 
     var activeProcessSummary: InferenceProcessSummary? {
         guard activeAssistantMessageID != nil, phase != .idle else { return nil }
@@ -149,7 +150,7 @@ final class ChatViewModel: ObservableObject {
     private var currentPhaseHistory: [InferencePhase] = []
     private var currentDiagnostics: [String] = []
     private var generationHapticEventsByMessageID: [ChatMessage.ID: Set<GenerationHapticEvent>] = [:]
-    @Published private(set) var sendStartedAt: Date?
+    private(set) var sendStartedAt: Date?
     private let uiFlushInterval: Duration = .milliseconds(75)
     private let summaryChunkCharacterLimit = 3_600
 

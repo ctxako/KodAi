@@ -84,7 +84,7 @@ private enum MessageTextSize: String, CaseIterable, Identifiable {
 }
 
 struct ChatView: View {
-    @StateObject private var viewModel = ChatViewModel()
+    @State private var viewModel = ChatViewModel()
     @State private var expandedProcessMessageIDs: Set<ChatMessage.ID> = []
     @State private var isMenuOpen = false
     @State private var commentEditor: MessageCommentEditor?
