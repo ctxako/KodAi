@@ -70,7 +70,7 @@ struct KodaiSidebar: View {
             if sidebarOpen {
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 12) {
-                        KodaiSidebarGlassBox()
+                        KodaiSidebarGlassBox(isActive: isLoading)
 
                         sidebarRow("New thread", icon: "plus") {
                             onNewSession(activeProject)
@@ -982,6 +982,8 @@ struct KodaiSidebar: View {
 private struct KodaiSidebarGlassBox: View {
     @Environment(\.kodaiTheme) private var theme
 
+    let isActive: Bool
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -1001,7 +1003,7 @@ private struct KodaiSidebarGlassBox: View {
                                 .frame(width: 3, height: 3)
                         }
 
-                    Text("Idle")
+                    Text(isActive ? "Responding" : "Idle")
                         .font(.system(size: 10, weight: .medium, design: .rounded))
                         .foregroundStyle(theme.secondaryText)
                 }
@@ -1009,9 +1011,28 @@ private struct KodaiSidebarGlassBox: View {
 
             Spacer(minLength: 0)
 
-            Text("Live Entity ready")
-                .font(.system(size: 12, weight: .regular, design: .rounded))
-                .foregroundStyle(theme.primaryText.opacity(0.72))
+            WorkloadBloomView(
+                isActive: isActive,
+                activityLevel: isActive ? 0.82 : 0.08
+            )
+            .frame(maxWidth: .infinity)
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 7) {
+                Text("Local")
+                Circle()
+                    .fill(theme.secondaryText.opacity(0.45))
+                    .frame(width: 2.5, height: 2.5)
+                Text("Ready")
+                Circle()
+                    .fill(theme.secondaryText.opacity(0.45))
+                    .frame(width: 2.5, height: 2.5)
+                Text("On-device")
+            }
+            .font(.system(size: 9, weight: .medium, design: .rounded))
+            .foregroundStyle(theme.secondaryText.opacity(0.72))
+            .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
