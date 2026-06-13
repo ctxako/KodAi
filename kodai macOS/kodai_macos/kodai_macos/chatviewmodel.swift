@@ -33,12 +33,7 @@ Kodai is project- and task-aware. When project, task, or deadline context appear
 @Observable
 final class ChatViewModel {
     var inputText = ""
-    var messages: [ChatMessage] = [
-        ChatMessage(
-            role: .assistant,
-            text: "What are we building today?"
-        )
-    ]
+    var messages: [ChatMessage] = []
 
     var selectedChat: KodaiChatSession?
     var isLoading = false
@@ -165,9 +160,7 @@ final class ChatViewModel {
         let session = KodaiChatSession(project: project)
         selectedChat = session
 
-        messages = [
-            ChatMessage(role: .assistant, text: "Fresh chat. What are we building today?")
-        ]
+        messages = []
         turnRecords = [:]
 
         inputText = ""
@@ -271,9 +264,7 @@ final class ChatViewModel {
             } else {
                 selectedChat = nil
                 backend.reset()
-                messages = [
-                    ChatMessage(role: .assistant, text: "What are we building today?")
-                ]
+                messages = []
                 inputText = ""
                 estimatedContextPercent = 0
             }
@@ -310,9 +301,7 @@ final class ChatViewModel {
             if wasSelectedInStream {
                 selectedChat = nil
                 backend.reset()
-                messages = [
-                    ChatMessage(role: .assistant, text: "What are we building today?")
-                ]
+                messages = []
                 inputText = ""
                 estimatedContextPercent = 0
             }
@@ -368,7 +357,7 @@ final class ChatViewModel {
         if wasSelectedInProject {
             selectedChat = nil
             backend.reset()
-            messages = [ChatMessage(role: .assistant, text: "What are we building today?")]
+            messages = []
             inputText = ""
             estimatedContextPercent = 0
         }
@@ -763,12 +752,6 @@ final class ChatViewModel {
 
     private func messagesForSession(_ session: KodaiChatSession) -> [ChatMessage] {
         let storedMessages = session.messages.sorted { $0.createdAt < $1.createdAt }
-
-        guard !storedMessages.isEmpty else {
-            return [
-                ChatMessage(role: .assistant, text: "Fresh chat. What are we building today?")
-            ]
-        }
 
         return storedMessages.map { storedMessage in
             ChatMessage(

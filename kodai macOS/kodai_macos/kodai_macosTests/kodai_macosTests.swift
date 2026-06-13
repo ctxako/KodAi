@@ -59,6 +59,7 @@ struct kodai_macosTests {
 
         #expect(session.modelContext == nil)
         #expect(storedSessions.isEmpty)
+        #expect(viewModel.messages.isEmpty)
     }
 
     @MainActor
