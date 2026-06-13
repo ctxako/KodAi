@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import KodaiCore
 
 struct GlassBoxView: View {
     @Environment(\.kodaiTheme) private var theme

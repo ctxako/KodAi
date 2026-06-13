@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import KodaiCore
 
 struct WorkloadBloomView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
