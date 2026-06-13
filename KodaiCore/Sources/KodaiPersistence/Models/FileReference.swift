@@ -4,7 +4,7 @@ import SwiftData
 
 @Model
 public final class FileReference {
-    @Attribute(.unique) public var id: UUID
+    public var id: UUID
     public var path: String
     public var filename: String
     public var size: Int

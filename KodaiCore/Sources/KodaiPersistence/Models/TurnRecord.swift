@@ -6,7 +6,7 @@ import SwiftData
 /// used to produce the response, plus performance and tool-use metadata.
 @Model
 public final class TurnRecord {
-    @Attribute(.unique) public var id: UUID
+    public var id: UUID
     public var userMessage: String
     public var assistantMessage: String
     public var systemPrompt: String

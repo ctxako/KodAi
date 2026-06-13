@@ -4,7 +4,7 @@ import SwiftData
 
 @Model
 public final class KodaiReminder {
-    @Attribute(.unique) public var id: UUID
+    public var id: UUID
     public var title: String
     public var scheduledAt: Date
     public var fired: Bool

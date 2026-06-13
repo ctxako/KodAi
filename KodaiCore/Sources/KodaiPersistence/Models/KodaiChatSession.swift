@@ -4,7 +4,7 @@ import SwiftData
 
 @Model
 public final class KodaiChatSession {
-    @Attribute(.unique) public var id: UUID
+    public var id: UUID
     public var title: String
     public var createdAt: Date
     public var updatedAt: Date

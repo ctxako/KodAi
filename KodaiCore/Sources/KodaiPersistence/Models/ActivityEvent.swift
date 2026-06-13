@@ -4,7 +4,7 @@ import SwiftData
 
 @Model
 public final class ActivityEvent {
-    @Attribute(.unique) public var id: UUID
+    public var id: UUID
     public var kind: ActivityKind
     public var detail: String
     public var createdAt: Date

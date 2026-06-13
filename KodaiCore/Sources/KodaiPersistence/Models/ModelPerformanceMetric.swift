@@ -4,7 +4,7 @@ import SwiftData
 
 @Model
 public final class ModelPerformanceMetric {
-    @Attribute(.unique) public var id: UUID
+    public var id: UUID
     public var inputTokenEstimate: Int
     public var outputTokenEstimate: Int
     public var latencyMs: Double

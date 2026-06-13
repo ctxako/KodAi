@@ -4,7 +4,7 @@ import SwiftData
 
 @Model
 public final class Summary {
-    @Attribute(.unique) public var id: UUID
+    public var id: UUID
     public var kind: SummaryKind
     public var content: String
     public var tokenCount: Int

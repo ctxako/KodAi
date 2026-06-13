@@ -4,7 +4,7 @@ import SwiftData
 
 @Model
 public final class ToolCall {
-    @Attribute(.unique) public var id: UUID
+    public var id: UUID
     public var toolName: String
     public var input: String
     public var output: String?
