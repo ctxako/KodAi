@@ -1,9 +1,7 @@
 import Foundation
 
-public enum Prompts {
-    public static let version = "1.0"
-
-    public static func persona(for mode: PersonaMode) -> String {
+public enum KodaiAssistantModePromptBuilder {
+    public static func build(for mode: PersonaMode) -> String {
         switch mode {
         case .default_:
             return "You are Kodai, a private on-device assistant. Be direct, practical, and conversational. Do not over-explain unless asked. Keep responses short by default."
@@ -17,19 +15,66 @@ public enum Prompts {
             return "You are Kodai, in critic mode. Identify weaknesses, risks, and failure modes. Challenge assumptions respectfully. Be rigorous and constructive."
         }
     }
+}
 
-    public static func format(for outputFormat: OutputFormat) -> String {
+public enum KodaiOutputModePromptBuilder {
+    public static func build(for outputFormat: OutputFormat) -> String {
         switch outputFormat {
         case .chat:
-            return "Talk with the user like a normal practical assistant. Be direct, useful, and conversational. Keep responses short by default."
+            return """
+            Talk with the user like a normal practical assistant.
+            Be direct, useful, and conversational.
+            Help the user think through app development, project organization, debugging, planning, and next steps.
+            Do not force a rigid format unless the user asks for one.
+            Keep responses short by default.
+            """
         case .organize:
-            return "Turn the user's messy note into a clean helper-task format.\nReturn:\n1. Short summary\n2. Task list\n3. Priority order\n4. Best next action"
+            return """
+            Turn the user's messy note into a clean helper-task format.
+
+            Return:
+            1. Short summary
+            2. Task list
+            3. Priority order
+            4. Best next action
+            """
         case .summarize:
-            return "Summarize the user's text clearly.\nReturn:\n1. Main idea\n2. Key points\n3. What matters most"
+            return """
+            Summarize the user's text clearly.
+
+            Return:
+            1. Main idea
+            2. Key points
+            3. What matters most
+            """
         case .checklist:
-            return "Turn the user's input into a practical checklist. Return clear checkbox-style action items."
+            return """
+            Turn the user's input into a practical checklist.
+
+            Return clear checkbox-style action items.
+            """
         case .debug:
-            return "Help debug the user's issue.\nReturn:\n1. Likely problem\n2. Possible causes\n3. Step-by-step fix\n4. What to try first"
+            return """
+            Help debug the user's issue.
+
+            Return:
+            1. Likely problem
+            2. Possible causes
+            3. Step-by-step fix
+            4. What to try first
+            """
         }
+    }
+}
+
+public enum Prompts {
+    public static let version = "1.0"
+
+    public static func persona(for mode: PersonaMode) -> String {
+        KodaiAssistantModePromptBuilder.build(for: mode)
+    }
+
+    public static func format(for outputFormat: OutputFormat) -> String {
+        KodaiOutputModePromptBuilder.build(for: outputFormat)
     }
 }

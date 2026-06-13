@@ -79,7 +79,7 @@ KodaiChatMessage
 `KodaiModel` creates a new `LanguageModelSession` on first use and holds it until `reset()` is called (on new chat or chat switch). Each session maintains its own conversation history inside the Foundation Models framework.
 
 The prompt passed to the session is assembled at call time from:
-1. Mode label + system prompt (`OutputMode.systemPrompt`)
+1. Mode label + system prompt (`KodaiOutputModePromptBuilder`)
 2. Last 15 messages formatted as plain text history
 3. The user's current message
 
@@ -89,9 +89,9 @@ Context percent is estimated client-side (character count / 4 ≈ tokens, agains
 
 `OutputMode` is a `CaseIterable` enum. Each case has:
 - `rawValue` — display name shown in the UI
-- `systemPrompt` — instruction block injected into every request when that mode is active
+- `outputFormat` — mapping to the shared `KodaiKernel.OutputFormat`
 
-Adding a new mode: add a case to `OutputMode`, write its `systemPrompt`, and add an icon mapping in `kodaisidebar.swift:modeIcon(for:)`.
+Adding a new mode: add the shared prompt to `KodaiOutputModePromptBuilder`, map the macOS `OutputMode` case to its `OutputFormat`, and add an icon mapping in `kodaisidebar.swift:modeIcon(for:)`.
 
 ## Design system
 

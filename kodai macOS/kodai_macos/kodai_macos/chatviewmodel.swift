@@ -914,7 +914,7 @@ final class ChatViewModel {
             "Current mode: \(selectedMode.rawValue)",
             "",
             "Mode instructions:",
-            selectedMode.systemPrompt,
+            KodaiOutputModePromptBuilder.build(for: selectedMode.outputFormat),
         ]
 
         return lines.joined(separator: "\n")
@@ -980,7 +980,8 @@ final class ChatViewModel {
 
         let personaContent = userProfile
         let timeContent = "Date/time: \(dateString)"
-        let modeContent = "Current mode: \(selectedMode.rawValue)\nMode instructions:\n\(selectedMode.systemPrompt)"
+        let modeInstructions = KodaiOutputModePromptBuilder.build(for: selectedMode.outputFormat)
+        let modeContent = "Current mode: \(selectedMode.rawValue)\nMode instructions:\n\(modeInstructions)"
 
         var blocks: [ContextBlock] = [
             ContextBlock(
@@ -1149,9 +1150,10 @@ final class ChatViewModel {
     }
 
     private func estimatedCurrentContextPercent(pendingInput: String = "") -> Int {
+        let modeInstructions = KodaiOutputModePromptBuilder.build(for: selectedMode.outputFormat)
         var contextText = """
         Mode instructions:
-        \(selectedMode.systemPrompt)
+        \(modeInstructions)
 
         Recent conversation:
         \(recentConversationHistory(limit: 10))
