@@ -1,13 +1,20 @@
 //
-//  composerview.swift
+//  kodaicomposerbar.swift
 //  kodai_macos
 //
 
 import SwiftUI
 
-struct ComposerView: View {
+struct KodaiComposerBar: View {
+    private enum Metrics {
+        static let cornerRadius: CGFloat = 18
+        static let horizontalPadding: CGFloat = 12
+        static let sendButtonSize: CGFloat = 44
+    }
+
+    @Environment(\.kodaiTheme) private var theme
+
     @Binding var inputText: String
-    @Binding var selectedMode: OutputMode
     @FocusState.Binding var composerFocused: Bool
 
     let isLoading: Bool
@@ -18,6 +25,20 @@ struct ComposerView: View {
     let onStop: () -> Void
 
     @AppStorage("composerHintDismissed") private var hintDismissed = false
+
+    private var trimmedInput: String {
+        inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var activityText: String? {
+        if isSummarizing {
+            return "summarizing"
+        }
+        if isLoading {
+            return "generating"
+        }
+        return nil
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,27 +64,65 @@ struct ComposerView: View {
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
-        HStack(spacing: 10) {
             VStack(spacing: 0) {
+                HStack(alignment: .bottom, spacing: 8) {
+                    TextField("Message Kodai...", text: $inputText, axis: .vertical)
+                        .focused($composerFocused)
+                        .textFieldStyle(.plain)
+                        .font(.system(.body, design: .rounded))
+                        .lineLimit(1...5)
+                        .padding(.leading, Metrics.horizontalPadding)
+                        .padding(.vertical, 8)
+                        .onKeyPress(.return, phases: .down) { press in
+                            if press.modifiers.contains(.shift) {
+                                return .ignored
+                            }
+                            guard !trimmedInput.isEmpty, !isLoading else { return .handled }
+                            onSend()
+                            return .handled
+                        }
+
+                    Button {
+                        if isLoading {
+                            onStop()
+                        } else {
+                            onSend()
+                        }
+                    } label: {
+                        Image(systemName: isLoading ? "stop.fill" : "arrow.up")
+                            .font(.system(size: 14, weight: .bold))
+                            .frame(
+                                width: Metrics.sendButtonSize,
+                                height: Metrics.sendButtonSize
+                            )
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .clipShape(Circle())
+                    .disabled(!isLoading && trimmedInput.isEmpty)
+                    .padding(.trailing, 4)
+                }
+                .frame(minHeight: Metrics.sendButtonSize)
+
                 HStack(spacing: 8) {
                     Text(telemetry.composerBarText)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.46))
                         .lineLimit(1)
 
-                    if isSummarizing {
+                    Spacer(minLength: 8)
+
+                    if let activityText {
                         HStack(spacing: 4) {
                             ProgressView()
                                 .controlSize(.mini)
-                                .tint(.white.opacity(0.45))
-                            Text("summarizing")
+                                .tint(.white.opacity(0.4))
+                            Text(activityText)
                                 .font(.system(size: 10, weight: .regular, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.4))
+                                .foregroundStyle(.white.opacity(0.38))
                         }
                         .transition(.opacity)
                     }
-
-                    Spacer(minLength: 4)
 
                     ContextArcView(
                         percent: telemetry.contextPercent,
@@ -72,62 +131,31 @@ struct ComposerView: View {
                         color: telemetry.contextRiskColor
                     )
                 }
-                .padding(.horizontal, 14)
+                .padding(.horizontal, Metrics.horizontalPadding)
                 .padding(.vertical, 6)
-
-                Rectangle()
-                    .fill(.white.opacity(0.08))
-                    .frame(height: 1)
-
-                ZStack(alignment: .topLeading) {
-                    if inputText.isEmpty {
-                        Text("Message Kodai...")
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .allowsHitTesting(false)
-                    }
-
-                    TextEditor(text: $inputText)
-                        .focused($composerFocused)
-                        .font(.system(.body, design: .rounded))
-                        .scrollContentBackground(.hidden)
-                        .frame(minHeight: 35, maxHeight: 110)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
-                        .onKeyPress(.return, phases: .down) { press in
-                            if press.modifiers.contains(.shift) {
-                                return .ignored
-                            }
-                            let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-                            guard !trimmed.isEmpty, !isLoading else { return .handled }
-                            onSend()
-                            return .handled
-                        }
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(.white.opacity(0.055))
+                        .frame(height: 0.5)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .kodaiGlass(cornerRadius: 22)
-
-            Button {
-                    if isLoading {
-                        onStop()
-                    } else {
-                        onSend()
+            .background {
+                RoundedRectangle(cornerRadius: Metrics.cornerRadius, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: Metrics.cornerRadius, style: .continuous)
+                            .fill(theme.glassSurface)
                     }
-                } label: {
-                    Image(systemName: isLoading ? "stop.fill" : "arrow.up")
-                        .font(.system(size: 17, weight: .bold))
-                        .frame(width: 42, height: 42)
-                }
-            .buttonStyle(.borderedProminent)
-            .clipShape(Circle())
-            .disabled(!isLoading && inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: Metrics.cornerRadius, style: .continuous)
+                    .stroke(.white.opacity(0.07), lineWidth: 0.75)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: Metrics.cornerRadius, style: .continuous))
+            .padding(.horizontal, 16)
+            .padding(.top, 6)
+            .padding(.bottom, 10)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 16)
-        } // VStack
     }
 }
 

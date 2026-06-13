@@ -44,6 +44,7 @@ struct ContentView: View {
 
     private let sidebarLeadingPadding: CGFloat = 8
     private let sidebarContentGap: CGFloat = 8
+    private let mainChatLaneMaxWidth: CGFloat = 680
 
     private var contentLeadingPadding: CGFloat {
         (sidebarOpen ? KodaiSidebar.openWidth : KodaiSidebar.closedWidth)
@@ -164,6 +165,8 @@ struct ContentView: View {
             }
 
             ChatScrollView(messages: viewModel.messages, turnRecords: viewModel.turnRecords)
+                .frame(maxWidth: mainChatLaneMaxWidth)
+                .frame(maxWidth: .infinity)
 
             if let proposal = viewModel.pendingToolProposal {
                 ToolProposalConfirmationCard(
@@ -181,11 +184,12 @@ struct ContentView: View {
                 )
                 .padding(.horizontal)
                 .padding(.bottom, 4)
+                .frame(maxWidth: mainChatLaneMaxWidth)
+                .frame(maxWidth: .infinity)
             }
 
-            ComposerView(
+            KodaiComposerBar(
                 inputText: $viewModel.inputText,
-                selectedMode: $viewModel.selectedMode,
                 composerFocused: $composerFocused,
                 isLoading: viewModel.isLoading,
                 isSummarizing: viewModel.isSummarizing,
@@ -197,6 +201,8 @@ struct ContentView: View {
                     viewModel.stopGeneration()
                 }
             )
+            .frame(maxWidth: mainChatLaneMaxWidth)
+            .frame(maxWidth: .infinity)
         }
     }
 
