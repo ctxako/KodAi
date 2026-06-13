@@ -9,7 +9,7 @@ public final class KodaiChatSession {
     public var createdAt: Date
     public var updatedAt: Date
     public var stream: KodaiStream?
-    public var project: KodaiProject?
+    public var projectID: UUID?
     public var summarizedThroughMessageID: UUID?
 
     @Relationship(deleteRule: .cascade, inverse: \KodaiChatMessage.session)
@@ -24,7 +24,7 @@ public final class KodaiChatSession {
         createdAt: Date = .now,
         updatedAt: Date = .now,
         stream: KodaiStream? = nil,
-        project: KodaiProject? = nil,
+        projectID: UUID? = nil,
         messages: [KodaiChatMessage] = [],
         summarizedThroughMessageID: UUID? = nil,
         summaries: [KodaiSummary] = []
@@ -34,7 +34,7 @@ public final class KodaiChatSession {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.stream = stream
-        self.project = project
+        self.projectID = projectID
         self.messages = messages
         self.summarizedThroughMessageID = summarizedThroughMessageID
         self.summaries = summaries

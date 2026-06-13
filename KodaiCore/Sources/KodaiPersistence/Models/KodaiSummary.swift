@@ -13,7 +13,7 @@ public final class KodaiSummary {
     public var rangeEnd: Date?
     public var createdAt: Date
     public var session: KodaiChatSession?
-    public var project: KodaiProject?
+    public var projectID: UUID?
 
     public init(
         id: UUID = UUID(),
@@ -24,7 +24,7 @@ public final class KodaiSummary {
         rangeEnd: Date? = nil,
         createdAt: Date = .now,
         session: KodaiChatSession? = nil,
-        project: KodaiProject? = nil
+        projectID: UUID? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -35,6 +35,6 @@ public final class KodaiSummary {
         self.rangeEnd = rangeEnd
         self.createdAt = createdAt
         self.session = session
-        self.project = project
+        self.projectID = projectID
     }
 }

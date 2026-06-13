@@ -23,6 +23,7 @@ struct KodaiSidebar: View {
     let estimatedContextPercent: Int
 
     let chatSessions: [KodaiChatSession]
+    let allChatSessions: [KodaiChatSession]
     let streams: [KodaiStream]
     let projects: [KodaiProject]
     let todaysTasks: [KodaiTask]
@@ -64,8 +65,15 @@ struct KodaiSidebar: View {
     let onAssignChatToProject: (KodaiChatSession, KodaiProject?) -> Void
 
     private var activeProject: KodaiProject? {
-        guard let id = selectedChatID else { return nil }
-        return projects.first { $0.sessions.contains { $0.id == id } }
+        guard let selectedChatID,
+              let projectID = allChatSessions.first(where: { $0.id == selectedChatID })?.projectID else {
+            return nil
+        }
+        return projects.first { $0.id == projectID }
+    }
+
+    private func sessions(in project: KodaiProject) -> [KodaiChatSession] {
+        allChatSessions.filter { $0.projectID == project.id }
     }
 
     var body: some View {
@@ -294,7 +302,7 @@ struct KodaiSidebar: View {
 
     private func selectTodayTask(_ task: KodaiTask) {
         guard let project = task.project else { return }
-        let sorted = project.sessions.sorted { $0.updatedAt > $1.updatedAt }
+        let sorted = sessions(in: project).sorted { $0.updatedAt > $1.updatedAt }
         if let latest = sorted.first {
             onSelectChat(latest)
         } else {
@@ -372,7 +380,7 @@ struct KodaiSidebar: View {
 
     private func projectRow(_ project: KodaiProject) -> some View {
         let isExpanded = expandedProjectIDs.contains(project.id)
-        let hasActiveChat = project.sessions.contains { $0.id == selectedChatID }
+        let hasActiveChat = sessions(in: project).contains { $0.id == selectedChatID }
         let startOfToday = Calendar.current.startOfDay(for: Date())
         let overdueCount = project.tasks.filter {
             !$0.isCompleted && ($0.dueDate.map { $0 < startOfToday } ?? false)
@@ -426,7 +434,7 @@ struct KodaiSidebar: View {
                         expandedProjectIDs.insert(project.id)
                     }
                 }
-                let sorted = project.sessions.sorted { $0.updatedAt > $1.updatedAt }
+                let sorted = sessions(in: project).sorted { $0.updatedAt > $1.updatedAt }
                 if let latest = sorted.first {
                     onSelectChat(latest)
                 }
@@ -457,7 +465,7 @@ struct KodaiSidebar: View {
 
             // Expanded chats list
             if isExpanded {
-                let sorted = project.sessions.sorted { $0.updatedAt > $1.updatedAt }
+                let sorted = sessions(in: project).sorted { $0.updatedAt > $1.updatedAt }
                 ForEach(sorted, id: \.id) { session in
                     projectChatRow(session)
                         .padding(.leading, 16)

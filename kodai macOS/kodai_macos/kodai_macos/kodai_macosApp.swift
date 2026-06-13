@@ -13,23 +13,28 @@ import KodaiCore
 
 @main
 struct kodai_macosApp: App {
+    private let container: ModelContainer = {
+        let schema = Schema(versionedSchema: KodaiLocalStoreSchemaV3.self)
+        do {
+            return try ModelContainer(
+                for: schema,
+                migrationPlan: KodaiLocalStoreMigrationPlan.self,
+                configurations: ModelConfiguration(
+                    schema: schema,
+                    cloudKitDatabase: .none
+                )
+            )
+        } catch {
+            fatalError("Failed to create model container: \(error)")
+        }
+    }()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .background(.clear)
         }
         .windowStyle(.hiddenTitleBar)
-        .modelContainer(for: [
-            KodaiChatSession.self,
-            KodaiChatMessage.self,
-            KodaiStream.self,
-            KodaiProject.self,
-            KodaiTask.self,
-            KodaiSummary.self,
-            TurnRecord.self,
-            ActivityEvent.self,
-            ModelPerformanceMetric.self,
-            ToolCall.self,
-        ])
+        .modelContainer(container)
     }
 }

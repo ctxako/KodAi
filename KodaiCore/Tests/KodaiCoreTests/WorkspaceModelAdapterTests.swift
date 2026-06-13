@@ -178,15 +178,15 @@ final class WorkspaceModelAdapterTests: XCTestCase {
         XCTAssertEqual(model.tasks.map(\.id), [originalTaskID])
     }
 
-    func testProjectValueRepresentationExcludesChatSessions() throws {
-        let container = try makeInMemoryContainer()
-        let context = ModelContext(container)
+    func testProjectSchemaDoesNotDependOnChatSessions() throws {
+        let schema = Schema([KodaiProject.self, KodaiTask.self])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        _ = try ModelContainer(for: schema, configurations: [configuration])
+
+        XCTAssertNil(schema.entitiesByName["KodaiChatSession"])
+
         let model = KodaiProject(title: "With chat")
-        context.insert(model)
-        model.sessions.append(KodaiChatSession(title: "Chat"))
         let value = model.valueRepresentation
-        // KodaiProjectValue has no chat fields at all; this guards that the
-        // workspace value stays chat-free even as the model carries sessions.
         XCTAssertEqual(value.tasks, [])
         XCTAssertEqual(value.title, "With chat")
     }
@@ -226,7 +226,7 @@ final class WorkspaceModelAdapterTests: XCTestCase {
     // MARK: - Helpers
 
     private func makeInMemoryContainer() throws -> ModelContainer {
-        let schema = Schema([KodaiProject.self, KodaiTask.self, KodaiChatSession.self])
+        let schema = Schema([KodaiProject.self, KodaiTask.self])
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])
     }

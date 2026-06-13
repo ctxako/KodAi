@@ -140,14 +140,13 @@ struct ModelCreationTests {
         #expect(project.details == "")
         #expect(project.summary == nil)
         #expect(project.deadline == nil)
-        #expect(project.sessions.isEmpty)
         #expect(project.tasks.isEmpty)
     }
 
     @Test func sessionDefaults() throws {
         let session = KodaiChatSession()
         #expect(session.title == "New chat")
-        #expect(session.project == nil)
+        #expect(session.projectID == nil)
         #expect(session.stream == nil)
         #expect(session.summarizedThroughMessageID == nil)
         #expect(session.messages.isEmpty)
@@ -184,6 +183,7 @@ struct ModelCreationTests {
         let summary = KodaiSummary(kind: .session, content: String(repeating: "x", count: 100))
         #expect(summary.tokenCount == 25)
         #expect(summary.previousContent == nil)
+        #expect(summary.projectID == nil)
     }
 }
 
@@ -191,20 +191,30 @@ struct ModelCreationTests {
 
 @Suite("Relationship wiring")
 struct RelationshipTests {
-    @Test func sessionBelongsToProject() throws {
+    @Test func sessionStoresProjectIDAndResolvesProject() throws {
         let container = try makeContainer()
         let context = ModelContext(container)
 
         let project = KodaiProject(title: "Kodai macOS")
-        let session = KodaiChatSession(title: "Sprint 1")
-        project.sessions.append(session)
-        session.project = project
+        let session = KodaiChatSession(title: "Sprint 1", projectID: project.id)
         context.insert(project)
         context.insert(session)
         try context.save()
 
-        #expect(session.project?.title == "Kodai macOS")
-        #expect(project.sessions.count == 1)
+        #expect(session.projectID == project.id)
+        #expect(try context.kodaiProject(id: session.projectID)?.title == "Kodai macOS")
+        #expect(try context.kodaiChatSessions(projectID: project.id).map(\.id) == [session.id])
+    }
+
+    @Test func summaryStoresProjectID() throws {
+        let projectID = UUID()
+        let summary = KodaiSummary(
+            kind: .project,
+            content: "Project recap",
+            projectID: projectID
+        )
+
+        #expect(summary.projectID == projectID)
     }
 
     @Test func messagesAppendToSession() throws {
@@ -307,7 +317,7 @@ struct MigrationHelperTests {
 
         #expect(session.id == id)
         #expect(session.title == "Old chat")
-        #expect(session.project == nil)
+        #expect(session.projectID == nil)
     }
 
     @Test func migratesKnownRoles() {

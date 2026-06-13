@@ -230,23 +230,17 @@ struct WorkspaceProjectStoreTests {
         let loaded = try await store.loadProjects()
         #expect(loaded.count == 2)
 
-        // Chats stay in ChatStore JSON: the chat models are schema-only and
-        // must never gain rows from workspace migration or saves.
-        let context = ModelContext(container)
-        #expect(try context.fetch(FetchDescriptor<KodaiChatSession>()).isEmpty)
-        #expect(try context.fetch(FetchDescriptor<KodaiChatMessage>()).isEmpty)
-        #expect(try context.fetch(FetchDescriptor<KodaiStream>()).isEmpty)
-        #expect(try context.fetch(FetchDescriptor<KodaiSummary>()).isEmpty)
+        #expect(container.schema.entitiesByName["KodaiChatSession"] == nil)
+        #expect(container.schema.entitiesByName["KodaiChatMessage"] == nil)
+        #expect(container.schema.entitiesByName["KodaiStream"] == nil)
+        #expect(container.schema.entitiesByName["KodaiSummary"] == nil)
     }
 
     @Test func projectValuesFromSwiftDataExcludeChatSessions() async throws {
         let container = try WorkspaceModelContainer.makeInMemory()
-        // Even if a project somehow carried a session, the value layer the
-        // app consumes has no chat fields at all.
         let context = ModelContext(container)
         let project = KodaiProject(title: "With session")
         context.insert(project)
-        project.sessions.append(KodaiChatSession(title: "Stray chat"))
         try context.save()
 
         let directory = try makeTempDirectory()
@@ -258,10 +252,8 @@ struct WorkspaceProjectStoreTests {
         let value = try #require(loaded.first)
         #expect(value.title == "With session")
         #expect(value.tasks.isEmpty)
-        // KodaiProjectValue is Codable with no session key; encoding proves
-        // no chat content leaks through the workspace value path.
         let encoded = String(decoding: try JSONEncoder().encode(value), as: UTF8.self)
-        #expect(!encoded.contains("Stray chat"))
+        #expect(!encoded.contains("sessions"))
     }
 
     // MARK: - SwiftData as source of truth
