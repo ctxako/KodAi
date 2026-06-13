@@ -23,14 +23,35 @@ final class kodai_macosUITests: XCTestCase {
     }
 
     @MainActor
-    func testExample() throws {
-        // UI tests must launch the application that they test.
+    func testGlassBoxNavigationAndThemes() throws {
         let app = XCUIApplication()
         app.launch()
 
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
-        // XCUIAutomation Documentation
-        // https://developer.apple.com/documentation/xcuiautomation
+        let glassBoxButton = app.buttons["glassBox.sidebar"]
+        XCTAssertTrue(glassBoxButton.waitForExistence(timeout: 5))
+        glassBoxButton.click()
+
+        XCTAssertTrue(app.scrollViews["glassBox.detail"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["glassBox.status"].exists)
+
+        app.buttons["glassBox.backToChat"].click()
+        XCTAssertTrue(app.textViews.firstMatch.waitForExistence(timeout: 3))
+
+        let settingsButton = app.buttons["settings.open"]
+        XCTAssertTrue(settingsButton.exists)
+        settingsButton.click()
+
+        let themePicker = app.popUpButtons["settings.theme"]
+        XCTAssertTrue(themePicker.waitForExistence(timeout: 3))
+
+        themePicker.click()
+        app.menuItems["Blue Gradient"].click()
+
+        themePicker.click()
+        app.menuItems["Sage Glass"].click()
+
+        glassBoxButton.click()
+        XCTAssertTrue(app.scrollViews["glassBox.detail"].waitForExistence(timeout: 3))
     }
 
     @MainActor

@@ -75,6 +75,10 @@ final class ChatViewModel {
         messages.reversed().first { $0.role == .assistant }?.text ?? ""
     }
 
+    var isWaitingForFirstToken: Bool {
+        isLoading && activeFirstTokenAt == nil
+    }
+
     var chatTelemetry: ChatTelemetry {
         let activeTokens = Int(Double(estimatedContextPercent) / 100.0 * Double(FoundationModelsBackend.contextWindowTokenLimit))
         let summaryAge = max(0, messages.count - 1)

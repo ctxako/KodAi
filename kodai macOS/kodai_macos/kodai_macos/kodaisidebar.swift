@@ -15,7 +15,8 @@ struct KodaiSidebar: View {
     @Binding var sidebarOpen: Bool
     @Binding var selectedMode: OutputMode
 
-    let isLoading: Bool
+    let glassBoxSignalState: LiveEntitySignalState
+    let glassBoxSelected: Bool
     let estimatedContextPercent: Int
 
     let chatSessions: [KodaiChatSession]
@@ -44,6 +45,7 @@ struct KodaiSidebar: View {
 
     let onRenameChat: (KodaiChatSession, String) -> Void
     let onDeleteChat: (KodaiChatSession) -> Void
+    let onOpenGlassBox: () -> Void
     let onNewSession: (KodaiProject?) -> Void
     let onSelectChat: (KodaiChatSession) -> Void
     let onResetSession: () -> Void
@@ -70,7 +72,11 @@ struct KodaiSidebar: View {
             if sidebarOpen {
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 12) {
-                        KodaiSidebarGlassBox(isActive: isLoading)
+                        KodaiSidebarGlassBox(
+                            signalState: glassBoxSignalState,
+                            isSelected: glassBoxSelected,
+                            onOpen: onOpenGlassBox
+                        )
 
                         sidebarRow("New thread", icon: "plus") {
                             onNewSession(activeProject)
@@ -770,7 +776,7 @@ struct KodaiSidebar: View {
             }
         }
         .frame(height: 42)
-        .onChange(of: isLoading) { _, loading in
+        .onChange(of: glassBoxSignalState.isActive) { _, loading in
             if loading {
                 withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
                     breathing = true
@@ -813,6 +819,7 @@ struct KodaiSidebar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("settings.open")
         .popover(isPresented: $showingSettings, arrowEdge: .bottom) {
             KodaiSettingsView(
                 selectedMode: $selectedMode,
@@ -906,7 +913,7 @@ struct KodaiSidebar: View {
 
     private func sidebarChat(_ session: KodaiChatSession) -> some View {
         let isActiveThread = selectedChatID == session.id
-        let dotPulsing = isActiveThread && isLoading
+        let dotPulsing = isActiveThread && glassBoxSignalState.isActive
 
         return HStack(spacing: 10) {
             Circle()
@@ -982,62 +989,83 @@ struct KodaiSidebar: View {
 private struct KodaiSidebarGlassBox: View {
     @Environment(\.kodaiTheme) private var theme
 
-    let isActive: Bool
+    let signalState: LiveEntitySignalState
+    let isSelected: Bool
+    let onOpen: () -> Void
+
+    @State private var isHovering = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Glass Box")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(theme.secondaryText)
-
-                Spacer()
-
-                HStack(spacing: 5) {
-                    Circle()
-                        .stroke(theme.primaryAccent.opacity(0.8), lineWidth: 1)
-                        .frame(width: 8, height: 8)
-                        .overlay {
-                            Circle()
-                                .fill(theme.primaryAccent.opacity(0.65))
-                                .frame(width: 3, height: 3)
-                        }
-
-                    Text(isActive ? "Responding" : "Idle")
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
+        Button(action: onOpen) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Glass Box")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundStyle(theme.secondaryText)
+
+                    Spacer()
+
+                    HStack(spacing: 5) {
+                        Circle()
+                            .stroke(theme.primaryAccent.opacity(0.8), lineWidth: 1)
+                            .frame(width: 8, height: 8)
+                            .overlay {
+                                Circle()
+                                    .fill(theme.primaryAccent.opacity(0.65))
+                                    .frame(width: 3, height: 3)
+                            }
+
+                        Text(signalState.status.rawValue)
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .foregroundStyle(theme.secondaryText)
+                    }
                 }
+
+                Spacer(minLength: 0)
+
+                WorkloadBloomView(
+                    isActive: signalState.isActive,
+                    activityLevel: signalState.activityLevel
+                )
+                .frame(maxWidth: .infinity)
+
+                Spacer(minLength: 0)
+
+                HStack(spacing: 7) {
+                    Text("Local")
+                    Circle()
+                        .fill(theme.secondaryText.opacity(0.45))
+                        .frame(width: 2.5, height: 2.5)
+                    Text("Ready")
+                    Circle()
+                        .fill(theme.secondaryText.opacity(0.45))
+                        .frame(width: 2.5, height: 2.5)
+                    Text("On-device")
+                }
+                .font(.system(size: 9, weight: .medium, design: .rounded))
+                .foregroundStyle(theme.secondaryText.opacity(0.72))
+                .frame(maxWidth: .infinity)
             }
-
-            Spacer(minLength: 0)
-
-            WorkloadBloomView(
-                isActive: isActive,
-                activityLevel: isActive ? 0.82 : 0.08
-            )
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
             .frame(maxWidth: .infinity)
-
-            Spacer(minLength: 0)
-
-            HStack(spacing: 7) {
-                Text("Local")
-                Circle()
-                    .fill(theme.secondaryText.opacity(0.45))
-                    .frame(width: 2.5, height: 2.5)
-                Text("Ready")
-                Circle()
-                    .fill(theme.secondaryText.opacity(0.45))
-                    .frame(width: 2.5, height: 2.5)
-                Text("On-device")
-            }
-            .font(.system(size: 9, weight: .medium, design: .rounded))
-            .foregroundStyle(theme.secondaryText.opacity(0.72))
-            .frame(maxWidth: .infinity)
+            .frame(height: 190, alignment: .topLeading)
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity)
-        .frame(height: 190, alignment: .topLeading)
+        .buttonStyle(.plain)
         .kodaiGlass(cornerRadius: 14)
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(
+                    theme.primaryAccent.opacity(isSelected ? 0.34 : (isHovering ? 0.20 : 0)),
+                    lineWidth: 1
+                )
+        }
+        .opacity(isHovering ? 0.96 : 1)
+        .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.16), value: isHovering)
+        .accessibilityIdentifier("glassBox.sidebar")
+        .accessibilityLabel("Glass Box")
+        .accessibilityHint("Opens local model visibility")
     }
 }

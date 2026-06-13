@@ -100,6 +100,7 @@ struct KodaiSettingsView: View {
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()
+                .accessibilityIdentifier("settings.theme")
             }
             .padding(.horizontal, 16)
             .frame(height: 38)
