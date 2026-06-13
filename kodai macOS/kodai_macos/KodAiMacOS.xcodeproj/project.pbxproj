@@ -34,17 +34,17 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		3CB123212FD7EFA60085A424 /* KodAi macOS */ = {
+		3CB123212FD7EFA60085A424 /* kodai_macos */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = kodai_macos;
 			sourceTree = "<group>";
 		};
-		3CB123312FD7EFA70085A424 /* KodAi macOSTests */ = {
+		3CB123312FD7EFA70085A424 /* kodai_macosTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = kodai_macosTests;
 			sourceTree = "<group>";
 		};
-		3CB1233B2FD7EFA70085A424 /* KodAi macOSUITests */ = {
+		3CB1233B2FD7EFA70085A424 /* kodai_macosUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = kodai_macosUITests;
 			sourceTree = "<group>";
@@ -80,9 +80,9 @@
 		3CB123162FD7EFA60085A424 = {
 			isa = PBXGroup;
 			children = (
-				3CB123212FD7EFA60085A424 /* KodAi macOS */,
-				3CB123312FD7EFA70085A424 /* KodAi macOSTests */,
-				3CB1233B2FD7EFA70085A424 /* KodAi macOSUITests */,
+				3CB123212FD7EFA60085A424 /* kodai_macos */,
+				3CB123312FD7EFA70085A424 /* kodai_macosTests */,
+				3CB1233B2FD7EFA70085A424 /* kodai_macosUITests */,
 				3CB123202FD7EFA60085A424 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -102,7 +102,7 @@
 /* Begin PBXNativeTarget section */
 		3CB1231E2FD7EFA60085A424 /* KodAi macOS */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 3CB123422FD7EFA70085A424 /* Build configuration list for PBXNativeTarget "kodai_macos" */;
+			buildConfigurationList = 3CB123422FD7EFA70085A424 /* Build configuration list for PBXNativeTarget "KodAi macOS" */;
 			buildPhases = (
 				3CB1231B2FD7EFA60085A424 /* Sources */,
 				3CB1231C2FD7EFA60085A424 /* Frameworks */,
@@ -113,7 +113,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				3CB123212FD7EFA60085A424 /* KodAi macOS */,
+				3CB123212FD7EFA60085A424 /* kodai_macos */,
 			);
 			name = "KodAi macOS";
 			packageProductDependencies = (
@@ -125,7 +125,7 @@
 		};
 		3CB1232D2FD7EFA70085A424 /* KodAi macOSTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 3CB123452FD7EFA70085A424 /* Build configuration list for PBXNativeTarget "kodai_macosTests" */;
+			buildConfigurationList = 3CB123452FD7EFA70085A424 /* Build configuration list for PBXNativeTarget "KodAi macOSTests" */;
 			buildPhases = (
 				3CB1232A2FD7EFA70085A424 /* Sources */,
 				3CB1232B2FD7EFA70085A424 /* Frameworks */,
@@ -137,7 +137,7 @@
 				3CB123302FD7EFA70085A424 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				3CB123312FD7EFA70085A424 /* KodAi macOSTests */,
+				3CB123312FD7EFA70085A424 /* kodai_macosTests */,
 			);
 			name = "KodAi macOSTests";
 			packageProductDependencies = (
@@ -148,7 +148,7 @@
 		};
 		3CB123372FD7EFA70085A424 /* KodAi macOSUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 3CB123482FD7EFA70085A424 /* Build configuration list for PBXNativeTarget "kodai_macosUITests" */;
+			buildConfigurationList = 3CB123482FD7EFA70085A424 /* Build configuration list for PBXNativeTarget "KodAi macOSUITests" */;
 			buildPhases = (
 				3CB123342FD7EFA70085A424 /* Sources */,
 				3CB123352FD7EFA70085A424 /* Frameworks */,
@@ -160,7 +160,7 @@
 				3CB1233A2FD7EFA70085A424 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				3CB1233B2FD7EFA70085A424 /* KodAi macOSUITests */,
+				3CB1233B2FD7EFA70085A424 /* kodai_macosUITests */,
 			);
 			name = "KodAi macOSUITests";
 			packageProductDependencies = (
@@ -192,7 +192,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 3CB1231A2FD7EFA60085A424 /* Build configuration list for PBXProject "kodai_macos" */;
+			buildConfigurationList = 3CB1231A2FD7EFA60085A424 /* Build configuration list for PBXProject "KodAiMacOS" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -202,7 +202,7 @@
 			mainGroup = 3CB123162FD7EFA60085A424;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				3C44A7152FDA8FCE00E5EA04 /* XCLocalSwiftPackageReference "../../KodaiCore" */,
+				3C44A7152FDA8FCE00E5EA04 /* XCLocalSwiftPackageReference "KodaiCore" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3CB123202FD7EFA60085A424 /* Products */;
@@ -474,7 +474,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.4;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ctxa.kodai.macos.tests";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ctxa.kodai.macos.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -495,7 +495,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.4;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ctxa.kodai.macos.tests";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ctxa.kodai.macos.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -514,7 +514,7 @@
 				DEVELOPMENT_TEAM = 8DYF4R2M73;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ctxa.kodai.macos.uitests";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ctxa.kodai.macos.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -533,7 +533,7 @@
 				DEVELOPMENT_TEAM = 8DYF4R2M73;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ctxa.kodai.macos.uitests";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ctxa.kodai.macos.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -547,7 +547,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		3CB1231A2FD7EFA60085A424 /* Build configuration list for PBXProject "kodai_macos" */ = {
+		3CB1231A2FD7EFA60085A424 /* Build configuration list for PBXProject "KodAiMacOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3CB123402FD7EFA70085A424 /* Debug */,
@@ -556,7 +556,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		3CB123422FD7EFA70085A424 /* Build configuration list for PBXNativeTarget "kodai_macos" */ = {
+		3CB123422FD7EFA70085A424 /* Build configuration list for PBXNativeTarget "KodAi macOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3CB123432FD7EFA70085A424 /* Debug */,
@@ -565,7 +565,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		3CB123452FD7EFA70085A424 /* Build configuration list for PBXNativeTarget "kodai_macosTests" */ = {
+		3CB123452FD7EFA70085A424 /* Build configuration list for PBXNativeTarget "KodAi macOSTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3CB123462FD7EFA70085A424 /* Debug */,
@@ -574,7 +574,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		3CB123482FD7EFA70085A424 /* Build configuration list for PBXNativeTarget "kodai_macosUITests" */ = {
+		3CB123482FD7EFA70085A424 /* Build configuration list for PBXNativeTarget "KodAi macOSUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3CB123492FD7EFA70085A424 /* Debug */,
@@ -586,15 +586,16 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		3C44A7152FDA8FCE00E5EA04 /* XCLocalSwiftPackageReference "../../KodaiCore" */ = {
+		3C44A7152FDA8FCE00E5EA04 /* XCLocalSwiftPackageReference "KodaiCore" */ = {
 			isa = XCLocalSwiftPackageReference;
-			relativePath = ../../KodaiCore;
+			relativePath = KodaiCore;
 		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		3C44A7162FDA8FCE00E5EA04 /* KodaiCore */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = 3C44A7152FDA8FCE00E5EA04 /* XCLocalSwiftPackageReference "KodaiCore" */;
 			productName = KodaiCore;
 		};
 /* End XCSwiftPackageProductDependency section */

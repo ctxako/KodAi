@@ -24,7 +24,8 @@ public enum KodaiLocalStoreMigrationPlan: SchemaMigrationPlan {
         [
             KodaiLocalStoreSchemaV1.self,
             KodaiLocalStoreSchemaV2.self,
-            KodaiLocalStoreSchemaV3.self
+            KodaiLocalStoreSchemaV3.self,
+            KodaiLocalStoreSchemaV4.self
         ]
     }
 
@@ -55,6 +56,12 @@ public enum KodaiLocalStoreMigrationPlan: SchemaMigrationPlan {
                     try context.save()
                 },
                 didMigrate: nil
+            ),
+            // V4 removes KodaiProject and KodaiTask from the local store.
+            // Those types are now isolated in the workspace store (KodaiWorkspace.store).
+            .lightweight(
+                fromVersion: KodaiLocalStoreSchemaV3.self,
+                toVersion: KodaiLocalStoreSchemaV4.self
             )
         ]
     }
