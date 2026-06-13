@@ -1026,6 +1026,7 @@ private struct KodaiSidebarGlassBox: View {
                 WorkloadBloomView(
                     signalState: signalState
                 )
+                .scaleEffect(1.2)
                 .frame(maxWidth: .infinity)
 
                 Spacer(minLength: 0)

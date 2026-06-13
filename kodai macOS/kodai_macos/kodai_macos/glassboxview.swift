@@ -128,7 +128,7 @@ struct GlassBoxView: View {
             signalCard(
                 title: "Task Pressure",
                 value: "\(signalState.tasksDueCount)",
-                detail: signalState.tasksDueCount == 1 ? "One task needs attention" : "Due today or overdue"
+                detail: signalState.tasksDueCount == 0 ? "Nothing due today" : signalState.tasksDueCount == 1 ? "One task needs attention" : "Due today or overdue"
             )
             signalCard(
                 title: "Readiness",

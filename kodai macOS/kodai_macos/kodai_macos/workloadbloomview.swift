@@ -44,8 +44,8 @@ struct WorkloadBloomView: View {
                 .fill(
                     RadialGradient(
                         colors: [
-                            theme.primaryText.opacity(0.05 + coreEnergy * 0.1 + activeGlow * 0.035),
-                            theme.primaryText.opacity(0.035 + signalState.readiness * 0.035),
+                            theme.primaryText.opacity(0.08 + coreEnergy * 0.18 + activeGlow * 0.07),
+                            theme.primaryText.opacity(0.05 + signalState.readiness * 0.05),
                             theme.primaryText.opacity(0)
                         ],
                         center: .center,
@@ -76,10 +76,10 @@ struct WorkloadBloomView: View {
         let energy = energy(for: petal.sign)
         let independentPulse = sin(time * pulseSpeed(for: petal.sign) + petal.phase)
         let motion = motionAmount(for: petal.sign)
-        let lengthScale = 0.94 + energy * 0.075 + breath * 0.008 + independentPulse * motion
+        let lengthScale = 0.88 + energy * 0.14 + breath * 0.008 + independentPulse * motion
         let tension = petal.sign == .taskPressure ? energy * 0.025 : 0
         let widthScale = 0.98 + energy * 0.025 - tension
-        let reach = 24 + energy * 2.1 + independentPulse * motion * 13
+        let reach = 20 + energy * 8 + independentPulse * motion * 13
         let flex = independentPulse * motion * 18
         let pathEnergy = signalState.readiness * 0.5 + signalState.contextPressure * 0.28 + energy * 0.22
 
@@ -88,9 +88,9 @@ struct WorkloadBloomView: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            theme.primaryText.opacity(0.31 + energy * 0.25),
-                            theme.primaryText.opacity(0.22 + energy * 0.16),
-                            theme.primaryText.opacity(0.11 + energy * 0.09)
+                            theme.primaryText.opacity(0.24 + energy * 0.38),
+                            theme.primaryText.opacity(0.16 + energy * 0.24),
+                            theme.primaryText.opacity(0.07 + energy * 0.13)
                         ],
                         startPoint: .top,
                         endPoint: .bottom
@@ -98,7 +98,7 @@ struct WorkloadBloomView: View {
                 )
                 .overlay {
                     OrganicPetal()
-                        .stroke(theme.primaryText.opacity(0.09 + energy * 0.13), lineWidth: 0.7)
+                        .stroke(theme.primaryText.opacity(0.08 + energy * 0.20), lineWidth: 0.8)
                 }
                 .shadow(color: theme.primaryText.opacity(0.025 + energy * 0.04), radius: 4)
 
@@ -133,7 +133,7 @@ struct WorkloadBloomView: View {
                 .scaleEffect(1 + pulse * (0.012 + heat * 0.04))
 
             Circle()
-                .stroke(theme.primaryText.opacity(0.15 + readiness * 0.22), lineWidth: 0.75)
+                .stroke(theme.primaryText.opacity(0.28 + readiness * 0.32), lineWidth: 0.75)
                 .frame(width: 25, height: 25)
 
             CoreCircuitPath()
@@ -179,7 +179,7 @@ struct WorkloadBloomView: View {
         case .taskPressure:
             return signalState.taskPressure
         case .readiness:
-            return 0.12 + signalState.readiness * 0.24
+            return 0.1 + signalState.readiness * 0.58
         }
     }
 
@@ -285,6 +285,9 @@ private struct PetalChannelPath: Shape {
             control2: CGPoint(x: centerX - rect.width * 0.16, y: rect.height * 0.47)
         )
 
+        path.move(to: CGPoint(x: centerX - rect.width * 0.19, y: rect.height * 0.31))
+        path.addLine(to: CGPoint(x: centerX + rect.width * (0.14 + bend), y: rect.height * 0.26))
+
         return path
     }
 }
@@ -296,20 +299,24 @@ private struct CoreCircuitPath: Shape {
         let midY = rect.midY
 
         path.move(to: CGPoint(x: midX, y: rect.minY))
-        path.addLine(to: CGPoint(x: midX, y: rect.minY + rect.height * 0.24))
-        path.addLine(to: CGPoint(x: midX + rect.width * 0.14, y: midY - rect.height * 0.12))
+        path.addLine(to: CGPoint(x: midX, y: midY - rect.height * 0.26))
+        path.addLine(to: CGPoint(x: midX + rect.width * 0.13, y: midY - rect.height * 0.13))
+        path.addLine(to: CGPoint(x: midX, y: midY))
 
         path.move(to: CGPoint(x: rect.maxX, y: midY))
-        path.addLine(to: CGPoint(x: rect.maxX - rect.width * 0.24, y: midY))
-        path.addLine(to: CGPoint(x: midX + rect.width * 0.12, y: midY + rect.height * 0.14))
+        path.addLine(to: CGPoint(x: midX + rect.width * 0.26, y: midY))
+        path.addLine(to: CGPoint(x: midX + rect.width * 0.13, y: midY + rect.height * 0.13))
+        path.addLine(to: CGPoint(x: midX, y: midY))
 
         path.move(to: CGPoint(x: midX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: midX, y: rect.maxY - rect.height * 0.22))
-        path.addLine(to: CGPoint(x: midX - rect.width * 0.13, y: midY + rect.height * 0.12))
+        path.addLine(to: CGPoint(x: midX, y: midY + rect.height * 0.26))
+        path.addLine(to: CGPoint(x: midX - rect.width * 0.13, y: midY + rect.height * 0.13))
+        path.addLine(to: CGPoint(x: midX, y: midY))
 
         path.move(to: CGPoint(x: rect.minX, y: midY))
-        path.addLine(to: CGPoint(x: rect.minX + rect.width * 0.23, y: midY))
-        path.addLine(to: CGPoint(x: midX - rect.width * 0.12, y: midY - rect.height * 0.13))
+        path.addLine(to: CGPoint(x: midX - rect.width * 0.26, y: midY))
+        path.addLine(to: CGPoint(x: midX - rect.width * 0.13, y: midY - rect.height * 0.13))
+        path.addLine(to: CGPoint(x: midX, y: midY))
 
         return path
     }
