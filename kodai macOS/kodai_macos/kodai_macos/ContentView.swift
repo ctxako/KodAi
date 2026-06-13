@@ -113,12 +113,17 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .frame(minWidth: 950, minHeight: 650)
         .onAppear {
-            viewModel.createNewChat(context: modelContext)
+            viewModel.cleanupEmptySessions(context: modelContext)
+            if let newest = allChatSessions.first {
+                viewModel.selectChat(newest, context: modelContext)
+            } else {
+                viewModel.createNewChat(context: modelContext)
+            }
             viewModel.refreshContextEstimate()
         }
         .onChange(of: allChatSessions.map { $0.id }) {
             if viewModel.selectedChat == nil, let newest = allChatSessions.first {
-                viewModel.selectChat(newest)
+                viewModel.selectChat(newest, context: modelContext)
             }
         }
         .onChange(of: viewModel.inputText) {
@@ -240,7 +245,7 @@ struct ContentView: View {
             },
             onSelectChat: { session in
                 mainContentRoute = .chat
-                viewModel.selectChat(session)
+                viewModel.selectChat(session, context: modelContext)
             },
             onResetSession: {
                 viewModel.resetSession()

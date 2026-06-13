@@ -6,6 +6,8 @@
 //
 
 import Testing
+import SwiftData
+import KodaiCore
 @testable import kodai_macos
 
 struct kodai_macosTests {
@@ -46,4 +48,50 @@ struct kodai_macosTests {
         #expect(state.readiness == 0.1)
     }
 
+    @MainActor
+    @Test func newChatRemainsTransientUntilUserMessage() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let viewModel = ChatViewModel()
+
+        let session = viewModel.createNewChat(context: context)
+        let storedSessions = try context.fetch(FetchDescriptor<KodaiChatSession>())
+
+        #expect(session.modelContext == nil)
+        #expect(storedSessions.isEmpty)
+    }
+
+    @MainActor
+    @Test func cleanupRemovesOnlySessionsWithoutVisibleMessages() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let emptySession = KodaiChatSession()
+        let populatedSession = KodaiChatSession()
+        let assistantMessage = KodaiChatMessage(
+            role: "assistant",
+            content: "Existing response",
+            session: populatedSession
+        )
+
+        context.insert(emptySession)
+        context.insert(populatedSession)
+        context.insert(assistantMessage)
+        populatedSession.messages.append(assistantMessage)
+        try context.save()
+
+        ChatViewModel().cleanupEmptySessions(context: context)
+
+        let storedSessions = try context.fetch(FetchDescriptor<KodaiChatSession>())
+        #expect(storedSessions.map(\.id) == [populatedSession.id])
+    }
+
+    @MainActor
+    private func makeContainer() throws -> ModelContainer {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        return try ModelContainer(
+            for: KodaiChatSession.self,
+            KodaiChatMessage.self,
+            configurations: configuration
+        )
+    }
 }

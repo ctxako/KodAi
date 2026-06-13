@@ -157,10 +157,12 @@ final class ChatViewModel {
             stopGeneration()
         }
 
+        discardTransientSelectedChat()
+        cleanupEmptySessions(context: context)
         pendingToolProposal = nil
         backend.reset()
 
-        let session = makeStoredChatSession(context: context, project: project)
+        let session = KodaiChatSession(project: project)
         selectedChat = session
 
         messages = [
@@ -172,16 +174,17 @@ final class ChatViewModel {
         selectedMode = .chat
         backend.configure(instructions: buildInstructions(), chatID: session.id)
         estimatedContextPercent = estimatedCurrentContextPercent()
-        saveModelContext(context)
 
         return session
     }
 
-    func selectChat(_ session: KodaiChatSession) {
+    func selectChat(_ session: KodaiChatSession, context: ModelContext) {
         if isLoading {
             stopGeneration()
         }
 
+        discardTransientSelectedChat(excluding: session.id)
+        cleanupEmptySessions(context: context, excluding: session.id)
         pendingToolProposal = nil
         selectedChat = session
         messages = messagesForSession(session)
@@ -189,6 +192,47 @@ final class ChatViewModel {
         inputText = ""
         backend.switchToChat(session.id, instructions: buildInstructions())
         estimatedContextPercent = estimatedCurrentContextPercent()
+    }
+
+    func cleanupEmptySessions(context: ModelContext, excluding excludedID: UUID? = nil) {
+        let descriptor = FetchDescriptor<KodaiChatSession>()
+
+        guard let sessions = try? context.fetch(descriptor) else { return }
+
+        var deletedSessionIDs: [UUID] = []
+        for session in sessions where session.id != excludedID && Self.isEmptySession(session) {
+            deletedSessionIDs.append(session.id)
+            context.delete(session)
+        }
+
+        guard !deletedSessionIDs.isEmpty else { return }
+
+        for sessionID in deletedSessionIDs {
+            backend.evictSession(for: sessionID)
+        }
+        saveModelContext(context)
+    }
+
+    private func discardTransientSelectedChat(excluding excludedID: UUID? = nil) {
+        guard let selectedChat,
+              selectedChat.id != excludedID,
+              selectedChat.modelContext == nil else {
+            return
+        }
+
+        backend.evictSession(for: selectedChat.id)
+        selectedChat.project = nil
+        selectedChat.stream = nil
+        self.selectedChat = nil
+    }
+
+    static func isEmptySession(_ session: KodaiChatSession) -> Bool {
+        !session.messages.contains { message in
+            let isUserVisibleRole = message.role == ChatRole.user.rawValue
+                || message.role == ChatRole.assistant.rawValue
+            return isUserVisibleRole
+                && !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
     }
 
     func renameChat(
@@ -223,7 +267,7 @@ final class ChatViewModel {
 
         if wasSelected {
             if let fallbackChat {
-                selectChat(fallbackChat)
+                selectChat(fallbackChat, context: context)
             } else {
                 selectedChat = nil
                 backend.reset()
@@ -711,16 +755,9 @@ final class ChatViewModel {
             return selectedChat
         }
 
-        let session = makeStoredChatSession(context: context)
+        let session = KodaiChatSession()
         selectedChat = session
         backend.bindChatID(session.id)
-        saveModelContext(context)
-        return session
-    }
-
-    private func makeStoredChatSession(context: ModelContext, project: KodaiProject? = nil) -> KodaiChatSession {
-        let session = KodaiChatSession(project: project)
-        context.insert(session)
         return session
     }
 
@@ -830,6 +867,10 @@ final class ChatViewModel {
         let cleanContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !cleanContent.isEmpty else { return }
+
+        if role == .user, session.modelContext == nil {
+            context.insert(session)
+        }
 
         let storedMessage = KodaiChatMessage(
             role: role.rawValue,
