@@ -65,35 +65,36 @@ struct KodaiSidebar: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sidebarChromeControls
+            sidebarHeader
 
             if sidebarOpen {
-                sidebarBrandHeader
-            }
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        KodaiSidebarGlassBox()
 
-            if sidebarOpen {
-                Divider()
-                    .opacity(0.25)
-                    .padding(.vertical, 4)
-            }
+                        sidebarRow("New thread", icon: "plus") {
+                            onNewSession(activeProject)
+                        }
 
-            sidebarRow("New thread", icon: "plus") {
-                onNewSession(activeProject)
-            }
+                        todaySectionView
+                        projectsSection
+                        streamsSection
+                        chatHistorySection
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+            } else {
+                sidebarRow("New thread", icon: "plus") {
+                    onNewSession(activeProject)
+                }
 
-            if sidebarOpen {
-                todaySectionView
-            } else if !todaysTasks.isEmpty {
-                todayCollapsedBadge
-            }
+                if !todaysTasks.isEmpty {
+                    todayCollapsedBadge
+                }
 
-            if sidebarOpen {
-                projectsSection
-                streamsSection
-                chatHistorySection
+                Spacer()
             }
-
-            Spacer()
 
             sidebarFooter
         }
@@ -178,14 +179,11 @@ struct KodaiSidebar: View {
                 }
             }
         } else {
-            ScrollView(showsIndicators: false) {
-                LazyVStack(alignment: .leading, spacing: 2) {
-                    ForEach(todaysTasks, id: \.id) { task in
-                        todayTaskRow(task)
-                    }
+            LazyVStack(alignment: .leading, spacing: 2) {
+                ForEach(todaysTasks, id: \.id) { task in
+                    todayTaskRow(task)
                 }
             }
-            .frame(maxHeight: 170)
         }
     }
 
@@ -340,19 +338,16 @@ struct KodaiSidebar: View {
                         .padding(.horizontal, 8)
                         .frame(height: 30)
                 } else {
-                    ScrollView(showsIndicators: false) {
-                        LazyVStack(alignment: .leading, spacing: 2) {
-                            ForEach(active, id: \.id) { project in
+                    LazyVStack(alignment: .leading, spacing: 2) {
+                        ForEach(active, id: \.id) { project in
+                            projectRow(project)
+                        }
+                        if !archived.isEmpty {
+                            ForEach(archived, id: \.id) { project in
                                 projectRow(project)
-                            }
-                            if !archived.isEmpty {
-                                ForEach(archived, id: \.id) { project in
-                                    projectRow(project)
-                                }
                             }
                         }
                     }
-                    .frame(maxHeight: 200)
                 }
             }
         }
@@ -594,21 +589,12 @@ struct KodaiSidebar: View {
                         .foregroundStyle(.white.opacity(0.45))
                         .padding(.horizontal, 8)
                         .frame(height: 30)
-                } else if streams.count <= 5 {
-                    VStack(alignment: .leading, spacing: 4) {
+                } else {
+                    LazyVStack(alignment: .leading, spacing: 4) {
                         ForEach(streams, id: \.id) { stream in
                             streamRow(stream)
                         }
                     }
-                } else {
-                    ScrollView(showsIndicators: false) {
-                        LazyVStack(alignment: .leading, spacing: 4) {
-                            ForEach(streams, id: \.id) { stream in
-                                streamRow(stream)
-                            }
-                        }
-                    }
-                    .frame(maxHeight: 160)
                 }
             }
         }
@@ -736,22 +722,19 @@ struct KodaiSidebar: View {
                     .padding(.horizontal, 8)
                     .frame(height: 30)
             } else {
-                ScrollView(showsIndicators: false) {
-                    LazyVStack(alignment: .leading, spacing: 4) {
-                        ForEach(chatSessions, id: \.id) { session in
-                            sidebarChat(session)
-                        }
+                LazyVStack(alignment: .leading, spacing: 4) {
+                    ForEach(chatSessions, id: \.id) { session in
+                        sidebarChat(session)
                     }
                 }
-                .layoutPriority(1)
             }
         }
     }
 
     // MARK: – Chrome
 
-    private var sidebarChromeControls: some View {
-        HStack {
+    private var sidebarHeader: some View {
+        HStack(spacing: 10) {
             Button {
                 withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
                     sidebarOpen.toggle()
@@ -763,33 +746,30 @@ struct KodaiSidebar: View {
             }
             .buttonStyle(.plain)
 
-            Spacer()
-        }
-        .padding(.top, 8)
-    }
+            if sidebarOpen {
+                ZStack(alignment: .leading) {
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 72, height: 72)
+                        .blur(radius: 24)
+                        .opacity(breathing ? 0.13 : 0.0)
+                        .allowsHitTesting(false)
 
-    private var sidebarBrandHeader: some View {
-        ZStack(alignment: .leading) {
-            Circle()
-                .fill(.white)
-                .frame(width: 90, height: 90)
-                .blur(radius: 28)
-                .opacity(breathing ? 0.13 : 0.0)
-                .offset(x: 10, y: 0)
-                .allowsHitTesting(false)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Kodai")
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                            .foregroundStyle(theme.primaryText)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Kodai")
-                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                        Text("Local dev assistant")
+                            .font(.system(size: 10, weight: .regular, design: .rounded))
+                            .foregroundStyle(theme.secondaryText)
+                    }
+                }
 
-                Text("Local dev assistant")
-                    .font(.system(size: 11, weight: .regular, design: .rounded))
-                    .foregroundStyle(.secondary)
+                Spacer()
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.top, 2)
-        .padding(.bottom, 10)
+        .frame(height: 42)
         .onChange(of: isLoading) { _, loading in
             if loading {
                 withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
@@ -996,5 +976,47 @@ struct KodaiSidebar: View {
         case .checklist:  return "checklist"
         case .debug:      return "ladybug"
         }
+    }
+}
+
+private struct KodaiSidebarGlassBox: View {
+    @Environment(\.kodaiTheme) private var theme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Glass Box")
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(theme.secondaryText)
+
+                Spacer()
+
+                HStack(spacing: 5) {
+                    Circle()
+                        .stroke(theme.primaryAccent.opacity(0.8), lineWidth: 1)
+                        .frame(width: 8, height: 8)
+                        .overlay {
+                            Circle()
+                                .fill(theme.primaryAccent.opacity(0.65))
+                                .frame(width: 3, height: 3)
+                        }
+
+                    Text("Idle")
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .foregroundStyle(theme.secondaryText)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            Text("Live Entity ready")
+                .font(.system(size: 12, weight: .regular, design: .rounded))
+                .foregroundStyle(theme.primaryText.opacity(0.72))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .frame(height: 190, alignment: .topLeading)
+        .kodaiGlass(cornerRadius: 14)
     }
 }
