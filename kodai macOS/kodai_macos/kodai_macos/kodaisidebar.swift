@@ -772,21 +772,22 @@ struct KodaiSidebar: View {
                         .opacity(breathing ? 0.13 : 0.0)
                         .allowsHitTesting(false)
 
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Kodai")
-                            .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    VStack(alignment: .center, spacing: 2) {
+                        Text("KodAi")
+                            .font(.system(size: 25, weight: .heavy, design: .rounded))
                             .foregroundStyle(theme.primaryText)
 
                         Text("Local dev assistant")
-                            .font(.system(size: 10, weight: .regular, design: .rounded))
+                            .font(.system(size: 11, weight: .semibold, design: .default))
                             .foregroundStyle(theme.secondaryText)
                     }
+                    .fixedSize(horizontal: true, vertical: false)
                 }
 
                 Spacer()
             }
         }
-        .frame(height: 42)
+        .frame(height: sidebarOpen ? 48 : 42)
         .onChange(of: glassBoxSignalState.isActive) { _, loading in
             if loading {
                 withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
