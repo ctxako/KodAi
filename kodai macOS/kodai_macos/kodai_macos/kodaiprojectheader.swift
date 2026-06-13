@@ -23,7 +23,7 @@ struct KodaiProjectHeader: View {
     @State private var summaryDraft = ""
     @FocusState private var summaryFocused: Bool
 
-    @State private var tasksExpanded = true
+    @State private var tasksExpanded = false
     @State private var showAddTask = false
     @State private var newTaskTitle = ""
     @State private var newTaskPriority: TaskPriority = .medium
@@ -131,9 +131,11 @@ struct KodaiProjectHeader: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 10)
 
-            summaryRow
-                .padding(.horizontal, 16)
-                .padding(.top, 4)
+            if project.summary != nil || editingSummary {
+                summaryRow
+                    .padding(.horizontal, 16)
+                    .padding(.top, 4)
+            }
 
             taskSection
                 .padding(.horizontal, 16)
@@ -272,7 +274,7 @@ struct KodaiProjectHeader: View {
                             }
                         }
                     }
-                    .frame(maxHeight: 156)
+                    .frame(maxHeight: 92)
                 }
             }
         }
