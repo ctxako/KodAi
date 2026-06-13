@@ -34,7 +34,7 @@ struct GlassBoxView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
 
-                Text("The bloom reflects local activity, context, tasks, project focus, and tool readiness.")
+                Text("Six quiet life signs shape the bloom: pulse, context, heat, focus, tasks, and readiness.")
                     .font(.system(size: 12, weight: .regular, design: .rounded))
                     .foregroundStyle(theme.secondaryText)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -81,15 +81,14 @@ struct GlassBoxView: View {
     private var liveEntity: some View {
         VStack(spacing: 18) {
             WorkloadBloomView(
-                isActive: signalState.isActive,
-                activityLevel: signalState.activityLevel
+                signalState: signalState
             )
             .scaleEffect(2.05)
             .frame(width: 250, height: 250)
 
             HStack(spacing: 7) {
                 Circle()
-                    .fill(theme.primaryAccent.opacity(signalState.isActive ? 0.9 : 0.55))
+                    .fill(theme.primaryText.opacity(signalState.isActive ? 0.9 : 0.55))
                     .frame(width: 7, height: 7)
 
                 Text(signalState.status.rawValue)
@@ -106,35 +105,35 @@ struct GlassBoxView: View {
     private var signalGrid: some View {
         LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
             signalCard(
-                title: "Model activity",
+                title: "Model Pulse",
                 value: signalState.status.rawValue,
-                detail: modelActivityDetail,
+                detail: modelPulseDetail,
                 isActivityCard: true
             )
             signalCard(
-                title: "Context load",
+                title: "Context Pressure",
                 value: "\(signalState.contextPercent)%",
                 detail: contextDetail
             )
             signalCard(
-                title: "Tasks due",
-                value: "\(signalState.tasksDueCount)",
-                detail: signalState.tasksDueCount == 1 ? "One task needs attention" : "Due today or overdue"
+                title: "Response Heat",
+                value: signalState.isActive ? "Elevated" : "Low",
+                detail: responseHeatDetail
             )
             signalCard(
-                title: "Selected project",
+                title: "Focus Lock",
                 value: signalState.selectedProjectName ?? "None",
                 detail: signalState.selectedProjectName == nil ? "No project focus" : "Current thread focus"
             )
             signalCard(
-                title: "Memory + context",
-                value: signalState.memoryReady ? "Ready" : "Waiting",
-                detail: signalState.memoryReady ? "Thread context available" : "Select or create a thread"
+                title: "Task Pressure",
+                value: "\(signalState.tasksDueCount)",
+                detail: signalState.tasksDueCount == 1 ? "One task needs attention" : "Due today or overdue"
             )
             signalCard(
-                title: "Tools + actions",
-                value: signalState.toolActionReady ? "Ready" : "Review needed",
-                detail: signalState.toolActionReady ? "Available when requested" : "Action awaiting confirmation"
+                title: "Readiness",
+                value: readinessValue,
+                detail: readinessDetail
             )
         }
         .frame(maxWidth: 520)
@@ -178,7 +177,7 @@ struct GlassBoxView: View {
         .animation(.easeInOut(duration: 0.24), value: signalState.status)
     }
 
-    private var modelActivityDetail: String {
+    private var modelPulseDetail: String {
         switch signalState.status {
         case .idle:
             return "Model is standing by"
@@ -187,6 +186,30 @@ struct GlassBoxView: View {
         case .responding:
             return "Streaming the local response"
         }
+    }
+
+    private var responseHeatDetail: String {
+        signalState.isActive ? "Generation energy is awake" : "Core glow is resting"
+    }
+
+    private var readinessValue: String {
+        if signalState.memoryReady && signalState.toolActionReady {
+            return "Ready"
+        }
+        if signalState.memoryReady || signalState.toolActionReady {
+            return "Partial"
+        }
+        return "Waiting"
+    }
+
+    private var readinessDetail: String {
+        if !signalState.memoryReady {
+            return "Select or create a thread"
+        }
+        if !signalState.toolActionReady {
+            return "Action review in progress"
+        }
+        return "Context and actions available"
     }
 
     private var contextDetail: String {

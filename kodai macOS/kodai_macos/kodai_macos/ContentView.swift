@@ -81,7 +81,7 @@ struct ContentView: View {
             tasksDueCount: todaysTasks.count,
             selectedProjectName: activeProject?.title,
             memoryReady: viewModel.selectedChat != nil,
-            toolActionReady: viewModel.pendingToolProposal == nil
+            toolActionReady: viewModel.pendingToolProposal == nil && !viewModel.isSummarizing
         )
     }
 

@@ -1007,11 +1007,11 @@ private struct KodaiSidebarGlassBox: View {
 
                     HStack(spacing: 5) {
                         Circle()
-                            .stroke(theme.primaryAccent.opacity(0.8), lineWidth: 1)
+                            .stroke(theme.primaryText.opacity(0.72), lineWidth: 1)
                             .frame(width: 8, height: 8)
                             .overlay {
                                 Circle()
-                                    .fill(theme.primaryAccent.opacity(0.65))
+                                    .fill(theme.primaryText.opacity(0.62))
                                     .frame(width: 3, height: 3)
                             }
 
@@ -1024,8 +1024,7 @@ private struct KodaiSidebarGlassBox: View {
                 Spacer(minLength: 0)
 
                 WorkloadBloomView(
-                    isActive: signalState.isActive,
-                    activityLevel: signalState.activityLevel
+                    signalState: signalState
                 )
                 .frame(maxWidth: .infinity)
 

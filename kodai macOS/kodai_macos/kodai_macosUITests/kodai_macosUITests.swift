@@ -31,8 +31,16 @@ final class kodai_macosUITests: XCTestCase {
         XCTAssertTrue(glassBoxButton.waitForExistence(timeout: 5))
         glassBoxButton.click()
 
-        XCTAssertTrue(app.scrollViews["glassBox.detail"].waitForExistence(timeout: 3))
+        let glassBoxDetail = app.scrollViews["glassBox.detail"]
+        XCTAssertTrue(glassBoxDetail.waitForExistence(timeout: 3))
         XCTAssertTrue(app.staticTexts["glassBox.status"].exists)
+        XCTAssertTrue(app.staticTexts["Model Pulse"].exists)
+        XCTAssertTrue(app.staticTexts["Context Pressure"].exists)
+        XCTAssertTrue(app.staticTexts["Response Heat"].exists)
+        XCTAssertTrue(app.staticTexts["Focus Lock"].exists)
+        glassBoxDetail.scroll(byDeltaX: 0, deltaY: -240)
+        XCTAssertTrue(app.staticTexts["Task Pressure"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.staticTexts["Readiness"].waitForExistence(timeout: 2))
 
         app.buttons["glassBox.backToChat"].click()
         XCTAssertTrue(app.textViews.firstMatch.waitForExistence(timeout: 3))

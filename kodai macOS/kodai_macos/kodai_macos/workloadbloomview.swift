@@ -9,93 +9,88 @@ struct WorkloadBloomView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.kodaiTheme) private var theme
 
-    let isActive: Bool
-    let activityLevel: Double
+    let signalState: LiveEntitySignalState
 
     private let petals = [
-        PetalProfile(angle: -3, width: 25, length: 52, phase: 0.2),
-        PetalProfile(angle: 48, width: 28, length: 48, phase: 1.1),
-        PetalProfile(angle: 101, width: 24, length: 54, phase: 2.4),
-        PetalProfile(angle: 153, width: 27, length: 49, phase: 3.5),
-        PetalProfile(angle: 207, width: 25, length: 53, phase: 4.7),
-        PetalProfile(angle: 260, width: 29, length: 47, phase: 5.6),
-        PetalProfile(angle: 312, width: 24, length: 51, phase: 6.5)
+        PetalProfile(sign: .modelPulse, angle: -4, width: 28, length: 55, phase: 0.2),
+        PetalProfile(sign: .contextPressure, angle: 55, width: 26, length: 49, phase: 1.3),
+        PetalProfile(sign: .responseHeat, angle: 116, width: 29, length: 52, phase: 2.1),
+        PetalProfile(sign: .focusLock, angle: 178, width: 27, length: 50, phase: 3.7),
+        PetalProfile(sign: .taskPressure, angle: 237, width: 25, length: 54, phase: 4.6),
+        PetalProfile(sign: .readiness, angle: 302, width: 28, length: 51, phase: 5.8)
     ]
-
-    private var normalizedActivity: Double {
-        min(max(activityLevel, 0), 1)
-    }
 
     var body: some View {
         Group {
             if reduceMotion {
                 bloom(at: 0)
             } else {
-                TimelineView(.periodic(from: .now, by: isActive ? 1.0 / 15.0 : 1.0 / 8.0)) { context in
+                TimelineView(.periodic(from: .now, by: signalState.isActive ? 1.0 / 15.0 : 1.0 / 8.0)) { context in
                     bloom(at: context.date.timeIntervalSinceReferenceDate)
                 }
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(isActive ? "Kodai is responding" : "Kodai is idle")
+        .accessibilityLabel("Kodai is \(signalState.status.rawValue.lowercased())")
     }
 
     private func bloom(at time: TimeInterval) -> some View {
-        let activity = normalizedActivity
-        let breath = sin(time * (isActive ? 0.86 : 0.34))
-        let bodyScale = 1 + breath * (isActive ? 0.014 : 0.007)
-        let activeGlow = isActive ? (sin(time * 1.08) + 1) * 0.5 : 0
+        let breath = sin(time * (signalState.isActive ? 0.82 : 0.3))
+        let activeGlow = signalState.isActive ? (sin(time * 1.05) + 1) * 0.5 : 0
+        let coreEnergy = max(signalState.modelPulse * 0.58, signalState.responseHeat)
 
         return ZStack {
             Circle()
                 .fill(
                     RadialGradient(
                         colors: [
-                            theme.primaryAccent.opacity(0.08 + activity * 0.12 + activeGlow * 0.05),
-                            theme.primaryText.opacity(0.07 + activity * 0.03),
+                            theme.primaryText.opacity(0.05 + coreEnergy * 0.1 + activeGlow * 0.035),
+                            theme.primaryText.opacity(0.035 + signalState.readiness * 0.035),
                             theme.primaryText.opacity(0)
                         ],
                         center: .center,
                         startRadius: 2,
-                        endRadius: 40
+                        endRadius: 42
                     )
                 )
-                .frame(width: 82, height: 82)
-                .scaleEffect(1 + breath * (isActive ? 0.055 : 0.025))
+                .frame(width: 86, height: 86)
+                .scaleEffect(1 + breath * (signalState.isActive ? 0.045 : 0.018))
 
             ForEach(Array(petals.enumerated()), id: \.offset) { index, petal in
-                petalLayer(petal, index: index, time: time, activity: activity, breath: breath)
+                petalLayer(petal, index: index, time: time, breath: breath)
             }
 
-            nucleus(breath: breath, activity: activity, time: time)
+            nucleus(breath: breath, time: time)
         }
-        .scaleEffect(bodyScale)
+        .scaleEffect(1 + breath * (signalState.isActive ? 0.012 : 0.005))
         .frame(width: 112, height: 112)
+        .animation(.easeInOut(duration: 0.42), value: signalState)
     }
 
     private func petalLayer(
         _ petal: PetalProfile,
         index: Int,
         time: TimeInterval,
-        activity: Double,
         breath: Double
     ) -> some View {
-        let independentPulse = sin(time * (0.62 + Double(index % 3) * 0.055) + petal.phase)
-        let activeMotion = isActive ? activity : 0.16
-        let lengthScale = 1 + breath * 0.012 + independentPulse * (0.006 + activeMotion * 0.034)
-        let widthScale = 1 - independentPulse * activeMotion * 0.012
-        let reach = 24.5 + activity * 0.65 + independentPulse * activeMotion * 1.35
-        let flex = independentPulse * activeMotion * 1.45
-        let channelEnergy = (sin(time * 0.92 + petal.phase * 0.8) + 1) * 0.5
+        let energy = energy(for: petal.sign)
+        let independentPulse = sin(time * pulseSpeed(for: petal.sign) + petal.phase)
+        let motion = motionAmount(for: petal.sign)
+        let lengthScale = 0.94 + energy * 0.075 + breath * 0.008 + independentPulse * motion
+        let tension = petal.sign == .taskPressure ? energy * 0.025 : 0
+        let widthScale = 0.98 + energy * 0.025 - tension
+        let reach = 24 + energy * 2.1 + independentPulse * motion * 13
+        let flex = independentPulse * motion * 18
+        let pathEnergy = signalState.readiness * 0.5 + signalState.contextPressure * 0.28 + energy * 0.22
 
         return ZStack {
             OrganicPetal()
                 .fill(
                     LinearGradient(
                         colors: [
-                            theme.primaryText.opacity(0.48 + activity * 0.05),
-                            theme.primaryText.opacity(0.29),
-                            theme.primaryText.opacity(0.16)
+                            theme.primaryText.opacity(0.31 + energy * 0.25),
+                            theme.primaryText.opacity(0.22 + energy * 0.16),
+                            theme.primaryText.opacity(0.11 + energy * 0.09)
                         ],
                         startPoint: .top,
                         endPoint: .bottom
@@ -103,15 +98,18 @@ struct WorkloadBloomView: View {
                 )
                 .overlay {
                     OrganicPetal()
-                        .stroke(theme.primaryText.opacity(0.13), lineWidth: 0.65)
+                        .stroke(theme.primaryText.opacity(0.09 + energy * 0.13), lineWidth: 0.7)
                 }
+                .shadow(color: theme.primaryText.opacity(0.025 + energy * 0.04), radius: 4)
 
             PetalChannelPath(bend: index.isMultiple(of: 2) ? 0.1 : -0.1)
                 .stroke(
-                    theme.primaryAccent.opacity(
-                        0.18 + activity * 0.18 + (isActive ? channelEnergy * 0.12 : 0)
-                    ),
-                    style: StrokeStyle(lineWidth: 0.8, lineCap: .round, lineJoin: .round)
+                    theme.primaryText.opacity(0.11 + pathEnergy * 0.31),
+                    style: StrokeStyle(
+                        lineWidth: 0.75 + signalState.readiness * 0.2,
+                        lineCap: .round,
+                        lineJoin: .round
+                    )
                 )
                 .padding(.horizontal, petal.width * 0.27)
                 .padding(.vertical, petal.length * 0.12)
@@ -122,26 +120,35 @@ struct WorkloadBloomView: View {
         .rotationEffect(.degrees(petal.angle + flex))
     }
 
-    private func nucleus(breath: Double, activity: Double, time: TimeInterval) -> some View {
-        let pulse = sin(time * (isActive ? 1.18 : 0.5))
-        let coreScale = 1 + pulse * (isActive ? 0.075 : 0.018)
+    private func nucleus(breath: Double, time: TimeInterval) -> some View {
+        let pulse = sin(time * (signalState.isActive ? 1.14 : 0.46))
+        let heat = signalState.responseHeat
+        let readiness = signalState.readiness
+        let coreScale = 1 + pulse * (0.012 + heat * 0.055)
 
         return ZStack {
             Circle()
-                .fill(theme.primaryAccent.opacity(0.07 + activity * 0.16))
-                .frame(width: 36, height: 36)
-                .scaleEffect(1 + pulse * (isActive ? 0.055 : 0.018))
+                .fill(theme.primaryText.opacity(0.045 + heat * 0.13))
+                .frame(width: 38, height: 38)
+                .scaleEffect(1 + pulse * (0.012 + heat * 0.04))
 
             Circle()
-                .stroke(theme.primaryAccent.opacity(0.24 + activity * 0.20), lineWidth: 0.8)
-                .frame(width: 23, height: 23)
+                .stroke(theme.primaryText.opacity(0.15 + readiness * 0.22), lineWidth: 0.75)
+                .frame(width: 25, height: 25)
+
+            CoreCircuitPath()
+                .stroke(
+                    theme.primaryText.opacity(0.12 + readiness * 0.43),
+                    style: StrokeStyle(lineWidth: 0.72, lineCap: .round, lineJoin: .round)
+                )
+                .frame(width: 29, height: 29)
 
             Circle()
                 .fill(
                     RadialGradient(
                         colors: [
-                            theme.primaryText.opacity(0.92),
-                            theme.primaryAccent.opacity(0.58 + activity * 0.24)
+                            theme.primaryText.opacity(0.96),
+                            theme.primaryText.opacity(0.48 + heat * 0.3)
                         ],
                         center: UnitPoint(x: 0.42, y: 0.38),
                         startRadius: 1,
@@ -151,16 +158,75 @@ struct WorkloadBloomView: View {
                 .frame(width: 14, height: 14)
                 .overlay(alignment: .topLeading) {
                     Circle()
-                        .fill(theme.primaryText.opacity(0.72))
+                        .fill(theme.primaryText.opacity(0.75))
                         .frame(width: 2.5, height: 2.5)
                         .offset(x: 3.5, y: 3.5)
                 }
-                .scaleEffect(coreScale + breath * 0.025)
+                .scaleEffect(coreScale + breath * 0.018)
+        }
+    }
+
+    private func energy(for sign: LifeSign) -> Double {
+        switch sign {
+        case .modelPulse:
+            return signalState.modelPulse
+        case .contextPressure:
+            return signalState.contextPressure
+        case .responseHeat:
+            return signalState.responseHeat
+        case .focusLock:
+            return signalState.focusLock
+        case .taskPressure:
+            return signalState.taskPressure
+        case .readiness:
+            return 0.12 + signalState.readiness * 0.24
+        }
+    }
+
+    private func motionAmount(for sign: LifeSign) -> Double {
+        switch sign {
+        case .modelPulse:
+            return 0.01 + signalState.modelPulse * 0.045
+        case .responseHeat:
+            return 0.008 + signalState.responseHeat * 0.025
+        case .taskPressure:
+            return 0.006 + signalState.taskPressure * 0.009
+        case .contextPressure, .readiness:
+            return 0.006
+        case .focusLock:
+            return 0.002
+        }
+    }
+
+    private func pulseSpeed(for sign: LifeSign) -> Double {
+        switch sign {
+        case .modelPulse:
+            return signalState.isActive ? 0.92 : 0.42
+        case .responseHeat:
+            return signalState.isActive ? 1.08 : 0.5
+        case .taskPressure:
+            return 0.68
+        case .contextPressure:
+            return 0.54
+        case .readiness:
+            return 0.48
+        case .focusLock:
+            return 0.34
         }
     }
 }
 
+private enum LifeSign: Equatable {
+    case modelPulse
+    case contextPressure
+    case responseHeat
+    case focusLock
+    case taskPressure
+    case readiness
+}
+
 private struct PetalProfile {
+    let sign: LifeSign
     let angle: Double
     let width: CGFloat
     let length: CGFloat
@@ -218,6 +284,32 @@ private struct PetalChannelPath: Shape {
             control1: CGPoint(x: centerX - rect.width * 0.03, y: rect.height * 0.51),
             control2: CGPoint(x: centerX - rect.width * 0.16, y: rect.height * 0.47)
         )
+
+        return path
+    }
+}
+
+private struct CoreCircuitPath: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let midX = rect.midX
+        let midY = rect.midY
+
+        path.move(to: CGPoint(x: midX, y: rect.minY))
+        path.addLine(to: CGPoint(x: midX, y: rect.minY + rect.height * 0.24))
+        path.addLine(to: CGPoint(x: midX + rect.width * 0.14, y: midY - rect.height * 0.12))
+
+        path.move(to: CGPoint(x: rect.maxX, y: midY))
+        path.addLine(to: CGPoint(x: rect.maxX - rect.width * 0.24, y: midY))
+        path.addLine(to: CGPoint(x: midX + rect.width * 0.12, y: midY + rect.height * 0.14))
+
+        path.move(to: CGPoint(x: midX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: midX, y: rect.maxY - rect.height * 0.22))
+        path.addLine(to: CGPoint(x: midX - rect.width * 0.13, y: midY + rect.height * 0.12))
+
+        path.move(to: CGPoint(x: rect.minX, y: midY))
+        path.addLine(to: CGPoint(x: rect.minX + rect.width * 0.23, y: midY))
+        path.addLine(to: CGPoint(x: midX - rect.width * 0.12, y: midY - rect.height * 0.13))
 
         return path
     }
