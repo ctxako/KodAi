@@ -54,16 +54,16 @@ A macOS chatbot with a collapsible sidebar, persistent chat history, markdown re
 
 ```
 git clone <repo>
-open kodai_macos.xcodeproj   # requires Xcode 26
+open KodAiMacOS.xcodeproj   # requires Xcode 26
 ```
 
-Select the `kodai_macos` scheme, then build and run (⌘R). No additional setup needed.
+Select the `KodAi macOS` scheme, then build and run (⌘R). No additional setup needed.
 
 ## Project Structure
 
 ```
 kodai_macos/
-  kodai_macos.xcodeproj/
+  KodAiMacOS.xcodeproj/
   kodai_macos/            ← all Swift source files
     docs/
       architecture.md     ← component map and data flow

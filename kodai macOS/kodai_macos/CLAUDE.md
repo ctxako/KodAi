@@ -9,7 +9,7 @@
 
 ```
 kodai_macos/                  ← repo root
-  kodai_macos.xcodeproj/      ← Xcode project
+  KodAiMacOS.xcodeproj/       ← Xcode project
   kodai_macos/                ← all app source files (canonical location)
     kodai_macosApp.swift
     ContentView.swift
@@ -37,7 +37,14 @@ The Xcode project uses `PBXFileSystemSynchronizedRootGroup` — Xcode auto-disco
 
 ## How to build
 
-Open `kodai_macos.xcodeproj` in Xcode 26, select the `kodai_macos` scheme, and build (⌘B) or run (⌘R). No setup steps required.
+Open `KodAiMacOS.xcodeproj` in Xcode 26, select the `KodAi macOS` scheme, and build (⌘B) or run (⌘R). No setup steps required.
+
+## Bundle identifiers
+
+- macOS app: `com.ctxa.kodai.macos`
+- iOS app: `com.ctxa.kodai.ios`
+- Shared CloudKit container (future): `iCloud.com.ctxa.kodai`
+- macOS workspace CloudKit: deferred to K2G (currently disabled)
 
 ## Architecture
 

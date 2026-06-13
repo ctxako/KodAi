@@ -2,14 +2,13 @@ import Foundation
 import KodaiPersistence
 import SwiftData
 
-/// Local-only SwiftData container for workspace data (projects/tasks).
+/// SwiftData container for workspace data (projects/tasks).
 ///
-/// Since K2D this is the source of truth for projects/tasks, accessed through
-/// WorkspaceProjectStore (which imports any legacy Projects.json on first
-/// access). ChatStore still owns the chat/stream/prompt-settings JSON;
-/// chats stay JSON-only.
-///
-/// Chat data stays outside this workspace-only schema.
+/// K2F: iOS syncs KodaiProject and KodaiTask via CloudKit (iCloud container
+/// "iCloud.ctxa.kodAI-chatbot-dev"). Chats, sessions, summaries, turns,
+/// activity events, metrics, and tools are not part of this schema and remain
+/// local-only in their own stores. macOS CloudKit container split is deferred
+/// to K2G.
 enum WorkspaceModelContainer {
     static let schema = Schema([
         KodaiProject.self,
@@ -18,8 +17,7 @@ enum WorkspaceModelContainer {
 
     static let storeFileName = "KodaiWorkspace.store"
 
-    /// On-disk store under Application Support, device-local with CloudKit
-    /// explicitly disabled.
+    /// On-disk store under Application Support, synced via CloudKit on iOS.
     static func makeLocal() throws -> ModelContainer {
         let supportURL = try FileManager.default.url(
             for: .applicationSupportDirectory,
@@ -28,15 +26,15 @@ enum WorkspaceModelContainer {
             create: true
         )
         let configuration = ModelConfiguration(
-            "KodaiWorkspaceLocal",
+            "KodaiWorkspace",
             schema: schema,
             url: supportURL.appendingPathComponent(storeFileName),
-            cloudKitDatabase: .none
+            cloudKitDatabase: .automatic
         )
         return try ModelContainer(for: schema, configurations: [configuration])
     }
 
-    /// In-memory variant for tests and startup verification.
+    /// In-memory variant for tests and startup verification — no CloudKit.
     static func makeInMemory() throws -> ModelContainer {
         let configuration = ModelConfiguration(
             "KodaiWorkspaceInMemory",

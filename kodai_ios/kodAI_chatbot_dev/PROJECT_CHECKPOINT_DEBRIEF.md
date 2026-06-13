@@ -11,5 +11,5 @@
 ## Verification
 
 - Build succeeded with:
-  `xcodebuild -project kodAI_chatbot_dev.xcodeproj -scheme kodAI_chatbot_dev -destination 'platform=iOS Simulator,name=iPhone 14 Plus' build`
+  `xcodebuild -project KodAiIOS.xcodeproj -scheme "KodAi iOS" -destination 'platform=iOS Simulator,name=iPhone 14 Plus' build`
 - `iPhone 14` was not installed on this machine, so `iPhone 14 Plus` was used as the closest available simulator destination.

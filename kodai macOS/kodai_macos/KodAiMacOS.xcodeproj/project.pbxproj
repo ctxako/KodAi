@@ -16,35 +16,35 @@
 			containerPortal = 3CB123172FD7EFA60085A424 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 3CB1231E2FD7EFA60085A424;
-			remoteInfo = kodai_macos;
+			remoteInfo = "KodAi macOS";
 		};
 		3CB123392FD7EFA70085A424 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 3CB123172FD7EFA60085A424 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 3CB1231E2FD7EFA60085A424;
-			remoteInfo = kodai_macos;
+			remoteInfo = "KodAi macOS";
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		3CB1231F2FD7EFA60085A424 /* kodai_macos.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = kodai_macos.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		3CB1232E2FD7EFA70085A424 /* kodai_macosTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = kodai_macosTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		3CB123382FD7EFA70085A424 /* kodai_macosUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = kodai_macosUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		3CB1231F2FD7EFA60085A424 /* KodAi.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KodAi.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		3CB1232E2FD7EFA70085A424 /* KodAi macOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "KodAi macOSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3CB123382FD7EFA70085A424 /* KodAi macOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "KodAi macOSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		3CB123212FD7EFA60085A424 /* kodai_macos */ = {
+		3CB123212FD7EFA60085A424 /* KodAi macOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = kodai_macos;
 			sourceTree = "<group>";
 		};
-		3CB123312FD7EFA70085A424 /* kodai_macosTests */ = {
+		3CB123312FD7EFA70085A424 /* KodAi macOSTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = kodai_macosTests;
 			sourceTree = "<group>";
 		};
-		3CB1233B2FD7EFA70085A424 /* kodai_macosUITests */ = {
+		3CB1233B2FD7EFA70085A424 /* KodAi macOSUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = kodai_macosUITests;
 			sourceTree = "<group>";
@@ -80,9 +80,9 @@
 		3CB123162FD7EFA60085A424 = {
 			isa = PBXGroup;
 			children = (
-				3CB123212FD7EFA60085A424 /* kodai_macos */,
-				3CB123312FD7EFA70085A424 /* kodai_macosTests */,
-				3CB1233B2FD7EFA70085A424 /* kodai_macosUITests */,
+				3CB123212FD7EFA60085A424 /* KodAi macOS */,
+				3CB123312FD7EFA70085A424 /* KodAi macOSTests */,
+				3CB1233B2FD7EFA70085A424 /* KodAi macOSUITests */,
 				3CB123202FD7EFA60085A424 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -90,9 +90,9 @@
 		3CB123202FD7EFA60085A424 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				3CB1231F2FD7EFA60085A424 /* kodai_macos.app */,
-				3CB1232E2FD7EFA70085A424 /* kodai_macosTests.xctest */,
-				3CB123382FD7EFA70085A424 /* kodai_macosUITests.xctest */,
+				3CB1231F2FD7EFA60085A424 /* KodAi.app */,
+				3CB1232E2FD7EFA70085A424 /* KodAi macOSTests.xctest */,
+				3CB123382FD7EFA70085A424 /* KodAi macOSUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -100,7 +100,7 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		3CB1231E2FD7EFA60085A424 /* kodai_macos */ = {
+		3CB1231E2FD7EFA60085A424 /* KodAi macOS */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 3CB123422FD7EFA70085A424 /* Build configuration list for PBXNativeTarget "kodai_macos" */;
 			buildPhases = (
@@ -113,17 +113,17 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				3CB123212FD7EFA60085A424 /* kodai_macos */,
+				3CB123212FD7EFA60085A424 /* KodAi macOS */,
 			);
-			name = kodai_macos;
+			name = "KodAi macOS";
 			packageProductDependencies = (
 				3C44A7162FDA8FCE00E5EA04 /* KodaiCore */,
 			);
-			productName = kodai_macos;
-			productReference = 3CB1231F2FD7EFA60085A424 /* kodai_macos.app */;
+			productName = "KodAi macOS";
+			productReference = 3CB1231F2FD7EFA60085A424 /* KodAi.app */;
 			productType = "com.apple.product-type.application";
 		};
-		3CB1232D2FD7EFA70085A424 /* kodai_macosTests */ = {
+		3CB1232D2FD7EFA70085A424 /* KodAi macOSTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 3CB123452FD7EFA70085A424 /* Build configuration list for PBXNativeTarget "kodai_macosTests" */;
 			buildPhases = (
@@ -137,16 +137,16 @@
 				3CB123302FD7EFA70085A424 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				3CB123312FD7EFA70085A424 /* kodai_macosTests */,
+				3CB123312FD7EFA70085A424 /* KodAi macOSTests */,
 			);
-			name = kodai_macosTests;
+			name = "KodAi macOSTests";
 			packageProductDependencies = (
 			);
-			productName = kodai_macosTests;
-			productReference = 3CB1232E2FD7EFA70085A424 /* kodai_macosTests.xctest */;
+			productName = "KodAi macOSTests";
+			productReference = 3CB1232E2FD7EFA70085A424 /* KodAi macOSTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		3CB123372FD7EFA70085A424 /* kodai_macosUITests */ = {
+		3CB123372FD7EFA70085A424 /* KodAi macOSUITests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 3CB123482FD7EFA70085A424 /* Build configuration list for PBXNativeTarget "kodai_macosUITests" */;
 			buildPhases = (
@@ -160,13 +160,13 @@
 				3CB1233A2FD7EFA70085A424 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				3CB1233B2FD7EFA70085A424 /* kodai_macosUITests */,
+				3CB1233B2FD7EFA70085A424 /* KodAi macOSUITests */,
 			);
-			name = kodai_macosUITests;
+			name = "KodAi macOSUITests";
 			packageProductDependencies = (
 			);
-			productName = kodai_macosUITests;
-			productReference = 3CB123382FD7EFA70085A424 /* kodai_macosUITests.xctest */;
+			productName = "KodAi macOSUITests";
+			productReference = 3CB123382FD7EFA70085A424 /* KodAi macOSUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -209,9 +209,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				3CB1231E2FD7EFA60085A424 /* kodai_macos */,
-				3CB1232D2FD7EFA70085A424 /* kodai_macosTests */,
-				3CB123372FD7EFA70085A424 /* kodai_macosUITests */,
+				3CB1231E2FD7EFA60085A424 /* KodAi macOS */,
+				3CB1232D2FD7EFA70085A424 /* KodAi macOSTests */,
+				3CB123372FD7EFA70085A424 /* KodAi macOSUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -267,12 +267,12 @@
 /* Begin PBXTargetDependency section */
 		3CB123302FD7EFA70085A424 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 3CB1231E2FD7EFA60085A424 /* kodai_macos */;
+			target = 3CB1231E2FD7EFA60085A424 /* KodAi macOS */;
 			targetProxy = 3CB1232F2FD7EFA70085A424 /* PBXContainerItemProxy */;
 		};
 		3CB1233A2FD7EFA70085A424 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 3CB1231E2FD7EFA60085A424 /* kodai_macos */;
+			target = 3CB1231E2FD7EFA60085A424 /* KodAi macOS */;
 			targetProxy = 3CB123392FD7EFA70085A424 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -403,6 +403,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = kodai_macos/kodai_macos.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -418,8 +419,8 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "ctxa.kodai-macos";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ctxa.kodai.macos;
+				PRODUCT_NAME = KodAi;
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -435,6 +436,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = kodai_macos/kodai_macos.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -450,8 +452,8 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "ctxa.kodai-macos";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ctxa.kodai.macos;
+				PRODUCT_NAME = KodAi;
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -472,14 +474,14 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.4;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "ctxa.kodai-macosTests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ctxa.kodai.macos.tests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/kodai_macos.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/kodai_macos";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KodAi.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/KodAi";
 			};
 			name = Debug;
 		};
@@ -493,14 +495,14 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 26.4;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "ctxa.kodai-macosTests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ctxa.kodai.macos.tests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/kodai_macos.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/kodai_macos";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KodAi.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/KodAi";
 			};
 			name = Release;
 		};
@@ -512,14 +514,14 @@
 				DEVELOPMENT_TEAM = 8DYF4R2M73;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "ctxa.kodai-macosUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ctxa.kodai.macos.uitests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = kodai_macos;
+				TEST_TARGET_NAME = "KodAi macOS";
 			};
 			name = Debug;
 		};
@@ -531,14 +533,14 @@
 				DEVELOPMENT_TEAM = 8DYF4R2M73;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "ctxa.kodai-macosUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ctxa.kodai.macos.uitests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TEST_TARGET_NAME = kodai_macos;
+				TEST_TARGET_NAME = "KodAi macOS";
 			};
 			name = Release;
 		};

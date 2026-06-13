@@ -18,21 +18,21 @@
 			containerPortal = 3C1A89122FD48C3C003E89DE /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 3C1A89192FD48C3C003E89DE;
-			remoteInfo = kodAI_chatbot_dev;
+			remoteInfo = "KodAi iOS";
 		};
 		3C1A89362FD48C3E003E89DE /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 3C1A89122FD48C3C003E89DE /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 3C1A89192FD48C3C003E89DE;
-			remoteInfo = kodAI_chatbot_dev;
+			remoteInfo = "KodAi iOS";
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		3C1A891A2FD48C3C003E89DE /* kodAI_chatbot_dev.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = kodAI_chatbot_dev.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		3C1A892B2FD48C3E003E89DE /* kodAI_chatbot_devTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = kodAI_chatbot_devTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		3C1A89352FD48C3E003E89DE /* kodAI_chatbot_devUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = kodAI_chatbot_devUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		3C1A891A2FD48C3C003E89DE /* KodAi.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KodAi.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		3C1A892B2FD48C3E003E89DE /* KodAi iOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "KodAi iOSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3C1A89352FD48C3E003E89DE /* KodAi iOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "KodAi iOSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -41,12 +41,12 @@
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 3C1A89192FD48C3C003E89DE /* kodAI_chatbot_dev */;
+			target = 3C1A89192FD48C3C003E89DE /* KodAi iOS */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		3C1A891C2FD48C3C003E89DE /* kodAI_chatbot_dev */ = {
+		3C1A891C2FD48C3C003E89DE /* KodAi iOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				3C1A893D2FD48C3E003E89DE /* Exceptions for "kodAI_chatbot_dev" folder in "kodAI_chatbot_dev" target */,
@@ -54,12 +54,12 @@
 			path = kodAI_chatbot_dev;
 			sourceTree = "<group>";
 		};
-		3C1A892E2FD48C3E003E89DE /* kodAI_chatbot_devTests */ = {
+		3C1A892E2FD48C3E003E89DE /* KodAi iOSTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = kodAI_chatbot_devTests;
 			sourceTree = "<group>";
 		};
-		3C1A89382FD48C3E003E89DE /* kodAI_chatbot_devUITests */ = {
+		3C1A89382FD48C3E003E89DE /* KodAi iOSUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = kodAI_chatbot_devUITests;
 			sourceTree = "<group>";
@@ -97,9 +97,9 @@
 		3C1A89112FD48C3C003E89DE = {
 			isa = PBXGroup;
 			children = (
-				3C1A891C2FD48C3C003E89DE /* kodAI_chatbot_dev */,
-				3C1A892E2FD48C3E003E89DE /* kodAI_chatbot_devTests */,
-				3C1A89382FD48C3E003E89DE /* kodAI_chatbot_devUITests */,
+				3C1A891C2FD48C3C003E89DE /* KodAi iOS */,
+				3C1A892E2FD48C3E003E89DE /* KodAi iOSTests */,
+				3C1A89382FD48C3E003E89DE /* KodAi iOSUITests */,
 				3C1A891B2FD48C3C003E89DE /* Products */,
 			);
 			sourceTree = "<group>";
@@ -107,9 +107,9 @@
 		3C1A891B2FD48C3C003E89DE /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				3C1A891A2FD48C3C003E89DE /* kodAI_chatbot_dev.app */,
-				3C1A892B2FD48C3E003E89DE /* kodAI_chatbot_devTests.xctest */,
-				3C1A89352FD48C3E003E89DE /* kodAI_chatbot_devUITests.xctest */,
+				3C1A891A2FD48C3C003E89DE /* KodAi.app */,
+				3C1A892B2FD48C3E003E89DE /* KodAi iOSTests.xctest */,
+				3C1A89352FD48C3E003E89DE /* KodAi iOSUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -117,7 +117,7 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		3C1A89192FD48C3C003E89DE /* kodAI_chatbot_dev */ = {
+		3C1A89192FD48C3C003E89DE /* KodAi iOS */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 3C1A893E2FD48C3E003E89DE /* Build configuration list for PBXNativeTarget "kodAI_chatbot_dev" */;
 			buildPhases = (
@@ -130,19 +130,19 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				3C1A891C2FD48C3C003E89DE /* kodAI_chatbot_dev */,
+				3C1A891C2FD48C3C003E89DE /* KodAi iOS */,
 			);
-			name = kodAI_chatbot_dev;
+			name = "KodAi iOS";
 			packageProductDependencies = (
 				3C1A89652FD4A001003E89DE /* llama */,
 				3C1A89672FD4A001003E89DE /* KodaiKernel */,
 				3C1A89682FD4A002003E89DE /* KodaiPersistence */,
 			);
-			productName = kodAI_chatbot_dev;
-			productReference = 3C1A891A2FD48C3C003E89DE /* kodAI_chatbot_dev.app */;
+			productName = "KodAi iOS";
+			productReference = 3C1A891A2FD48C3C003E89DE /* KodAi.app */;
 			productType = "com.apple.product-type.application";
 		};
-		3C1A892A2FD48C3E003E89DE /* kodAI_chatbot_devTests */ = {
+		3C1A892A2FD48C3E003E89DE /* KodAi iOSTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 3C1A89432FD48C3E003E89DE /* Build configuration list for PBXNativeTarget "kodAI_chatbot_devTests" */;
 			buildPhases = (
@@ -156,16 +156,16 @@
 				3C1A892D2FD48C3E003E89DE /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				3C1A892E2FD48C3E003E89DE /* kodAI_chatbot_devTests */,
+				3C1A892E2FD48C3E003E89DE /* KodAi iOSTests */,
 			);
-			name = kodAI_chatbot_devTests;
+			name = "KodAi iOSTests";
 			packageProductDependencies = (
 			);
-			productName = kodAI_chatbot_devTests;
-			productReference = 3C1A892B2FD48C3E003E89DE /* kodAI_chatbot_devTests.xctest */;
+			productName = "KodAi iOSTests";
+			productReference = 3C1A892B2FD48C3E003E89DE /* KodAi iOSTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		3C1A89342FD48C3E003E89DE /* kodAI_chatbot_devUITests */ = {
+		3C1A89342FD48C3E003E89DE /* KodAi iOSUITests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 3C1A89462FD48C3E003E89DE /* Build configuration list for PBXNativeTarget "kodAI_chatbot_devUITests" */;
 			buildPhases = (
@@ -179,13 +179,13 @@
 				3C1A89372FD48C3E003E89DE /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				3C1A89382FD48C3E003E89DE /* kodAI_chatbot_devUITests */,
+				3C1A89382FD48C3E003E89DE /* KodAi iOSUITests */,
 			);
-			name = kodAI_chatbot_devUITests;
+			name = "KodAi iOSUITests";
 			packageProductDependencies = (
 			);
-			productName = kodAI_chatbot_devUITests;
-			productReference = 3C1A89352FD48C3E003E89DE /* kodAI_chatbot_devUITests.xctest */;
+			productName = "KodAi iOSUITests";
+			productReference = 3C1A89352FD48C3E003E89DE /* KodAi iOSUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -229,9 +229,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				3C1A89192FD48C3C003E89DE /* kodAI_chatbot_dev */,
-				3C1A892A2FD48C3E003E89DE /* kodAI_chatbot_devTests */,
-				3C1A89342FD48C3E003E89DE /* kodAI_chatbot_devUITests */,
+				3C1A89192FD48C3C003E89DE /* KodAi iOS */,
+				3C1A892A2FD48C3E003E89DE /* KodAi iOSTests */,
+				3C1A89342FD48C3E003E89DE /* KodAi iOSUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -287,12 +287,12 @@
 /* Begin PBXTargetDependency section */
 		3C1A892D2FD48C3E003E89DE /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 3C1A89192FD48C3C003E89DE /* kodAI_chatbot_dev */;
+			target = 3C1A89192FD48C3C003E89DE /* KodAi iOS */;
 			targetProxy = 3C1A892C2FD48C3E003E89DE /* PBXContainerItemProxy */;
 		};
 		3C1A89372FD48C3E003E89DE /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 3C1A89192FD48C3C003E89DE /* kodAI_chatbot_dev */;
+			target = 3C1A89192FD48C3C003E89DE /* KodAi iOS */;
 			targetProxy = 3C1A89362FD48C3E003E89DE /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -320,8 +320,8 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "ctxa.kodAI-chatbot-dev";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ctxa.kodai.ios;
+				PRODUCT_NAME = KodAi;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -354,8 +354,8 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "ctxa.kodAI-chatbot-dev";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ctxa.kodai.ios;
+				PRODUCT_NAME = KodAi;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -497,7 +497,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "ctxa.kodAI-chatbot-devTests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ctxa.kodai.ios.tests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -505,7 +505,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/kodAI_chatbot_dev.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/kodAI_chatbot_dev";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KodAi.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/KodAi";
 			};
 			name = Debug;
 		};
@@ -519,7 +519,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "ctxa.kodAI-chatbot-devTests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ctxa.kodai.ios.tests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -527,7 +527,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/kodAI_chatbot_dev.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/kodAI_chatbot_dev";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KodAi.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/KodAi";
 			};
 			name = Release;
 		};
@@ -539,7 +539,7 @@
 				DEVELOPMENT_TEAM = 8DYF4R2M73;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "ctxa.kodAI-chatbot-devUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ctxa.kodai.ios.uitests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -547,7 +547,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = kodAI_chatbot_dev;
+				TEST_TARGET_NAME = "KodAi iOS";
 			};
 			name = Debug;
 		};
@@ -559,7 +559,7 @@
 				DEVELOPMENT_TEAM = 8DYF4R2M73;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "ctxa.kodAI-chatbot-devUITests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.ctxa.kodai.ios.uitests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -567,7 +567,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = kodAI_chatbot_dev;
+				TEST_TARGET_NAME = "KodAi iOS";
 			};
 			name = Release;
 		};

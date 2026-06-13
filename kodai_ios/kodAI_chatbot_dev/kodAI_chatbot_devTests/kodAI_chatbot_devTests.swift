@@ -7,7 +7,7 @@
 
 import KodaiKernel
 import Testing
-@testable import kodAI_chatbot_dev
+@testable import KodAi
 
 struct kodAI_chatbot_devTests {
 

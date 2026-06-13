@@ -3,7 +3,7 @@ import KodaiPersistence
 import SwiftData
 import Testing
 
-@testable import kodAI_chatbot_dev
+@testable import KodAi
 
 struct WorkspaceModelContainerTests {
     @Test func inMemoryContainerInitializes() throws {

@@ -12,7 +12,7 @@ import KodaiPersistence
 import SwiftData
 import Testing
 
-@testable import kodAI_chatbot_dev
+@testable import KodAi
 
 struct WorkspaceProjectStoreTests {
 
