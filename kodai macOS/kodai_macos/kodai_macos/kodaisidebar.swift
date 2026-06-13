@@ -1054,16 +1054,23 @@ private struct KodaiSidebarGlassBox: View {
         }
         .buttonStyle(.plain)
         .kodaiGlass(cornerRadius: 14)
+        .background {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(theme.primaryAccent.opacity(0.055))
+            }
+        }
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(
-                    theme.primaryAccent.opacity(isSelected ? 0.34 : (isHovering ? 0.20 : 0)),
-                    lineWidth: 1
+                    theme.primaryAccent.opacity(isSelected ? 0.42 : (isHovering ? 0.20 : 0)),
+                    lineWidth: isSelected ? 1.25 : 1
                 )
         }
-        .opacity(isHovering ? 0.96 : 1)
+        .opacity(isHovering && !isSelected ? 0.96 : 1)
         .onHover { isHovering = $0 }
         .animation(.easeOut(duration: 0.16), value: isHovering)
+        .animation(.easeInOut(duration: 0.18), value: isSelected)
         .accessibilityIdentifier("glassBox.sidebar")
         .accessibilityLabel("Glass Box")
         .accessibilityHint("Opens local model visibility")

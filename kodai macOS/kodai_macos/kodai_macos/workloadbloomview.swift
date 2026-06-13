@@ -44,22 +44,24 @@ struct WorkloadBloomView: View {
         let activity = normalizedActivity
         let breath = sin(time * (isActive ? 0.86 : 0.34))
         let bodyScale = 1 + breath * (isActive ? 0.014 : 0.007)
+        let activeGlow = isActive ? (sin(time * 1.08) + 1) * 0.5 : 0
 
         return ZStack {
             Circle()
                 .fill(
                     RadialGradient(
                         colors: [
-                            theme.primaryText.opacity(0.13 + activity * 0.04),
+                            theme.primaryAccent.opacity(0.08 + activity * 0.12 + activeGlow * 0.05),
+                            theme.primaryText.opacity(0.07 + activity * 0.03),
                             theme.primaryText.opacity(0)
                         ],
                         center: .center,
                         startRadius: 2,
-                        endRadius: 37
+                        endRadius: 40
                     )
                 )
-                .frame(width: 76, height: 76)
-                .scaleEffect(1 + breath * 0.04)
+                .frame(width: 82, height: 82)
+                .scaleEffect(1 + breath * (isActive ? 0.055 : 0.025))
 
             ForEach(Array(petals.enumerated()), id: \.offset) { index, petal in
                 petalLayer(petal, index: index, time: time, activity: activity, breath: breath)
@@ -80,10 +82,10 @@ struct WorkloadBloomView: View {
     ) -> some View {
         let independentPulse = sin(time * (0.62 + Double(index % 3) * 0.055) + petal.phase)
         let activeMotion = isActive ? activity : 0.16
-        let lengthScale = 1 + breath * 0.012 + independentPulse * (0.006 + activeMotion * 0.026)
+        let lengthScale = 1 + breath * 0.012 + independentPulse * (0.006 + activeMotion * 0.034)
         let widthScale = 1 - independentPulse * activeMotion * 0.012
-        let reach = 24.5 + independentPulse * activeMotion * 1.15
-        let flex = independentPulse * activeMotion * 1.25
+        let reach = 24.5 + activity * 0.65 + independentPulse * activeMotion * 1.35
+        let flex = independentPulse * activeMotion * 1.45
         let channelEnergy = (sin(time * 0.92 + petal.phase * 0.8) + 1) * 0.5
 
         return ZStack {
@@ -106,8 +108,8 @@ struct WorkloadBloomView: View {
 
             PetalChannelPath(bend: index.isMultiple(of: 2) ? 0.1 : -0.1)
                 .stroke(
-                    theme.primaryText.opacity(
-                        0.22 + activity * 0.12 + (isActive ? channelEnergy * 0.10 : 0)
+                    theme.primaryAccent.opacity(
+                        0.18 + activity * 0.18 + (isActive ? channelEnergy * 0.12 : 0)
                     ),
                     style: StrokeStyle(lineWidth: 0.8, lineCap: .round, lineJoin: .round)
                 )
@@ -122,15 +124,16 @@ struct WorkloadBloomView: View {
 
     private func nucleus(breath: Double, activity: Double, time: TimeInterval) -> some View {
         let pulse = sin(time * (isActive ? 1.18 : 0.5))
+        let coreScale = 1 + pulse * (isActive ? 0.075 : 0.018)
 
         return ZStack {
             Circle()
-                .fill(theme.primaryText.opacity(0.08 + activity * 0.04))
-                .frame(width: 33, height: 33)
-                .scaleEffect(1 + pulse * (isActive ? 0.045 : 0.018))
+                .fill(theme.primaryAccent.opacity(0.07 + activity * 0.16))
+                .frame(width: 36, height: 36)
+                .scaleEffect(1 + pulse * (isActive ? 0.055 : 0.018))
 
             Circle()
-                .stroke(theme.primaryText.opacity(0.28), lineWidth: 0.8)
+                .stroke(theme.primaryAccent.opacity(0.24 + activity * 0.20), lineWidth: 0.8)
                 .frame(width: 23, height: 23)
 
             Circle()
@@ -138,7 +141,7 @@ struct WorkloadBloomView: View {
                     RadialGradient(
                         colors: [
                             theme.primaryText.opacity(0.92),
-                            theme.primaryText.opacity(0.58)
+                            theme.primaryAccent.opacity(0.58 + activity * 0.24)
                         ],
                         center: UnitPoint(x: 0.42, y: 0.38),
                         startRadius: 1,
@@ -152,7 +155,7 @@ struct WorkloadBloomView: View {
                         .frame(width: 2.5, height: 2.5)
                         .offset(x: 3.5, y: 3.5)
                 }
-                .scaleEffect(1 + breath * 0.06)
+                .scaleEffect(coreScale + breath * 0.025)
         }
     }
 }

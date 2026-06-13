@@ -108,7 +108,8 @@ struct GlassBoxView: View {
             signalCard(
                 title: "Model activity",
                 value: signalState.status.rawValue,
-                detail: modelActivityDetail
+                detail: modelActivityDetail,
+                isActivityCard: true
             )
             signalCard(
                 title: "Context load",
@@ -139,7 +140,12 @@ struct GlassBoxView: View {
         .frame(maxWidth: 520)
     }
 
-    private func signalCard(title: String, value: String, detail: String) -> some View {
+    private func signalCard(
+        title: String,
+        value: String,
+        detail: String,
+        isActivityCard: Bool = false
+    ) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             Text(title)
                 .font(.system(size: 11, weight: .medium, design: .rounded))
@@ -158,6 +164,18 @@ struct GlassBoxView: View {
         .padding(13)
         .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
         .kodaiGlass(cornerRadius: 14)
+        .overlay {
+            if isActivityCard && signalState.isActive {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(theme.primaryAccent.opacity(0.045))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(theme.primaryAccent.opacity(0.24), lineWidth: 1)
+                    }
+                    .allowsHitTesting(false)
+            }
+        }
+        .animation(.easeInOut(duration: 0.24), value: signalState.status)
     }
 
     private var modelActivityDetail: String {
