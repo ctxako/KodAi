@@ -680,6 +680,7 @@ final class ChatViewModel {
             var loadedSessions = try await chatStore.loadSessions()
             var loadedStreams = try await chatStore.loadStreams()
             loadedSessions.sort(by: sessionSort)
+            loadedSessions = loadedSessions.filter { hasRealMessages($0) }
             normalizeStreamMembership(sessions: &loadedSessions, streams: &loadedStreams)
 
             if loadedSessions.isEmpty {
@@ -1632,13 +1633,20 @@ final class ChatViewModel {
     }
 
     private func saveSessions() {
-        let sessionsToSave = sessions
+        let sessionsToSave = sessions.filter { hasRealMessages($0) }
         Task {
             do {
                 try await chatStore.saveSessions(sessionsToSave)
             } catch {
                 log.event("failed to save sessions: \(error.localizedDescription)")
             }
+        }
+    }
+
+    private func hasRealMessages(_ session: ChatSession) -> Bool {
+        session.messages.contains { message in
+            (message.role == .user || message.role == .assistant)
+                && !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
 
