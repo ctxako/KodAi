@@ -42,13 +42,11 @@ struct ContentView: View {
 
     @FocusState private var composerFocused: Bool
 
-    private let sidebarOpenWidth: CGFloat = 266
-    private let sidebarClosedWidth: CGFloat = 66
-    private let sidebarLeadingPadding: CGFloat = 10
-    private let sidebarContentGap: CGFloat = 10
+    private let sidebarLeadingPadding: CGFloat = 8
+    private let sidebarContentGap: CGFloat = 8
 
     private var contentLeadingPadding: CGFloat {
-        (sidebarOpen ? sidebarOpenWidth : sidebarClosedWidth)
+        (sidebarOpen ? KodaiSidebar.openWidth : KodaiSidebar.closedWidth)
             + sidebarLeadingPadding
             + sidebarContentGap
     }

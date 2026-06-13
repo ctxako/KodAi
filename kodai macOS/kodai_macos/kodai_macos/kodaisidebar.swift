@@ -10,6 +10,9 @@ import SwiftUI
 import KodaiCore
 
 struct KodaiSidebar: View {
+    static let openWidth: CGFloat = 200
+    static let closedWidth: CGFloat = 66
+
     @Environment(\.kodaiTheme) private var theme
 
     @Binding var sidebarOpen: Bool
@@ -66,17 +69,18 @@ struct KodaiSidebar: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: sidebarOpen ? 10 : 12) {
             sidebarHeader
 
             if sidebarOpen {
                 ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(alignment: .leading, spacing: 12) {
+                    LazyVStack(alignment: .leading, spacing: 10) {
                         KodaiSidebarGlassBox(
                             signalState: glassBoxSignalState,
                             isSelected: glassBoxSelected,
                             onOpen: onOpenGlassBox
                         )
+                        .frame(maxWidth: .infinity)
 
                         sidebarRow("New thread", icon: "plus") {
                             onNewSession(activeProject)
@@ -89,6 +93,7 @@ struct KodaiSidebar: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .scrollClipDisabled()
                 .scrollBounceBehavior(.basedOnSize)
             } else {
                 sidebarRow("New thread", icon: "plus") {
@@ -104,17 +109,23 @@ struct KodaiSidebar: View {
 
             sidebarFooter
         }
-        .padding(12)
-        .frame(width: sidebarOpen ? 266 : 66)
+        .padding(.horizontal, sidebarOpen ? 4 : 12)
+        .padding(.vertical, sidebarOpen ? 10 : 12)
+        .frame(width: sidebarOpen ? Self.openWidth : Self.closedWidth)
         .frame(maxHeight: .infinity)
-        .background(.ultraThinMaterial)
-        .background(theme.glassSurface)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(.ultraThinMaterial)
+        }
+        .background {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(theme.glassSurface)
+        }
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(theme.glassBorder, lineWidth: 1)
         }
-        .padding(.leading, 10)
+        .padding(.leading, 8)
         .padding(.vertical, 10)
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: sidebarOpen)
         .confirmationDialog(
@@ -997,7 +1008,7 @@ private struct KodaiSidebarGlassBox: View {
 
     var body: some View {
         Button(action: onOpen) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("Glass Box")
                         .font(.system(size: 11, weight: .medium, design: .rounded))
@@ -1026,12 +1037,12 @@ private struct KodaiSidebarGlassBox: View {
                 WorkloadBloomView(
                     signalState: signalState
                 )
-                .scaleEffect(1.2)
+                .scaleEffect(1.0)
                 .frame(maxWidth: .infinity)
 
                 Spacer(minLength: 0)
 
-                HStack(spacing: 7) {
+                HStack(spacing: 5) {
                     Text("Local")
                     Circle()
                         .fill(theme.secondaryText.opacity(0.45))
@@ -1046,10 +1057,9 @@ private struct KodaiSidebarGlassBox: View {
                 .foregroundStyle(theme.secondaryText.opacity(0.72))
                 .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity)
-            .frame(height: 190, alignment: .topLeading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .frame(width: 184, height: 184, alignment: .topLeading)
             .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
