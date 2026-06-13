@@ -6,18 +6,21 @@ import Testing
 struct SlashCommandParserTests {
     // Fixed reference date so due: parsing is deterministic.
     private let now: Date
-    private let calendar = Calendar.current
+    private let calendar: Calendar
 
     init() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        self.calendar = calendar
         var components = DateComponents()
         components.year = 2026
         components.month = 6
         components.day = 12
-        now = Calendar.current.date(from: components)!
+        now = calendar.date(from: components)!
     }
 
     private func parse(_ input: String) -> KodaiParsedSlashCommand? {
-        KodaiSlashCommandParser.parse(input, now: now)
+        KodaiSlashCommandParser.parse(input, now: now, calendar: calendar)
     }
 
     @Test func projectCommand() {
@@ -31,8 +34,24 @@ struct SlashCommandParserTests {
         let parsed = parse("/task Fix bug")
         #expect(parsed?.kind == .task)
         #expect(parsed?.title == "Fix bug")
+        #expect(parsed?.taskPriority == nil)
         #expect(parsed?.dueDate == nil)
         #expect(parsed?.dueToken == nil)
+    }
+
+    @Test func commandsAreCaseInsensitive() {
+        let parsed = parse("/TaSk Fix bug PRIORITY:HIGH")
+        #expect(parsed?.kind == .task)
+        #expect(parsed?.normalizedCommandName == "/task")
+        #expect(parsed?.title == "Fix bug")
+        #expect(parsed?.taskPriority == .high)
+    }
+
+    @Test func taskPriorityFlagsAreTyped() {
+        #expect(parse("/task Low priority priority:low")?.taskPriority == .low)
+        #expect(parse("/task Normal priority priority:normal")?.taskPriority == .normal)
+        #expect(parse("/task Medium priority priority:medium")?.taskPriority == .normal)
+        #expect(parse("/task High priority priority:high")?.taskPriority == .high)
     }
 
     @Test func taskDueToday() {
@@ -77,18 +96,46 @@ struct SlashCommandParserTests {
         #expect(parsed?.dueDate == june20)
     }
 
-    @Test func taskUnparseableDueStaysInTitle() {
+    @Test func taskDueISODate() {
+        let parsed = parse("/task Fix bug due:2027-01-05")
+        let expected = calendar.date(from: DateComponents(year: 2027, month: 1, day: 5))
+        #expect(parsed?.title == "Fix bug")
+        #expect(parsed?.dueDate == expected)
+    }
+
+    @Test func taskDueFullNumericDate() {
+        let parsed = parse("/task Fix bug due:1/5/2027")
+        let expected = calendar.date(from: DateComponents(year: 2027, month: 1, day: 5))
+        #expect(parsed?.title == "Fix bug")
+        #expect(parsed?.dueDate == expected)
+    }
+
+    @Test func taskInvalidDueIsExplicitAndRemovedFromTitle() {
         let parsed = parse("/task Fix bug due:notadate")
         #expect(parsed?.kind == .task)
-        #expect(parsed?.title == "Fix bug due:notadate")
+        #expect(parsed?.title == "Fix bug")
         #expect(parsed?.dueDate == nil)
-        #expect(parsed?.dueToken == nil)
+        #expect(parsed?.dueToken == "due:notadate")
+    }
+
+    @Test func impossibleCalendarDateIsInvalid() {
+        let parsed = parse("/task Fix bug due:2026-02-31")
+        #expect(parsed?.title == "Fix bug")
+        #expect(parsed?.dueDate == nil)
+        #expect(parsed?.dueToken == "due:2026-02-31")
     }
 
     @Test func doneCommand() {
         let parsed = parse("/done Fix bug")
         #expect(parsed?.kind == .done)
         #expect(parsed?.title == "Fix bug")
+    }
+
+    @Test func bareDoneIsPreserved() {
+        let parsed = parse("/done")
+        #expect(parsed?.kind == .done)
+        #expect(parsed?.rawArgument == nil)
+        #expect(parsed?.title == nil)
     }
 
     @Test func proposeTaskCommand() {
@@ -117,6 +164,12 @@ struct SlashCommandParserTests {
 
     @Test func unknownCommand() {
         let parsed = parse("/frobnicate now")
+        #expect(parsed?.kind == .unknown)
+        #expect(parsed?.normalizedCommandName == "/frobnicate")
+    }
+
+    @Test func unknownCommandNameIsNormalizedCaseInsensitively() {
+        let parsed = parse("/FROBNICATE now")
         #expect(parsed?.kind == .unknown)
         #expect(parsed?.normalizedCommandName == "/frobnicate")
     }
