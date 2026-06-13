@@ -6,6 +6,8 @@ import SwiftUI
 import KodaiCore
 
 struct ChatBubble: View {
+    @Environment(\.kodaiTheme) private var theme
+
     let message: ChatMessage
     var turnRecord: TurnRecord? = nil
 
@@ -76,11 +78,11 @@ struct ChatBubble: View {
             }
             .background {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(isUser ? .blue.opacity(0.15) : .white.opacity(0.055))
+                    .fill(isUser ? theme.primaryAccent.opacity(0.15) : theme.glassSurface)
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(isUser ? .blue.opacity(0.30) : .white.opacity(0.12), lineWidth: 1)
+                    .stroke(isUser ? theme.primaryAccent.opacity(0.30) : theme.glassBorder, lineWidth: 1)
             }
             .frame(maxWidth: 560, alignment: isUser ? .trailing : .leading)
 

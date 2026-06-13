@@ -10,6 +10,8 @@ import SwiftUI
 import KodaiCore
 
 struct KodaiSidebar: View {
+    @Environment(\.kodaiTheme) private var theme
+
     @Binding var sidebarOpen: Bool
     @Binding var selectedMode: OutputMode
 
@@ -99,10 +101,11 @@ struct KodaiSidebar: View {
         .frame(width: sidebarOpen ? 266 : 66)
         .frame(maxHeight: .infinity)
         .background(.ultraThinMaterial)
+        .background(theme.glassSurface)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(.white.opacity(0.10), lineWidth: 1)
+                .stroke(theme.glassBorder, lineWidth: 1)
         }
         .padding(.leading, 10)
         .padding(.vertical, 10)

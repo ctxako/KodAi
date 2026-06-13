@@ -7,29 +7,25 @@
 import SwiftUI
 
 struct KodaiBackground: View {
+    @Environment(\.kodaiTheme) private var theme
     @State private var drift = false
-
-    private let base = Color(red: 28.0 / 255.0, green: 36.0 / 255.0, blue: 42.0 / 255.0)
-    private let deepBlue = Color(red: 18.0 / 255.0, green: 35.0 / 255.0, blue: 45.0 / 255.0)
-    private let graphite = Color(red: 72.0 / 255.0, green: 84.0 / 255.0, blue: 94.0 / 255.0)
-    private let mist = Color(red: 118.0 / 255.0, green: 137.0 / 255.0, blue: 145.0 / 255.0)
 
     var body: some View {
         ZStack {
-            base
+            theme.backgroundBase
 
             LinearGradient(
                 colors: [
-                    graphite.opacity(0.22),
-                    deepBlue.opacity(0.48),
-                    base.opacity(1.0)
+                    theme.backgroundRaised.opacity(0.22),
+                    theme.backgroundDeep.opacity(0.48),
+                    theme.backgroundBase.opacity(1.0)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
 
             Circle()
-                .fill(mist.opacity(0.13))
+                .fill(theme.backgroundGlow.opacity(0.13))
                 .frame(width: 520, height: 520)
                 .blur(radius: 120)
                 .offset(
@@ -38,7 +34,7 @@ struct KodaiBackground: View {
                 )
 
             Circle()
-                .fill(deepBlue.opacity(0.42))
+                .fill(theme.backgroundDeep.opacity(0.42))
                 .frame(width: 620, height: 620)
                 .blur(radius: 150)
                 .offset(
@@ -47,7 +43,7 @@ struct KodaiBackground: View {
                 )
 
             Circle()
-                .fill(graphite.opacity(0.16))
+                .fill(theme.backgroundRaised.opacity(0.16))
                 .frame(width: 460, height: 460)
                 .blur(radius: 130)
                 .offset(

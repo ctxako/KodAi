@@ -11,6 +11,9 @@ private enum SettingsTab: Hashable {
 }
 
 struct KodaiSettingsView: View {
+    @Environment(\.kodaiTheme) private var theme
+    @AppStorage(KodaiTheme.storageKey) private var selectedThemeRawValue = KodaiTheme.blueGradient.rawValue
+
     @Binding var selectedMode: OutputMode
     let telemetryStore: TelemetryStore
     let onResetSession: () -> Void
@@ -51,10 +54,11 @@ struct KodaiSettingsView: View {
         }
         .frame(width: 360)
         .background(.ultraThinMaterial)
+        .background(theme.glassSurface)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(.white.opacity(0.12), lineWidth: 1)
+                .stroke(theme.glassBorder, lineWidth: 1)
         }
         .presentationBackground(.clear)
         .onAppear {
@@ -77,6 +81,25 @@ struct KodaiSettingsView: View {
                 Text(modelAvailable ? "Ready" : "Unavailable")
                     .font(.system(size: 12, design: .rounded))
                     .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 38)
+
+            Divider()
+                .opacity(0.10)
+                .padding(.horizontal, 16)
+
+            HStack {
+                Text("Theme")
+                    .font(.system(size: 13, design: .rounded))
+                Spacer()
+                Picker("Theme", selection: $selectedThemeRawValue) {
+                    ForEach(KodaiTheme.allCases) { theme in
+                        Text(theme.displayName).tag(theme.rawValue)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
             }
             .padding(.horizontal, 16)
             .frame(height: 38)
@@ -122,15 +145,15 @@ struct KodaiSettingsView: View {
         } label: {
             Text(label)
                 .font(.system(size: 12, weight: .medium, design: .rounded))
-                .foregroundStyle(selectedTab == tab ? .white : .white.opacity(0.45))
+                .foregroundStyle(selectedTab == tab ? theme.primaryText : theme.secondaryText.opacity(0.82))
                 .frame(maxWidth: .infinity)
                 .frame(height: 26)
-                .background(selectedTab == tab ? .white.opacity(0.14) : .clear)
+                .background(selectedTab == tab ? theme.primaryText.opacity(0.14) : .clear)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .overlay {
                     if selectedTab == tab {
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(.white.opacity(0.12), lineWidth: 1)
+                            .stroke(theme.glassBorder, lineWidth: 1)
                     }
                 }
         }

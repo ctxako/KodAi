@@ -6,6 +6,8 @@
 import SwiftUI
 
 struct ToolProposalConfirmationCard: View {
+    @Environment(\.kodaiTheme) private var theme
+
     let proposal: PendingToolProposal
     let onConfirm: () -> Void
     let onCancel: () -> Void
@@ -22,7 +24,7 @@ struct ToolProposalConfirmationCard: View {
                 HStack(spacing: 6) {
                     Image(systemName: "checkmark.circle.badge.questionmark")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.blue.opacity(0.9))
+                        .foregroundStyle(theme.primaryAccent.opacity(0.9))
                     Text("Create task?")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.primary)
@@ -68,11 +70,11 @@ struct ToolProposalConfirmationCard: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.vertical, 6)
-                    .background(.blue.opacity(0.25))
+                    .background(theme.primaryAccent.opacity(0.25))
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(.blue.opacity(0.4), lineWidth: 1)
+                            .stroke(theme.primaryAccent.opacity(0.4), lineWidth: 1)
                     }
                 }
             }

@@ -11,6 +11,7 @@ import KodaiCore
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
+    @AppStorage(KodaiTheme.storageKey) private var selectedThemeRawValue = KodaiTheme.blueGradient.rawValue
 
     // Loose chats: no project, no stream
     @Query(
@@ -48,6 +49,10 @@ struct ContentView: View {
 
     private var activeProject: KodaiProject? {
         viewModel.selectedChat?.project
+    }
+
+    private var selectedTheme: KodaiTheme {
+        KodaiTheme(rawValue: selectedThemeRawValue) ?? .blueGradient
     }
 
     var body: some View {
@@ -127,6 +132,8 @@ struct ContentView: View {
 
             sidebar
         }
+        .environment(\.kodaiTheme, selectedTheme.palette)
+        .tint(selectedTheme.palette.primaryAccent)
         .preferredColorScheme(.dark)
         .frame(minWidth: 950, minHeight: 650)
         .onAppear {
