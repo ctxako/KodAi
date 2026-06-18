@@ -195,7 +195,7 @@ nonisolated final class LlamaContextWrapper: @unchecked Sendable {
 
     nonisolated func decode(
         maxTokens: Int32,
-        onToken: (String, Int) -> Void
+        onToken: (String, Int, TokenDistribution) -> Void
     ) throws -> GenerationFinishReason {
         var generatedTokenCount: Int32 = 0
         utf8Buffer.removeAll(keepingCapacity: true)
@@ -210,7 +210,7 @@ nonisolated final class LlamaContextWrapper: @unchecked Sendable {
 
         while generatedTokenCount < maxTokens {
             if isCancellationRequested {
-                _ = flushBufferedText(generatedTokenCount: Int(generatedTokenCount), onToken: onToken, lossy: true)
+                _ = flushBufferedText(generatedTokenCount: Int(generatedTokenCount), distribution: .empty, onToken: onToken, lossy: true)
                 log.event("generation cancelled")
                 logRawOutputSummary(finishReason: .cancelled)
                 return .cancelled
@@ -218,6 +218,7 @@ nonisolated final class LlamaContextWrapper: @unchecked Sendable {
 
             let token = llama_sampler_sample(sampler, context, -1)
             llama_sampler_accept(sampler, token)
+            let distribution = readTopAlternatives(sampledToken: token)
 
             #if DEBUG
             debugGeneratedTokenIDs.append(token)
@@ -228,7 +229,7 @@ nonisolated final class LlamaContextWrapper: @unchecked Sendable {
             let tokenIndex = Int(generatedTokenCount) + 1
 
             if isNativeEOG {
-                _ = flushBufferedText(generatedTokenCount: tokenIndex, onToken: onToken, lossy: true)
+                _ = flushBufferedText(generatedTokenCount: tokenIndex, distribution: .empty, onToken: onToken, lossy: true)
                 logDecodeDiagnostic(
                     tokenIndex: tokenIndex,
                     token: token,
@@ -243,7 +244,7 @@ nonisolated final class LlamaContextWrapper: @unchecked Sendable {
             }
 
             let visibleCountBeforeAppend = debugVisibleYieldedCharacterCount
-            let didTextualStop = appendToken(token, generatedTokenCount: tokenIndex, onToken: onToken)
+            let didTextualStop = appendToken(token, generatedTokenCount: tokenIndex, distribution: distribution, onToken: onToken)
             if tokenIndex == 1 || (tokenIndex <= 3 && visibleCountBeforeAppend == 0) {
                 logDecodeDiagnostic(
                     tokenIndex: tokenIndex,
@@ -263,12 +264,12 @@ nonisolated final class LlamaContextWrapper: @unchecked Sendable {
             var nextToken = token
             let decodeResult = llama_decode(context, llama_batch_get_one(&nextToken, 1))
             guard decodeResult == 0 else {
-                _ = flushBufferedText(generatedTokenCount: tokenIndex, onToken: onToken, lossy: true)
+                _ = flushBufferedText(generatedTokenCount: tokenIndex, distribution: .empty, onToken: onToken, lossy: true)
                 throw LocalModelRuntimeError.decodeFailed(decodeResult)
             }
         }
 
-        _ = flushBufferedText(generatedTokenCount: Int(generatedTokenCount), onToken: onToken, lossy: true)
+        _ = flushBufferedText(generatedTokenCount: Int(generatedTokenCount), distribution: .empty, onToken: onToken, lossy: true)
         logRawOutputSummary(finishReason: .maxTokens)
         return .maxTokens
     }
@@ -301,19 +302,21 @@ nonisolated final class LlamaContextWrapper: @unchecked Sendable {
     private func appendToken(
         _ token: llama_token,
         generatedTokenCount: Int,
-        onToken: (String, Int) -> Void
+        distribution: TokenDistribution,
+        onToken: (String, Int, TokenDistribution) -> Void
     ) -> Bool {
         utf8Buffer.append(contentsOf: tokenBytes(token))
-        return flushBufferedText(generatedTokenCount: generatedTokenCount, onToken: onToken, lossy: false)
+        return flushBufferedText(generatedTokenCount: generatedTokenCount, distribution: distribution, onToken: onToken, lossy: false)
     }
 
     private func flushBufferedText(
         generatedTokenCount: Int,
-        onToken: (String, Int) -> Void,
+        distribution: TokenDistribution,
+        onToken: (String, Int, TokenDistribution) -> Void,
         lossy: Bool
     ) -> Bool {
         let emitToken: (String) -> Void = { text in
-            onToken(text, generatedTokenCount)
+            onToken(text, generatedTokenCount, distribution)
         }
 
         let result: TextualStopFilterResult
@@ -361,6 +364,87 @@ nonisolated final class LlamaContextWrapper: @unchecked Sendable {
         }
 
         return result.didStop
+    }
+
+    private func readTopAlternatives(sampledToken: llama_token, n: Int = 5) -> TokenDistribution {
+        let vocab = llama_model_get_vocab(model)
+        let nVocab = Int(llama_vocab_n_tokens(vocab))
+        guard nVocab > 0, let logitsPtr = llama_get_logits_ith(context, -1) else { return .empty }
+        let logits = UnsafeBufferPointer(start: logitsPtr, count: nVocab)
+
+        var maxLogit: Float = -Float.greatestFiniteMagnitude
+        for logit in logits { if logit > maxLogit { maxLogit = logit } }
+
+        var sumExp: Float = 0
+        for logit in logits { sumExp += exp(logit - maxLogit) }
+        guard sumExp > 0 else { return .empty }
+
+        // Full-vocab Shannon entropy (nats) over the raw distribution. Reuses
+        // the same exp() pass shape as the normalization above.
+        var entropy: Float = 0
+        for logit in logits {
+            let p = exp(logit - maxLogit) / sumExp
+            if p > 0 { entropy -= p * Foundation.log(p) }
+        }
+
+        // True probability of the actually-sampled token, regardless of
+        // whether it lands in the top-k.
+        let selectedProbability: Float = {
+            let index = Int(sampledToken)
+            guard index >= 0, index < nVocab else { return 0 }
+            return exp(logits[index] - maxLogit) / sumExp
+        }()
+
+        // Insertion-sort top-N by logit (single pass, O(n_vocab))
+        var topN: [(id: Int32, logit: Float)] = []
+        topN.reserveCapacity(n + 1)
+        for i in 0..<nVocab {
+            let logit = logits[i]
+            if topN.count < n {
+                topN.append((Int32(i), logit))
+                if topN.count == n { topN.sort { $0.logit > $1.logit } }
+            } else if logit > topN[n - 1].logit {
+                topN[n - 1] = (Int32(i), logit)
+                var j = n - 1
+                while j > 0 && topN[j].logit > topN[j - 1].logit {
+                    topN.swapAt(j, j - 1)
+                    j -= 1
+                }
+            }
+        }
+        if topN.count < n { topN.sort { $0.logit > $1.logit } }
+
+        let probabilities = topN.map { exp($0.logit - maxLogit) / sumExp }
+        let margin = probabilities.count >= 2 ? probabilities[0] - probabilities[1] : (probabilities.first ?? 0)
+
+        var alternatives = zip(topN, probabilities).map { entry, probability in
+            TokenAlternative(
+                tokenID: entry.id,
+                text: tokenText(entry.id),
+                probability: probability,
+                isSelected: entry.id == sampledToken
+            )
+        }
+
+        // Ensure the sampled token is always represented and marked, even when
+        // it falls outside the top-k, so the UI never mis-colors it.
+        if !alternatives.contains(where: { $0.isSelected }) {
+            alternatives.append(
+                TokenAlternative(
+                    tokenID: sampledToken,
+                    text: tokenText(sampledToken),
+                    probability: selectedProbability,
+                    isSelected: true
+                )
+            )
+        }
+
+        return TokenDistribution(
+            alternatives: alternatives,
+            selectedProbability: selectedProbability,
+            entropy: entropy,
+            margin: margin
+        )
     }
 
     private func tokenBytes(_ token: llama_token) -> [UInt8] {

@@ -120,7 +120,6 @@ struct ChatView: View {
                 text: $viewModel.inputText,
                 isGenerating: viewModel.isGenerating,
                 isInputFocused: $isInputFocused,
-                modelName: viewModel.settingsSnapshot.shortDisplayName,
                 onNewChat: inputBarNewChatAction,
                 onSend: {
                     Haptics.lightTap()
@@ -282,7 +281,7 @@ struct ChatView: View {
     }
 
     private func messageList(width: CGFloat) -> some View {
-        let maxBubbleWidth = min(560, width * 0.78)
+        let maxBubbleWidth = min(720, width * 0.9)
 
         return ScrollViewReader { proxy in
             ScrollView {
@@ -300,6 +299,7 @@ struct ChatView: View {
                                 activeProcessSummary: activeProcessSummary(for: message),
                                 isProcessExpanded: expandedProcessMessageIDs.contains(message.id),
                                 generationStartDate: message.id == viewModel.activeAssistantMessageID ? viewModel.sendStartedAt : nil,
+                                tokenHistory: viewModel.tokenHistories[message.id] ?? [],
                                 onToggleProcess: {
                                     toggleProcessSummary(for: message.id)
                                 },
