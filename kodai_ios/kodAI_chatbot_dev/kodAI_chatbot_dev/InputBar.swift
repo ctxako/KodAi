@@ -6,7 +6,7 @@ struct InputBar: View {
 
     let isGenerating: Bool
     let isInputFocused: FocusState<Bool>.Binding
-    let onNewChat: (() -> Void)?
+    let onOpenPrompts: (() -> Void)?
     let onSend: () -> Void
     let onStop: () -> Void
     let onSpeechInput: (() -> Void)?
@@ -43,20 +43,19 @@ struct InputBar: View {
 
             GlassEffectContainer(spacing: 8) {
                 HStack(alignment: .bottom, spacing: 8) {
-                    if let onNewChat {
-                        Button { onNewChat() } label: {
-                            Image(systemName: "square.and.pencil")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .frame(width: 40, height: 40)
+                    HStack(alignment: .center, spacing: 6) {
+                        if let onOpenPrompts {
+                            Button { onOpenPrompts() } label: {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.7))
+                                    .frame(width: 28, height: 28)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Quick prompts")
                         }
-                        .buttonStyle(.plain)
-                        .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Circle())
-                        .accessibilityLabel("New chat")
-                    }
 
-                    HStack(alignment: .center, spacing: 8) {
-                        TextField("Message", text: $text, axis: .vertical)
+                        TextField("Ask KodAi", text: $text, axis: .vertical)
                             .textFieldStyle(.plain)
                             .foregroundStyle(.white)
                             .lineLimit(1...6)
@@ -98,7 +97,7 @@ struct InputBar: View {
                             .accessibilityLabel("Send message")
                         }
                     }
-                    .padding(.leading, 14)
+                    .padding(.leading, onOpenPrompts != nil ? 10 : 14)
                     .padding(.trailing, 6)
                     .padding(.vertical, 6)
                     .liquidGlassPanel(tint: ChatPalette.inputField, cornerRadius: 20)
@@ -107,7 +106,7 @@ struct InputBar: View {
             .animation(.smooth(duration: 0.18), value: canSend)
             .animation(.smooth(duration: 0.18), value: isGenerating)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 16)
         .padding(.bottom, 2)
     }
 

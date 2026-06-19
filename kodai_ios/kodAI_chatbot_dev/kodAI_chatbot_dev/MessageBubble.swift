@@ -28,103 +28,113 @@ struct MessageBubble: View {
         bubble
     }
 
+    @ViewBuilder
     private var bubble: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if message.role == .assistant {
-                if let statusText {
-                    if activeProcessSummary != nil,
-                       message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        ThinkingDotsView(isAnimated: !reduceMotion)
-                            .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.8)))
-                    }
-                    processStatusView(statusText, summary: activeProcessSummary, isLive: true, generationStartDate: generationStartDate)
-                    if !tokenHistory.isEmpty {
-                        liveTrajectoryView(tokenHistory)
-                    }
-                } else if let processSummary = message.processSummary {
-                    processStatusView(processSummary.compactText, summary: processSummary, isLive: false, generationStartDate: nil)
+        Group {
+            if message.role == .user {
+                HStack(spacing: 0) {
+                    Spacer(minLength: 48)
+                    messageTextView
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .messageBubbleGlass(tint: bubbleTint, isUser: true)
+                        .frame(maxWidth: maxBubbleWidth * 0.78)
                 }
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    if let statusText {
+                        if activeProcessSummary != nil,
+                           message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            ThinkingDotsView(isAnimated: !reduceMotion)
+                                .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.8)))
+                        }
+                        processStatusView(statusText, summary: activeProcessSummary, isLive: true, generationStartDate: generationStartDate)
+                        if !tokenHistory.isEmpty {
+                            liveTrajectoryView(tokenHistory)
+                        }
+                    } else if let processSummary = message.processSummary {
+                        processStatusView(processSummary.compactText, summary: processSummary, isLive: false, generationStartDate: nil)
+                    }
+                    messageTextView
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-
-            messageTextView
         }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .messageBubbleGlass(tint: bubbleTint, isUser: message.role == .user)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contextMenu {
-                Button {
-                    UIPasteboard.general.string = message.text
-                } label: {
-                    Label("Copy", systemImage: "doc.on.doc")
-                }
+        .contextMenu {
+            Button {
+                UIPasteboard.general.string = message.text
+            } label: {
+                Label("Copy", systemImage: "doc.on.doc")
+            }
 
-                Button {
-                    onEditComment()
-                } label: {
-                    Label(
-                        message.exportComment == nil ? "Add Comment" : "Edit Comment",
-                        systemImage: "text.bubble"
-                    )
-                }
+            Button {
+                onEditComment()
+            } label: {
+                Label(
+                    message.exportComment == nil ? "Add Comment" : "Edit Comment",
+                    systemImage: "text.bubble"
+                )
+            }
 
+            Divider()
+
+            Button {
+                SpeechService.shared.speak(message.text)
+            } label: {
+                Label("Read Aloud", systemImage: "speaker.wave.2")
+            }
+
+            if SpeechService.shared.isSpeaking {
+                Button {
+                    SpeechService.shared.stop()
+                } label: {
+                    Label("Stop Reading", systemImage: "speaker.slash")
+                }
+            }
+
+            if !tokenHistory.isEmpty {
                 Divider()
 
                 Button {
-                    SpeechService.shared.speak(message.text)
+                    showsInspector = true
                 } label: {
-                    Label("Read Aloud", systemImage: "speaker.wave.2")
+                    Label("Inspect Tokens", systemImage: "brain")
                 }
 
-                if SpeechService.shared.isSpeaking {
-                    Button {
-                        SpeechService.shared.stop()
-                    } label: {
-                        Label("Stop Reading", systemImage: "speaker.slash")
-                    }
+                Button {
+                    showsRiver = true
+                } label: {
+                    Label("Follow the River", systemImage: "water.waves")
                 }
 
-                if !tokenHistory.isEmpty {
-                    Divider()
-
-                    Button {
-                        showsInspector = true
-                    } label: {
-                        Label("Inspect Tokens", systemImage: "brain")
-                    }
-
-                    Button {
-                        showsRiver = true
-                    } label: {
-                        Label("Follow the River", systemImage: "water.waves")
-                    }
-
-                    Button {
-                        showsGlobe = true
-                    } label: {
-                        Label("Generation Trace", systemImage: "globe")
-                    }
+                Button {
+                    showsGlobe = true
+                } label: {
+                    Label("Generation Trace", systemImage: "globe")
                 }
+            }
 
-                Divider()
+            Divider()
 
-                Button {} label: {
-                    Label(
-                        message.createdAt.formatted(date: .abbreviated, time: .shortened),
-                        systemImage: "clock"
-                    )
-                }
-                .disabled(true)
+            Button {} label: {
+                Label(
+                    message.createdAt.formatted(date: .abbreviated, time: .shortened),
+                    systemImage: "clock"
+                )
             }
-            .sheet(isPresented: $showsInspector) {
-                TokenInspectorView(messageText: message.text, history: tokenHistory)
-            }
-            .fullScreenCover(isPresented: $showsRiver) {
-                RiverView(messageText: message.text, history: tokenHistory)
-            }
-            .fullScreenCover(isPresented: $showsGlobe) {
-                GlobeView(messageText: message.text, history: tokenHistory)
-            }
+            .disabled(true)
+        }
+        .sheet(isPresented: $showsInspector) {
+            TokenInspectorView(messageText: message.text, history: tokenHistory)
+        }
+        .fullScreenCover(isPresented: $showsRiver) {
+            RiverView(messageText: message.text, history: tokenHistory)
+        }
+        .fullScreenCover(isPresented: $showsGlobe) {
+            GlobeView(messageText: message.text, history: tokenHistory)
+        }
     }
 
     /// The assistant text rendered plainly, or — when surprise highlighting is on

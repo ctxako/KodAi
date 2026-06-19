@@ -21,6 +21,7 @@ struct ChatView: View {
     @AppStorage(PrefKey.surpriseHighlighting) private var surpriseHighlighting = false
     @State private var isMessageListNearBottom = true
     @FocusState private var isInputFocused: Bool
+    @State private var isPromptsSheetPresented = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -69,7 +70,16 @@ struct ChatView: View {
                 )
             }
             .sheet(isPresented: $isPlaygroundPresented) {
-                SamplerPlaygroundView(liveAlternatives: viewModel.latestTokenAlternatives)
+                SamplerPlaygroundView(
+                    liveAlternatives: viewModel.latestTokenAlternatives,
+                    knobs: Binding(
+                        get: { viewModel.samplerKnobs },
+                        set: { viewModel.samplerKnobs = $0 }
+                    )
+                )
+            }
+            .sheet(isPresented: $isPromptsSheetPresented) {
+                quickPromptsSheet
             }
         }
     }
@@ -125,7 +135,7 @@ struct ChatView: View {
                 text: $viewModel.inputText,
                 isGenerating: viewModel.isGenerating,
                 isInputFocused: $isInputFocused,
-                onNewChat: inputBarNewChatAction,
+                onOpenPrompts: { isPromptsSheetPresented = true },
                 onSend: {
                     Haptics.lightTap()
                     viewModel.send()
@@ -142,14 +152,6 @@ struct ChatView: View {
                 Haptics.success()
             }
         }
-    }
-
-    private var inputBarNewChatAction: (() -> Void)? {
-        guard !isInputFocused else {
-            return nil
-        }
-
-        return startNewChat
     }
 
     private var mainContentBlurRadius: CGFloat {
@@ -251,6 +253,9 @@ struct ChatView: View {
                 Text("kodAI")
                     .font(.headline)
                     .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .glassEffect(.regular.tint(ChatPalette.elevatedSurface), in: Capsule())
 
                 Spacer(minLength: 0)
 
@@ -461,6 +466,53 @@ struct ChatView: View {
         return activeSession.messages.isEmpty
             && activeSession.streamID == nil
             && !viewModel.favoriteStreams.isEmpty
+    }
+}
+
+// MARK: - Quick Prompts Sheet
+
+private extension ChatView {
+    var quickPromptsSheet: some View {
+        let chips: [(label: String, prompt: String)] = [
+            ("Creative Essay", "Write an essay comparing the leadership styles of Darth Vader and SpongeBob SquarePants."),
+            ("Subtle Spice", "Is it ever justified to lie to someone for their own good? Defend your answer."),
+            ("Light Stress", "List 5 ways dreams and reality differ, then pick the most important one and argue why.")
+        ]
+        return VStack(alignment: .leading, spacing: 20) {
+            Text("Quick Prompts")
+                .font(.headline)
+                .foregroundStyle(.primary)
+                .padding(.top, 8)
+
+            VStack(spacing: 10) {
+                ForEach(chips, id: \.label) { chip in
+                    Button {
+                        isPromptsSheetPresented = false
+                        viewModel.inputText = chip.prompt
+                        viewModel.send()
+                    } label: {
+                        HStack {
+                            Text(chip.label)
+                                .font(.subheadline.weight(.medium))
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 13)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .foregroundStyle(.primary)
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .presentationDetents([.height(260)])
+        .presentationDragIndicator(.visible)
     }
 }
 
