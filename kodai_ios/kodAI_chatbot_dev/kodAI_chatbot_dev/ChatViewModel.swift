@@ -196,6 +196,7 @@ final class ChatViewModel {
     private let log = AppLog(category: "Chat")
     private let inferenceService = InferenceService()
     private let chatStore = ChatStore()
+    private let tokenTraceStore = TokenTraceStore()
     // K2D: SwiftData-backed workspace store (falls back to JSON internally).
     private let projectTaskStore = WorkspaceProjectStore()
     private var generationTask: Task<Void, Never>?
@@ -320,6 +321,7 @@ final class ChatViewModel {
                         cancelScheduledFlush()
                         updateActiveSession()
                         saveSessions()
+                        persistActiveTraces()
                     case .cancelled:
                         flushPendingAssistantText(reason: "cancelled")
                         log.event("final assistant text length=\(assistantTextLength(for: assistantMessageID))", since: sendStartedAt)
@@ -333,6 +335,7 @@ final class ChatViewModel {
                         cancelScheduledFlush()
                         updateActiveSession()
                         saveSessions()
+                        persistActiveTraces()
                     case .completed, .error:
                         // Emitted only by the macOS FoundationModels backend; the iOS
                         // llama runtime signals end-of-turn via .done/.cancelled.
@@ -485,6 +488,7 @@ final class ChatViewModel {
         generatedTokenCount = 0
         currentPhaseHistory = []
         setPhase(.idle)
+        loadTraces(for: session.id)
     }
 
     func deleteSession(_ session: ChatSession) {
@@ -1735,6 +1739,10 @@ final class ChatViewModel {
         let activeSessionWasDeleted = activeSessionID.map { ids.contains($0) } ?? false
         sessions.removeAll { ids.contains($0.id) }
 
+        for id in ids {
+            Task { await tokenTraceStore.delete(sessionID: id) }
+        }
+
         for streamIndex in streams.indices {
             streams[streamIndex].chatIDs.removeAll { ids.contains($0) }
             streams[streamIndex].updatedAt = Date()
@@ -2082,6 +2090,71 @@ final class ChatViewModel {
     private func pruneTokenHistories() {
         let liveIDs = Set(messages.map(\.id))
         tokenHistories = tokenHistories.filter { liveIDs.contains($0.key) }
+    }
+
+    // MARK: Token-trace persistence (Phase 3)
+
+    /// Saves the active chat's most-recent responses' traces to disk so the atlas
+    /// and globe survive relaunch. Capped per session so files can't grow unbounded.
+    private func persistActiveTraces() {
+        guard let sessionID = activeSessionID else { return }
+        let assistantIDs = messages.filter { $0.role == .assistant }.map(\.id)
+        let recent = assistantIDs.suffix(TokenTraceStore.maxResponsesPerSession)
+
+        var payload: [String: [TokenTraceRecord]] = [:]
+        for id in recent {
+            guard let history = tokenHistories[id] else { continue }
+            let records = traceRecords(from: history)
+            if !records.isEmpty { payload[id.uuidString] = records }
+        }
+        Task { await tokenTraceStore.save(payload, sessionID: sessionID) }
+    }
+
+    /// Lazily restores a chat's persisted traces into `tokenHistories` when it is
+    /// opened — without clobbering any live in-memory trace for the same message.
+    private func loadTraces(for sessionID: UUID) {
+        Task { [weak self] in
+            guard let self else { return }
+            let stored = await tokenTraceStore.load(sessionID: sessionID)
+            guard activeSessionID == sessionID else { return }
+            for (key, records) in stored {
+                guard let id = UUID(uuidString: key), tokenHistories[id] == nil else { continue }
+                tokenHistories[id] = snapshots(from: records)
+            }
+        }
+    }
+
+    private func traceRecords(from history: [TokenSnapshot]) -> [TokenTraceRecord] {
+        history.filter(\.isAnalyzed).map { snapshot in
+            TokenTraceRecord(
+                step: snapshot.step,
+                text: snapshot.text,
+                selectedProbability: snapshot.selectedProbability,
+                entropy: snapshot.entropy,
+                margin: snapshot.margin,
+                alternatives: snapshot.alternatives.map {
+                    TokenTraceRecord.Alternative(
+                        tokenID: $0.tokenID, text: $0.text,
+                        probability: $0.probability, isSelected: $0.isSelected
+                    )
+                }
+            )
+        }
+    }
+
+    private func snapshots(from records: [TokenTraceRecord]) -> [TokenSnapshot] {
+        records.map { record in
+            let alternatives = record.alternatives.map {
+                TokenAlternative(tokenID: $0.tokenID, text: $0.text, probability: $0.probability, isSelected: $0.isSelected)
+            }
+            let distribution = TokenDistribution(
+                alternatives: alternatives,
+                selectedProbability: record.selectedProbability,
+                entropy: record.entropy,
+                margin: record.margin
+            )
+            return TokenSnapshot(decision: TokenDecision(step: record.step, tokenID: 0, text: record.text, distribution: distribution))
+        }
     }
 
     private func assistantTextLength(for id: ChatMessage.ID) -> Int {

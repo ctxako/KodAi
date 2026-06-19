@@ -14,8 +14,9 @@ import SwiftUI
 /// Rendering helpers shared by the live trajectory (MessageBubble) and the
 /// post-generation inspector so confidence is encoded consistently.
 enum TokenVisuals {
-    /// Sequential violet-to-mint scale. It avoids implying that model
-    /// probability means wrong/right and stays distinct from red fork markers.
+    /// Weather-radar scale: red = uncertain (a tough pick), through yellow/green,
+    /// to blue = the model was locked in. Gold divergence markers deliberately sit
+    /// outside this hue range so a sampled-over-top-pick token always reads apart.
     static func confidenceColor(_ probability: Float) -> Color {
         let clamped = Double(max(0, min(1, probability)))
         return Color(
@@ -24,6 +25,10 @@ enum TokenVisuals {
             brightness: 0.94
         )
     }
+
+    /// Marks a token where sampling overrode the model's top pick. Chosen to fall
+    /// outside the radar hue range so it never blends into confident-blue tokens.
+    static let divergenceColor = Color(hue: 0.13, saturation: 0.8, brightness: 1.0)
 
     static func probabilityText(_ probability: Float) -> String {
         let percentage = max(0, probability) * 100

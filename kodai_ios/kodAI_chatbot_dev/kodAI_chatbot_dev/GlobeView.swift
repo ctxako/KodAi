@@ -8,7 +8,8 @@
 //  follow its own top pick) leave a small red satellite. The camera is fixed —
 //  we rotate the globe node itself: drag to turn it by hand, scrub generation
 //  time to spin the active token to front-center (a fixed playhead), and only
-//  the focused token blooms its top-k alternatives as orbiting shards. Reuses
+//  the focused token branches into "vessels" — one faint filament per weighed
+//  alternative the model did not pick, the overridden top pick glowing gold. Reuses
 //  TokenSnapshot/TokenAlternative and TokenVisuals so confidence reads exactly
 //  as it does in the heatmap, inspector, and river.
 //
@@ -73,7 +74,7 @@ private func v_cross(_ a: SCNVector3, _ b: SCNVector3) -> SCNVector3 {
 
 /// Wraps an `SCNView` and owns the globe node. The camera stays put; the
 /// coordinator rotates the globe to bring `activeStep` to the front and rebuilds
-/// the focused token's shards. Taps select a bead via hit-testing.
+/// the focused token's vessels. Taps select a bead via hit-testing.
 private struct GlobeSceneView: UIViewRepresentable {
     let tokens: [TokenSnapshot]
     @Binding var activeStep: Int?
@@ -132,7 +133,7 @@ private struct GlobeSceneView: UIViewRepresentable {
         private let globeNode = SCNNode()
         private var beadPositions: [Int: SCNVector3] = [:]
         private var depthCuedNodes: [SCNNode] = []
-        private var shardContainer: SCNNode?
+        private var vesselContainer: SCNNode?
         private var selectedBead: SCNNode?
         private var renderedSteps: [Int] = []
 
@@ -159,6 +160,7 @@ private struct GlobeSceneView: UIViewRepresentable {
 
             buildGlobe()
             scene.rootNode.addChildNode(globeNode)
+            scene.rootNode.addChildNode(GlobeChrome.silhouetteRing(radius: 0.99))
             return scene
         }
 
@@ -179,37 +181,19 @@ private struct GlobeSceneView: UIViewRepresentable {
             beadPositions.removeAll()
             depthCuedNodes.removeAll()
             selectedBead = nil
-            shardContainer = nil
+            vesselContainer = nil
             renderedSteps = tokens.map(\.step)
 
             let positions = GlobeLayout.positions(count: tokens.count)
 
-            // A nearly clear shell plus three restrained great-circle guides.
-            // Constant materials avoid the blown-out highlights produced by a
-            // two-sided physically based glass material.
-            let shell = SCNSphere(radius: 0.97)
-            shell.segmentCount = 48
-            let glass = SCNMaterial()
-            glass.diffuse.contents = UIColor(red: 0.18, green: 0.55, blue: 0.72, alpha: 1)
-            glass.transparency = 0.025
-            glass.transparencyMode = .singleLayer
-            glass.blendMode = .screen
-            glass.lightingModel = .constant
-            glass.isDoubleSided = true
-            glass.writesToDepthBuffer = false
-            shell.firstMaterial = glass
-            let shellNode = SCNNode(geometry: shell)
-            shellNode.renderingOrder = -10
-            globeNode.addChildNode(shellNode)
+            // Clear fresnel glass shell — no lat/long guides; the silhouette ring
+            // (added once at the scene root) defines the orb instead.
+            globeNode.addChildNode(GlobeChrome.glassShell(radius: 0.97))
 
-            globeNode.addChildNode(makeGuideRing(eulerAngles: SCNVector3(0, 0, 0)))
-            globeNode.addChildNode(makeGuideRing(eulerAngles: SCNVector3(Float.pi / 2, 0, 0)))
-            globeNode.addChildNode(makeGuideRing(eulerAngles: SCNVector3(0, 0, Float.pi / 2)))
-
-            // Ribbon: a single neutral line strip threading the chosen path. Color
-            // lives on the beads; the thread just shows the order of decisions.
+            // Tracer: a strand threading the chosen path in token order, tinted by
+            // each token's confidence so the trajectory itself carries the heat.
             if positions.count > 1 {
-                globeNode.addChildNode(makeRibbon(positions))
+                globeNode.addChildNode(makeTracer(positions))
             }
 
             // Beads, one per token, colored by confidence; forks get a red moon.
@@ -247,7 +231,7 @@ private struct GlobeSceneView: UIViewRepresentable {
                 if token.divergedFromGreedy {
                     let moon = SCNPyramid(width: 0.026, height: 0.036, length: 0.026)
                     let moonMat = SCNMaterial()
-                    moonMat.diffuse.contents = UIColor.systemRed
+                    moonMat.diffuse.contents = UIColor(TokenVisuals.divergenceColor)
                     moonMat.lightingModel = .constant
                     moon.firstMaterial = moonMat
                     let moonNode = SCNNode(geometry: moon)
@@ -263,45 +247,54 @@ private struct GlobeSceneView: UIViewRepresentable {
             updateDepthCues()
         }
 
-        private func makeRibbon(_ positions: [SCNVector3]) -> SCNNode {
+        /// The chosen-path tracer, tinted per-vertex by each token's confidence
+        /// (gold where sampling overrode the top pick) so the strand itself reads
+        /// as the trajectory's heat. Positions are in token order.
+        private func makeTracer(_ positions: [SCNVector3]) -> SCNNode {
             let source = SCNGeometrySource(vertices: positions)
+
+            // Per-vertex RGBA color, interpolated along each segment.
+            var components: [Float] = []
+            components.reserveCapacity(positions.count * 4)
+            for (i, _) in positions.enumerated() {
+                let color: UIColor = i < tokens.count
+                    ? (tokens[i].divergedFromGreedy
+                        ? UIColor(TokenVisuals.divergenceColor)
+                        : UIColor(TokenVisuals.confidenceColor(tokens[i].selectedProbability)))
+                    : UIColor(white: 1, alpha: 1)
+                var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+                color.getRed(&r, green: &g, blue: &b, alpha: &a)
+                components.append(contentsOf: [Float(r), Float(g), Float(b), 0.85])
+            }
+            let colorData = components.withUnsafeBytes { Data($0) }
+            let colorSource = SCNGeometrySource(
+                data: colorData,
+                semantic: .color,
+                vectorCount: positions.count,
+                usesFloatComponents: true,
+                componentsPerVector: 4,
+                bytesPerComponent: MemoryLayout<Float>.size,
+                dataOffset: 0,
+                dataStride: MemoryLayout<Float>.size * 4
+            )
+
             var indices: [Int32] = []
             indices.reserveCapacity((positions.count - 1) * 2)
             for i in 0..<(positions.count - 1) {
-                indices.append(Int32(i))
-                indices.append(Int32(i + 1))
+                indices.append(Int32(i)); indices.append(Int32(i + 1))
             }
-            let element = SCNGeometryElement(
-                indices: indices,
-                primitiveType: .line
-            )
-            let geometry = SCNGeometry(sources: [source], elements: [element])
+            let element = SCNGeometryElement(indices: indices, primitiveType: .line)
+            let geometry = SCNGeometry(sources: [source, colorSource], elements: [element])
             let mat = SCNMaterial()
-            mat.diffuse.contents = UIColor(white: 1, alpha: 0.18)
             mat.lightingModel = .constant
+            mat.writesToDepthBuffer = false
             geometry.firstMaterial = mat
             return SCNNode(geometry: geometry)
         }
 
-        private func makeGuideRing(eulerAngles: SCNVector3) -> SCNNode {
-            let ring = SCNTorus(ringRadius: 0.974, pipeRadius: 0.0015)
-            ring.ringSegmentCount = 96
-            ring.pipeSegmentCount = 4
-            let material = SCNMaterial()
-            material.diffuse.contents = UIColor(red: 0.30, green: 0.82, blue: 0.94, alpha: 1)
-            material.transparency = 0.13
-            material.lightingModel = .constant
-            material.writesToDepthBuffer = false
-            ring.firstMaterial = material
-            let node = SCNNode(geometry: ring)
-            node.eulerAngles = eulerAngles
-            node.renderingOrder = -8
-            return node
-        }
+        // MARK: Focus + vessels
 
-        // MARK: Focus + shards
-
-        /// Brings `step`'s bead to front-center and blooms its top-k shards.
+        /// Brings `step`'s bead to front-center and blooms its top-k vessels.
         func focus(step: Int, animated: Bool) {
             currentStep = step
             guard let pos = beadPositions[step] else { return }
@@ -315,7 +308,7 @@ private struct GlobeSceneView: UIViewRepresentable {
             dragPitch = 0
 
             applyOrientation(animated: animated)
-            rebuildShards(for: step, at: pos)
+            rebuildVessels(for: step, at: pos)
         }
 
         private func applyOrientation(animated: Bool) {
@@ -343,15 +336,20 @@ private struct GlobeSceneView: UIViewRepresentable {
             }
         }
 
-        /// Rebuilds the orbiting alternatives for the focused token only — every
-        /// other bead stays a clean dot, so the globe doesn't drown in labels.
-        private func rebuildShards(for step: Int, at pos: SCNVector3) {
-            shardContainer?.removeFromParentNode()
+        /// Blooms the focused token's "vessels": a filament from the chosen bead
+        /// out to each alternative the model weighed but did *not* pick. Those
+        /// considered-yet-unchosen branches are greyed and translucent; the one
+        /// the model itself preferred but sampling overrode (a fork) glows gold.
+        /// Only the focused token blooms — every other bead stays a clean dot, so
+        /// the globe shows just what you're looking at.
+        private func rebuildVessels(for step: Int, at pos: SCNVector3) {
+            vesselContainer?.removeFromParentNode()
             selectedBead?.scale = SCNVector3(1, 1, 1)
 
             guard let token = tokens.first(where: { $0.step == step }) else { return }
 
-            // Emphasize the chosen bead.
+            // Emphasize the chosen bead — the sampled token itself needs no
+            // branch; the strand threading the beads already carries it forward.
             if let bead = globeNode.childNode(withName: "bead:\(step)", recursively: false) {
                 bead.scale = SCNVector3(1.8, 1.8, 1.8)
                 selectedBead = bead
@@ -359,37 +357,120 @@ private struct GlobeSceneView: UIViewRepresentable {
 
             let container = SCNNode()
 
-            // Alternatives remain graphical here; readable labels live in the
-            // inspector, where they can never collide with one another.
-            let alts = Array(token.alternatives.prefix(5))
-            if alts.count > 1 {
+            // Branch only the considerations (everything that wasn't sampled).
+            let considered = Array(token.alternatives.filter { !$0.isSelected }.prefix(5))
+            if !considered.isEmpty {
+                // Tangent basis at the token so vessels fan across the local surface.
                 let n = v_norm(pos)
                 var u = v_cross(n, SCNVector3(0, 1, 0))
                 if v_len(u) < 1e-3 { u = v_cross(n, SCNVector3(1, 0, 0)) }
                 u = v_norm(u)
                 let w = v_norm(v_cross(n, u))
 
-                for (j, alt) in alts.enumerated() {
-                    let angle = Float(j) / Float(alts.count) * 2 * .pi
-                    let dir = v_add(v_scale(u, cos(angle)), v_scale(w, sin(angle)))
-                    let base = v_add(pos, v_scale(n, 0.06))
-                    let shardPos = v_add(base, v_scale(dir, 0.16))
+                let origin = v_add(pos, v_scale(n, 0.02))
+                let greedyID = token.greedyAlternative?.tokenID
 
-                    let r = CGFloat(0.008 + 0.020 * alt.probability)
-                    let shard = SCNSphere(radius: r)
-                    let mat = SCNMaterial()
-                    let color = UIColor(TokenVisuals.confidenceColor(alt.probability))
-                    mat.diffuse.contents = color.withAlphaComponent(alt.isSelected ? 0.95 : 0.38)
-                    mat.lightingModel = .constant
-                    shard.firstMaterial = mat
-                    let shardNode = SCNNode(geometry: shard)
-                    shardNode.position = shardPos
-                    container.addChildNode(shardNode)
+                for (j, alt) in considered.enumerated() {
+                    let angle = Float(j) / Float(considered.count) * 2 * .pi
+                    let dir = v_add(v_scale(u, cos(angle)), v_scale(w, sin(angle)))
+                    // More-probable considerations reach a little further out.
+                    let reach = Float(0.12 + 0.10 * alt.probability)
+                    let tip = v_add(v_add(pos, v_scale(n, 0.05)), v_scale(dir, reach))
+
+                    // The model's own top pick, overridden by sampling, glows gold;
+                    // every other weighed-but-unchosen option is a faint grey line.
+                    let isOverriddenTop = token.divergedFromGreedy && alt.tokenID == greedyID
+                    let color = isOverriddenTop
+                        ? UIColor(TokenVisuals.divergenceColor)
+                        : UIColor(white: 0.78, alpha: 1)
+                    let opacity: CGFloat = isOverriddenTop ? 0.72 : 0.3
+                    let thickness: CGFloat = isOverriddenTop ? 0.0034 : 0.0022
+
+                    container.addChildNode(
+                        makeVessel(from: origin, to: tip, radius: thickness, color: color, opacity: opacity)
+                    )
+
+                    // A small node at the vessel tip, sized by the option's odds.
+                    let nodeGeo = SCNSphere(radius: CGFloat(0.006 + 0.018 * alt.probability))
+                    let nodeMat = SCNMaterial()
+                    nodeMat.diffuse.contents = color.withAlphaComponent(opacity)
+                    nodeMat.lightingModel = .constant
+                    nodeMat.writesToDepthBuffer = false
+                    nodeGeo.firstMaterial = nodeMat
+                    let tipNode = SCNNode(geometry: nodeGeo)
+                    tipNode.position = tip
+                    container.addChildNode(tipNode)
+
+                    // Camera-facing label at the tip (≤5, focused token only).
+                    container.addChildNode(
+                        makeTipLabel(vesselLabel(alt), at: v_add(tip, v_scale(n, 0.03)), bright: isOverriddenTop)
+                    )
                 }
             }
 
             globeNode.addChildNode(container)
-            shardContainer = container
+            vesselContainer = container
+        }
+
+        /// A thin cylinder ("vessel") spanning two points around the globe. Built
+        /// along +Y by SceneKit, then rotated so +Y aligns with the span.
+        private func makeVessel(from a: SCNVector3, to b: SCNVector3, radius: CGFloat, color: UIColor, opacity: CGFloat) -> SCNNode {
+            let diff = SCNVector3(b.x - a.x, b.y - a.y, b.z - a.z)
+            let length = v_len(diff)
+            let cylinder = SCNCylinder(radius: radius, height: CGFloat(max(length, 1e-4)))
+            let mat = SCNMaterial()
+            mat.diffuse.contents = color.withAlphaComponent(opacity)
+            mat.lightingModel = .constant
+            mat.writesToDepthBuffer = false
+            cylinder.firstMaterial = mat
+            let node = SCNNode(geometry: cylinder)
+            node.position = v_scale(v_add(a, b), 0.5)
+
+            let d = v_norm(diff)
+            let up = SCNVector3(0, 1, 0)
+            let axis = v_cross(up, d)
+            let axisLen = v_len(axis)
+            if axisLen > 1e-5 {
+                let dot = max(-1, min(1, up.x * d.x + up.y * d.y + up.z * d.z))
+                node.rotation = SCNVector4(axis.x / axisLen, axis.y / axisLen, axis.z / axisLen, acos(dot))
+            } else if d.y < 0 {
+                node.rotation = SCNVector4(1, 0, 0, Float.pi)
+            }
+            return node
+        }
+
+        /// Small camera-facing text at a vessel tip. Lives in the scene so it
+        /// tracks the 3D point; only ever drawn for the one focused token.
+        private func makeTipLabel(_ text: String, at pos: SCNVector3, bright: Bool) -> SCNNode {
+            let geo = SCNText(string: text, extrusionDepth: 0)
+            geo.font = .systemFont(ofSize: 8, weight: .semibold)
+            geo.flatness = 0.4
+            let mat = SCNMaterial()
+            mat.diffuse.contents = bright
+                ? UIColor(TokenVisuals.divergenceColor)
+                : UIColor(white: 1, alpha: 0.85)
+            mat.lightingModel = .constant
+            mat.writesToDepthBuffer = false
+            geo.firstMaterial = mat
+            let node = SCNNode(geometry: geo)
+
+            // SCNText is large and corner-anchored; center its pivot, then shrink.
+            let (minB, maxB) = geo.boundingBox
+            node.pivot = SCNMatrix4MakeTranslation((minB.x + maxB.x) / 2, (minB.y + maxB.y) / 2, 0)
+            node.scale = SCNVector3(0.006, 0.006, 0.006)
+            node.position = pos
+            let billboard = SCNBillboardConstraint()
+            billboard.freeAxes = .all
+            node.constraints = [billboard]
+            node.renderingOrder = 20
+            return node
+        }
+
+        /// Compact, legible label for a considered token piece.
+        private func vesselLabel(_ alt: TokenAlternative) -> String {
+            let trimmed = alt.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let base = trimmed.isEmpty ? (alt.text == "\n" ? "⏎" : "␣") : trimmed
+            return base.count > 10 ? String(base.prefix(10)) + "…" : base
         }
 
         // MARK: Gestures
@@ -469,6 +550,7 @@ struct GlobeView: View {
                         GlobeSceneView(tokens: tokens, activeStep: $activeStep)
                             .accessibilityHidden(true)
                         playhead
+                        focusedGlobeLabel
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(.horizontal, 12)
@@ -492,7 +574,7 @@ struct GlobeView: View {
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(.white)
                 if !tokens.isEmpty {
-                    Text("\(tokens.count) tokens · generated from top to bottom")
+                    Text("\(tokens.count) tokens · drag to rotate · scrub to replay")
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.5))
                 }
@@ -514,24 +596,50 @@ struct GlobeView: View {
     }
 
     private var legend: some View {
-        HStack(spacing: 14) {
-            Label {
-                Text("color = likelihood")
-            } icon: {
-                Circle()
-                    .fill(TokenVisuals.confidenceColor(0.75))
-                    .frame(width: 7, height: 7)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 14) {
+                Label {
+                    Text("blue = sure · red = unsure")
+                } icon: {
+                    LinearGradient(
+                        colors: [
+                            TokenVisuals.confidenceColor(0),
+                            TokenVisuals.confidenceColor(0.5),
+                            TokenVisuals.confidenceColor(1),
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    .frame(width: 18, height: 7)
+                    .clipShape(Capsule())
+                }
+
+                Label {
+                    Text("bigger = less certain")
+                } icon: {
+                    HStack(spacing: 2) {
+                        Circle().fill(.white.opacity(0.55)).frame(width: 4, height: 4)
+                        Circle().fill(.white.opacity(0.55)).frame(width: 8, height: 8)
+                    }
+                }
             }
 
-            Label {
-                Text("diamond = alternate pick")
-            } icon: {
-                Image(systemName: "diamond.fill")
-                    .foregroundStyle(.red)
-                    .font(.system(size: 7))
-            }
+            HStack(spacing: 14) {
+                Label {
+                    Text("gold = sampling overrode top pick")
+                } icon: {
+                    Image(systemName: "diamond.fill")
+                        .foregroundStyle(TokenVisuals.divergenceColor)
+                        .font(.system(size: 7))
+                }
 
-            Label("time runs down", systemImage: "arrow.down")
+                Label {
+                    Text("faint strands = considered, not chosen")
+                } icon: {
+                    Image(systemName: "arrow.triangle.branch")
+                        .font(.system(size: 8))
+                }
+            }
         }
         .font(.caption2)
         .foregroundStyle(.white.opacity(0.48))
@@ -544,22 +652,40 @@ struct GlobeView: View {
         ZStack {
             Circle()
                 .stroke(
-                    Color.cyan.opacity(0.42),
+                    Color.white.opacity(0.5),
                     style: StrokeStyle(lineWidth: 1, dash: [4, 4])
                 )
                 .frame(width: 52, height: 52)
             Circle()
-                .fill(Color.cyan.opacity(0.72))
+                .fill(Color.white.opacity(0.85))
                 .frame(width: 4, height: 4)
             Rectangle()
-                .fill(Color.cyan.opacity(0.28))
+                .fill(Color.white.opacity(0.3))
                 .frame(width: 70, height: 0.5)
             Rectangle()
-                .fill(Color.cyan.opacity(0.28))
+                .fill(Color.white.opacity(0.3))
                 .frame(width: 0.5, height: 70)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+
+    /// The focused token's identity, pinned just above the playhead so the
+    /// centered bead is never an anonymous dot. Lives in SwiftUI (not the scene)
+    /// to stay crisp and respect Dynamic Type.
+    @ViewBuilder
+    private var focusedGlobeLabel: some View {
+        if let token = activeToken {
+            Text(readableTokenText(token.text))
+                .font(.callout.monospaced().bold())
+                .foregroundStyle(.white)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 3)
+                .background(.black.opacity(0.4), in: Capsule())
+                .offset(y: -46)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
     }
 
     private var timeline: some View {
@@ -664,7 +790,7 @@ struct GlobeView: View {
                             systemImage: "diamond.fill"
                         )
                         .font(.caption2)
-                        .foregroundStyle(.red.opacity(0.82))
+                        .foregroundStyle(TokenVisuals.divergenceColor.opacity(0.95))
                     }
 
                     HStack(spacing: 18) {
@@ -672,6 +798,10 @@ struct GlobeView: View {
                         metric("Top margin", "\(percent(token.margin)) pp")
                         metric("Surprise", String(format: "%.2f nats", -log(max(token.selectedProbability, 1e-6))))
                     }
+
+                    Text("Nats measure spread: ~0 = the model was certain, ~4 ≈ a toss-up among ~55 tokens. Surprise is how unexpected the chosen token turned out to be.")
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.45))
 
                     if token.alternatives.count > 1 {
                         Divider().overlay(.white.opacity(0.12))
@@ -725,7 +855,8 @@ struct GlobeView: View {
             }
 
             var piece = AttributedString(text)
-            piece.foregroundColor = isSelected ? .cyan : .white.opacity(0.62)
+            piece.foregroundColor = isSelected ? .white : .white.opacity(0.62)
+            if isSelected { piece.inlinePresentationIntent = .stronglyEmphasized }
             result += piece
         }
         return result

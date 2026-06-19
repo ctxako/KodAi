@@ -14,6 +14,7 @@ struct ChatView: View {
     @State private var expandedProcessMessageIDs: Set<ChatMessage.ID> = []
     @State private var isMenuOpen = false
     @State private var isTuningPresented = false
+    @State private var showsThreadGlobe = false
     @State private var commentEditor: MessageCommentEditor?
     @AppStorage(PrefKey.messageTextSize) private var messageTextSize: MessageTextSize = .small
     @AppStorage(PrefKey.reduceMotion) private var reduceMotion = false
@@ -75,6 +76,20 @@ struct ChatView: View {
                     )
                 )
             }
+            .fullScreenCover(isPresented: $showsThreadGlobe) {
+                ThreadGlobeView(
+                    messages: viewModel.messages,
+                    histories: viewModel.tokenHistories,
+                    contextSize: Int(LocalModelConfiguration.lfm2_5_1_2B_Instruct_Q4_K_M.contextSize)
+                )
+            }
+        }
+    }
+
+    /// True once at least one assistant reply in this chat carries a token trace.
+    private var hasThreadTrace: Bool {
+        viewModel.tokenHistories.values.contains { history in
+            history.contains(where: \.isAnalyzed)
         }
     }
 
@@ -269,6 +284,22 @@ struct ChatView: View {
                 Text(viewModel.headerTelemetryText)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+
+                if hasThreadTrace {
+                    Button {
+                        showsThreadGlobe = true
+                        Haptics.lightTap()
+                    } label: {
+                        Image(systemName: "globe.americas")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(width: 38, height: 36)
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Capsule())
+                    .accessibilityLabel("Thread atlas")
+                    .accessibilityHint("See the whole conversation as a globe of token continents")
+                }
 
                 Button {
                     surpriseHighlighting.toggle()
