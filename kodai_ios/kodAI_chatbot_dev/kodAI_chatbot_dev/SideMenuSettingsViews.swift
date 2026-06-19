@@ -209,9 +209,6 @@ private struct SettingsSection<Content: View>: View {
             VStack(spacing: 2) {
                 content
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .liquidGlassPanel(tint: ChatPalette.inputField, cornerRadius: 16)
         }
     }
 }

@@ -100,7 +100,7 @@ struct InputBar: View {
                     .padding(.leading, onOpenPrompts != nil ? 10 : 14)
                     .padding(.trailing, 6)
                     .padding(.vertical, 6)
-                    .liquidGlassPanel(tint: ChatPalette.inputField, cornerRadius: 20)
+                    .liquidGlassPanel(tint: .clear, cornerRadius: 20)
                 }
             }
             .animation(.smooth(duration: 0.18), value: canSend)
