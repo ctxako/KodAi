@@ -58,15 +58,20 @@ struct TokenSnapshot: Identifiable {
     /// are excluded from confidence stats and drawn neutral in the heatmap.
     var isAnalyzed: Bool { !alternatives.isEmpty }
 
-    /// The model's top-ranked candidate (what greedy decoding would pick).
-    /// `alternatives` is probability-sorted, so the argmax is first.
-    var greedyAlternative: TokenAlternative? { alternatives.first }
+    /// The argmax of the raw, temperature-1 model distribution. Sampler penalties
+    /// and transforms have not been applied to this ranking.
+    var rawArgmaxAlternative: TokenAlternative? { alternatives.first }
 
-    /// True when sampling chose a token other than the model's top pick — a
-    /// fork point where randomness changed the output.
-    var divergedFromGreedy: Bool {
+    /// True when the emitted token differs from the raw model argmax. This does
+    /// not attribute the difference to randomness: repetition penalties,
+    /// truncation, temperature, or stochastic sampling may each contribute.
+    var differsFromRawArgmax: Bool {
         isAnalyzed && !(alternatives.first?.isSelected ?? true)
     }
+
+    /// Compatibility names used by older interpretation surfaces.
+    var greedyAlternative: TokenAlternative? { rawArgmaxAlternative }
+    var divergedFromGreedy: Bool { differsFromRawArgmax }
 }
 
 @Observable

@@ -4,14 +4,14 @@
 //
 //  "Decision Globe" — a generation trace wrapped onto a transparent glass
 //  sphere. Each analyzed token is a bead on a pole-to-pole spiral; the chosen
-//  path is the ribbon threading them; sampling forks (where the model didn't
-//  follow its own top pick) leave a small red satellite. The camera is fixed —
+//  path is the ribbon threading them; tokens that differ from the raw model
+//  argmax leave a small gold satellite. The camera is fixed —
 //  we rotate the globe node itself: drag to turn it by hand, scrub generation
 //  time to spin the active token to front-center (a fixed playhead), and only
 //  the focused token branches into "vessels" — one faint filament per weighed
-//  alternative the model did not pick, the overridden top pick glowing gold. Reuses
-//  TokenSnapshot/TokenAlternative and TokenVisuals so confidence reads exactly
-//  as it does in the heatmap, inspector, and river.
+//  raw alternative the model did not emit, the raw argmax glowing gold when it
+//  differs from the emitted token. Reuses TokenSnapshot/TokenAlternative and
+//  TokenVisuals so raw probability reads consistently across interpretation views.
 //
 //  This is a decision trace through probability space — not "thoughts."
 //
@@ -190,13 +190,14 @@ private struct GlobeSceneView: UIViewRepresentable {
             // (added once at the scene root) defines the orb instead.
             globeNode.addChildNode(GlobeChrome.glassShell(radius: 0.97))
 
-            // Tracer: a strand threading the chosen path in token order, tinted by
-            // each token's confidence so the trajectory itself carries the heat.
+            // Tracer: a strand threading the emitted path in token order, tinted by
+            // each token's raw probability so the trajectory itself carries the heat.
             if positions.count > 1 {
                 globeNode.addChildNode(makeTracer(positions))
             }
 
-            // Beads, one per token, colored by confidence; forks get a red moon.
+            // Beads, one per token, colored by raw probability; deviations from
+            // the raw argmax get a gold diamond.
             for (i, token) in tokens.enumerated() {
                 let pos = positions[i]
                 beadPositions[token.step] = pos
@@ -228,7 +229,7 @@ private struct GlobeSceneView: UIViewRepresentable {
                 hitNode.categoryBitMask = 2
                 globeNode.addChildNode(hitNode)
 
-                if token.divergedFromGreedy {
+                if token.differsFromRawArgmax {
                     let moon = SCNPyramid(width: 0.026, height: 0.036, length: 0.026)
                     let moonMat = SCNMaterial()
                     moonMat.diffuse.contents = UIColor(TokenVisuals.divergenceColor)
@@ -247,8 +248,8 @@ private struct GlobeSceneView: UIViewRepresentable {
             updateDepthCues()
         }
 
-        /// The chosen-path tracer, tinted per-vertex by each token's confidence
-        /// (gold where sampling overrode the top pick) so the strand itself reads
+        /// The emitted-path tracer, tinted per-vertex by raw token probability
+        /// (gold where the emitted token differs from the raw argmax) so the strand
         /// as the trajectory's heat. Positions are in token order.
         private func makeTracer(_ positions: [SCNVector3]) -> SCNNode {
             let source = SCNGeometrySource(vertices: positions)
@@ -258,9 +259,7 @@ private struct GlobeSceneView: UIViewRepresentable {
             components.reserveCapacity(positions.count * 4)
             for (i, _) in positions.enumerated() {
                 let color: UIColor = i < tokens.count
-                    ? (tokens[i].divergedFromGreedy
-                        ? UIColor(TokenVisuals.divergenceColor)
-                        : UIColor(TokenVisuals.confidenceColor(tokens[i].selectedProbability)))
+                    ? UIColor(TokenVisuals.confidenceColor(tokens[i].selectedProbability))
                     : UIColor(white: 1, alpha: 1)
                 var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
                 color.getRed(&r, green: &g, blue: &b, alpha: &a)
@@ -337,9 +336,9 @@ private struct GlobeSceneView: UIViewRepresentable {
         }
 
         /// Blooms the focused token's "vessels": a filament from the chosen bead
-        /// out to each alternative the model weighed but did *not* pick. Those
-        /// considered-yet-unchosen branches are greyed and translucent; the one
-        /// the model itself preferred but sampling overrode (a fork) glows gold.
+        /// out to each top raw alternative the model did *not* emit. Those branches
+        /// are greyed and translucent; the raw argmax glows gold when it differs
+        /// from the emitted token.
         /// Only the focused token blooms — every other bead stays a clean dot, so
         /// the globe shows just what you're looking at.
         private func rebuildVessels(for step: Int, at pos: SCNVector3) {
@@ -368,7 +367,7 @@ private struct GlobeSceneView: UIViewRepresentable {
                 let w = v_norm(v_cross(n, u))
 
                 let origin = v_add(pos, v_scale(n, 0.02))
-                let greedyID = token.greedyAlternative?.tokenID
+                let rawArgmaxID = token.rawArgmaxAlternative?.tokenID
 
                 for (j, alt) in considered.enumerated() {
                     let angle = Float(j) / Float(considered.count) * 2 * .pi
@@ -377,14 +376,14 @@ private struct GlobeSceneView: UIViewRepresentable {
                     let reach = Float(0.12 + 0.10 * alt.probability)
                     let tip = v_add(v_add(pos, v_scale(n, 0.05)), v_scale(dir, reach))
 
-                    // The model's own top pick, overridden by sampling, glows gold;
-                    // every other weighed-but-unchosen option is a faint grey line.
-                    let isOverriddenTop = token.divergedFromGreedy && alt.tokenID == greedyID
-                    let color = isOverriddenTop
+                    // The raw argmax glows gold when it differs from the emitted
+                    // token; other top raw alternatives stay faint grey.
+                    let isRawArgmax = token.differsFromRawArgmax && alt.tokenID == rawArgmaxID
+                    let color = isRawArgmax
                         ? UIColor(TokenVisuals.divergenceColor)
                         : UIColor(white: 0.78, alpha: 1)
-                    let opacity: CGFloat = isOverriddenTop ? 0.72 : 0.3
-                    let thickness: CGFloat = isOverriddenTop ? 0.0034 : 0.0022
+                    let opacity: CGFloat = isRawArgmax ? 0.72 : 0.3
+                    let thickness: CGFloat = isRawArgmax ? 0.0034 : 0.0022
 
                     container.addChildNode(
                         makeVessel(from: origin, to: tip, radius: thickness, color: color, opacity: opacity)
@@ -403,7 +402,7 @@ private struct GlobeSceneView: UIViewRepresentable {
 
                     // Camera-facing label at the tip (≤5, focused token only).
                     container.addChildNode(
-                        makeTipLabel(vesselLabel(alt), at: v_add(tip, v_scale(n, 0.03)), bright: isOverriddenTop)
+                        makeTipLabel(vesselLabel(alt), at: v_add(tip, v_scale(n, 0.03)), bright: isRawArgmax)
                     )
                 }
             }
@@ -597,55 +596,85 @@ struct GlobeView: View {
 
     private var legend: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 14) {
-                Label {
-                    Text("blue = sure · red = unsure")
-                } icon: {
-                    LinearGradient(
-                        colors: [
-                            TokenVisuals.confidenceColor(0),
-                            TokenVisuals.confidenceColor(0.5),
-                            TokenVisuals.confidenceColor(1),
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: 18, height: 7)
-                    .clipShape(Capsule())
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 14) {
+                    rawProbabilityLegend
+                    entropyLegend
                 }
-
-                Label {
-                    Text("bigger = less certain")
-                } icon: {
-                    HStack(spacing: 2) {
-                        Circle().fill(.white.opacity(0.55)).frame(width: 4, height: 4)
-                        Circle().fill(.white.opacity(0.55)).frame(width: 8, height: 8)
-                    }
+                VStack(alignment: .leading, spacing: 4) {
+                    rawProbabilityLegend
+                    entropyLegend
                 }
             }
 
-            HStack(spacing: 14) {
-                Label {
-                    Text("gold = sampling overrode top pick")
-                } icon: {
-                    Image(systemName: "diamond.fill")
-                        .foregroundStyle(TokenVisuals.divergenceColor)
-                        .font(.system(size: 7))
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 14) {
+                    rawArgmaxLegend
+                    alternativesLegend
                 }
-
-                Label {
-                    Text("faint strands = considered, not chosen")
-                } icon: {
-                    Image(systemName: "arrow.triangle.branch")
-                        .font(.system(size: 8))
+                VStack(alignment: .leading, spacing: 4) {
+                    rawArgmaxLegend
+                    alternativesLegend
                 }
             }
+
+            Text("Sampling telemetry only: spiral position is generation order, not meaning or hidden reasoning.")
+                .foregroundStyle(.white.opacity(0.58))
+                .fixedSize(horizontal: false, vertical: true)
         }
         .font(.caption2)
         .foregroundStyle(.white.opacity(0.48))
         .padding(.horizontal, 18)
         .padding(.vertical, 5)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var rawProbabilityLegend: some View {
+        Label {
+            Text("color = raw token probability")
+        } icon: {
+            LinearGradient(
+                colors: [
+                    TokenVisuals.confidenceColor(0),
+                    TokenVisuals.confidenceColor(0.5),
+                    TokenVisuals.confidenceColor(1),
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: 18, height: 7)
+            .clipShape(Capsule())
+        }
+    }
+
+    private var entropyLegend: some View {
+        Label {
+            Text("size = raw entropy")
+        } icon: {
+            HStack(spacing: 2) {
+                Circle().fill(.white.opacity(0.55)).frame(width: 4, height: 4)
+                Circle().fill(.white.opacity(0.55)).frame(width: 8, height: 8)
+            }
+        }
+    }
+
+    private var rawArgmaxLegend: some View {
+        Label {
+            Text("gold diamond = differs from raw argmax")
+        } icon: {
+            Image(systemName: "diamond.fill")
+                .foregroundStyle(TokenVisuals.divergenceColor)
+                .font(.system(size: 7))
+        }
+    }
+
+    private var alternativesLegend: some View {
+        Label {
+            Text("branches = top raw alternatives")
+        } icon: {
+            Image(systemName: "arrow.triangle.branch")
+                .font(.system(size: 8))
+        }
     }
 
     private var playhead: some View {
@@ -751,7 +780,7 @@ struct GlobeView: View {
                             .foregroundStyle(.white)
                             .lineLimit(1)
                         Spacer()
-                        Text("\(percent(token.selectedProbability))% likely")
+                        Text("\(percent(token.selectedProbability))% raw p")
                             .font(.headline.monospacedDigit())
                             .foregroundStyle(TokenVisuals.confidenceColor(token.selectedProbability))
 
@@ -780,13 +809,13 @@ struct GlobeView: View {
                 if isInspectorExpanded {
                     Divider().overlay(.white.opacity(0.12))
 
-                    Text("Probability is not correctness. It only shows how expected this next token was before sampling controls.")
+                    Text("Raw probability is measured before repetition penalties, truncation, temperature, and sampling. It is not answer correctness.")
                         .font(.caption2)
                         .foregroundStyle(.white.opacity(0.45))
 
-                    if token.divergedFromGreedy, let greedy = token.greedyAlternative {
+                    if token.differsFromRawArgmax, let rawArgmax = token.rawArgmaxAlternative {
                         Label(
-                            "Raw top option: \(readableTokenText(greedy.text)) (\(percent(greedy.probability))%)",
+                            "Raw argmax: \(readableTokenText(rawArgmax.text)) (\(percent(rawArgmax.probability))%)",
                             systemImage: "diamond.fill"
                         )
                         .font(.caption2)
@@ -795,11 +824,11 @@ struct GlobeView: View {
 
                     HStack(spacing: 18) {
                         metric("Entropy", String(format: "%.2f nats", token.entropy))
-                        metric("Top margin", "\(percent(token.margin)) pp")
+                        metric("Raw margin", "\(percent(token.margin)) pp")
                         metric("Surprise", String(format: "%.2f nats", -log(max(token.selectedProbability, 1e-6))))
                     }
 
-                    Text("Nats measure spread: ~0 = the model was certain, ~4 ≈ a toss-up among ~55 tokens. Surprise is how unexpected the chosen token turned out to be.")
+                    Text("Nats measure raw-distribution spread: ~0 is concentrated; ~4 has an effective support near 55 equally weighted tokens. Surprise is -log(raw p) for the emitted token.")
                         .font(.caption2)
                         .foregroundStyle(.white.opacity(0.45))
 
@@ -864,16 +893,16 @@ struct GlobeView: View {
 
     private func takeaway(for token: TokenSnapshot) -> String {
         let selected = readableTokenText(token.text)
-        if token.divergedFromGreedy, let greedy = token.greedyAlternative {
-            return "Sampling chose “\(selected)” (\(percent(token.selectedProbability))%) instead of the model’s top option “\(readableTokenText(greedy.text))” (\(percent(greedy.probability))%)."
+        if token.differsFromRawArgmax, let rawArgmax = token.rawArgmaxAlternative {
+            return "“\(selected)” was emitted at \(percent(token.selectedProbability))% raw probability; the raw argmax was “\(readableTokenText(rawArgmax.text))” at \(percent(rawArgmax.probability))%. Sampler controls determine the final choice."
         }
         if token.selectedProbability >= 0.75 {
-            return "“\(selected)” was the model’s clear top option at \(percent(token.selectedProbability))%."
+            return "The raw model distribution strongly favored “\(selected)” at \(percent(token.selectedProbability))%."
         }
         if token.margin < 0.08 {
-            return "“\(selected)” won a close call; several next tokens had similar likelihood."
+            return "“\(selected)” was the raw argmax, but the two leading raw probabilities were close."
         }
-        return "“\(selected)” was the top option, but meaningful alternatives remained."
+        return "“\(selected)” was the raw argmax, with other raw alternatives still carrying probability."
     }
 
     private func readableTokenText(_ text: String) -> String {

@@ -21,21 +21,29 @@ enum GlobeChrome {
         sphere.segmentCount = 64
         let material = SCNMaterial()
         material.lightingModel = .constant
-        material.diffuse.contents = UIColor(white: 0.7, alpha: 1)
-        material.isDoubleSided = true
+        // Keep the fallback transparent too. If SceneKit cannot compile the
+        // shader modifier, the shell must never fall back to an opaque sphere.
+        material.diffuse.contents = UIColor.clear
+        material.blendMode = .alpha
+        material.transparencyMode = .singleLayer
+        material.isDoubleSided = false
         material.writesToDepthBuffer = false
         material.shaderModifiers = [.fragment: fresnelFragment]
         sphere.firstMaterial = material
         let node = SCNNode(geometry: sphere)
+        // The shell itself stays fully transparent face-on. The shader supplies
+        // only a restrained rim; the separate silhouette ring defines the orb.
+        node.opacity = 1
         node.renderingOrder = -10
         return node
     }
 
     private static let fresnelFragment = """
     #pragma transparent
-    float fres = pow(1.0 - abs(dot(normalize(_surface.normal), normalize(_surface.view))), 2.8);
+    #pragma body
+    float fres = pow(1.0 - abs(dot(normalize(_surface.normal), normalize(_surface.view))), 3.4);
     _output.color.rgb = float3(0.40, 0.54, 0.74);
-    _output.color.a = mix(0.02, 0.24, fres);
+    _output.color.a = fres * 0.10;
     """
 
     /// A camera-facing circle the size of the globe's silhouette. Attach to the

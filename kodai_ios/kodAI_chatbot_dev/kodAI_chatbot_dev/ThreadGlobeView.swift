@@ -3,10 +3,10 @@
 //  kodAI_chatbot_dev
 //
 //  "Thread Atlas" — the whole conversation wrapped onto a clear glass globe.
-//  Each user→assistant exchange becomes a *continent*: a region whose surface
-//  area is its share of the context window (stable as the thread grows — new
+//  Each traced user→assistant exchange becomes a *continent*: a region whose size
+//  approximates its share of context capacity (stable as the thread grows — new
 //  continents are added, existing ones never resize). A continent's tint is its
-//  average confidence (the conversation's weather map); fork-heavy answers glow.
+//  mean raw token probability; raw-argmax deviations glow.
 //
 //  Only what you're looking at is drawn in full: the focused continent scatters
 //  its tokens; the others stay cheap glow regions, the far side faint through
@@ -73,11 +73,11 @@ struct GlobeContinent: Identifiable {
     let promptSummary: String
     let responsePreview: String
     let tokens: [TokenSnapshot]
-    /// Share of the model's context window this exchange occupies (0–1). Sized
-    /// against total *capacity*, not current fill, so continents never resize.
-    let contextShare: Double
-    let avgConfidence: Float
-    let forkCount: Int
+    /// Estimated exchange footprint relative to context capacity (0–1). The user
+    /// prompt uses a lightweight estimator; response tokens are captured exactly.
+    let estimatedContextShare: Double
+    let avgRawProbability: Float
+    let rawArgmaxDifferenceCount: Int
 
     /// Walks the thread, pairing each analyzed assistant reply with the prompt
     /// that preceded it. Replies with no captured distribution are skipped.
@@ -96,7 +96,7 @@ struct GlobeContinent: Identifiable {
 
                 let exchangeTokens = TokenEstimator.estimate(lastPrompt) + tokens.count
                 let avg = tokens.reduce(Float(0)) { $0 + $1.selectedProbability } / Float(tokens.count)
-                let forks = tokens.filter(\.divergedFromGreedy).count
+                let rawArgmaxDifferences = tokens.filter(\.differsFromRawArgmax).count
 
                 result.append(
                     GlobeContinent(
@@ -105,9 +105,9 @@ struct GlobeContinent: Identifiable {
                         promptSummary: snippet(lastPrompt, fallback: "Opening"),
                         responsePreview: snippet(message.text, fallback: "Response"),
                         tokens: tokens,
-                        contextShare: min(max(Double(exchangeTokens) / Double(capacity), 0), 1),
-                        avgConfidence: avg,
-                        forkCount: forks
+                        estimatedContextShare: min(max(Double(exchangeTokens) / Double(capacity), 0), 1),
+                        avgRawProbability: avg,
+                        rawArgmaxDifferenceCount: rawArgmaxDifferences
                     )
                 )
                 order += 1
@@ -246,7 +246,7 @@ private struct ThreadGlobeSceneView: UIViewRepresentable {
             // Continent seats: a pole-to-pole spiral so conversation order maps to
             // latitude (north = first), reinforced by the vine.
             centers = continentCenters(count: continents.count)
-            caps = continents.map { capAngle(forShare: $0.contextShare) }
+            caps = continents.map { capAngle(forShare: $0.estimatedContextShare) }
 
             for continent in continents {
                 let center = centers[continent.order]
@@ -292,7 +292,7 @@ private struct ThreadGlobeSceneView: UIViewRepresentable {
             let blob = SCNSphere(radius: CGFloat(radius))
             blob.segmentCount = 16
             let mat = SCNMaterial()
-            let tint = UIColor(TokenVisuals.confidenceColor(continent.avgConfidence))
+            let tint = UIColor(TokenVisuals.confidenceColor(continent.avgRawProbability))
             mat.diffuse.contents = tint
             mat.lightingModel = .constant
             mat.writesToDepthBuffer = false
@@ -303,9 +303,8 @@ private struct ThreadGlobeSceneView: UIViewRepresentable {
             node.name = "continent:\(continent.order)"
             node.categoryBitMask = 4
 
-            // Fork-heavy exchanges get a faint gold halo so "stormy" answers read
-            // at a glance, even from across the globe.
-            if continent.forkCount > 0 {
+            // Exchanges with raw-argmax deviations get a faint gold halo.
+            if continent.rawArgmaxDifferenceCount > 0 {
                 let halo = SCNSphere(radius: CGFloat(radius * 1.22))
                 halo.segmentCount = 16
                 let haloMat = SCNMaterial()
@@ -314,7 +313,7 @@ private struct ThreadGlobeSceneView: UIViewRepresentable {
                 haloMat.writesToDepthBuffer = false
                 halo.firstMaterial = haloMat
                 let haloNode = SCNNode(geometry: halo)
-                haloNode.opacity = min(0.32, 0.06 + 0.02 * Double(continent.forkCount))
+                haloNode.opacity = min(0.32, 0.06 + 0.02 * Double(continent.rawArgmaxDifferenceCount))
                 node.addChildNode(haloNode)
             }
             return node
@@ -450,9 +449,7 @@ private struct ThreadGlobeSceneView: UIViewRepresentable {
                 let bead = SCNSphere(radius: radius)
                 bead.segmentCount = 8
                 let mat = SCNMaterial()
-                mat.diffuse.contents = token.divergedFromGreedy
-                    ? UIColor(TokenVisuals.divergenceColor)
-                    : UIColor(TokenVisuals.confidenceColor(token.selectedProbability))
+                mat.diffuse.contents = UIColor(TokenVisuals.confidenceColor(token.selectedProbability))
                 mat.lightingModel = .constant
                 bead.firstMaterial = mat
                 let node = SCNNode(geometry: bead)
@@ -460,6 +457,32 @@ private struct ThreadGlobeSceneView: UIViewRepresentable {
                 node.name = "token:\(token.step)"
                 node.categoryBitMask = 8
                 container.addChildNode(node)
+
+                if token.differsFromRawArgmax {
+                    let marker = SCNPyramid(width: radius * 1.7, height: radius * 2.2, length: radius * 1.7)
+                    let markerMaterial = SCNMaterial()
+                    markerMaterial.diffuse.contents = UIColor(TokenVisuals.divergenceColor)
+                    markerMaterial.lightingModel = .constant
+                    marker.firstMaterial = markerMaterial
+                    let markerNode = SCNNode(geometry: marker)
+                    markerNode.position = v_add(pos, v_scale(v_norm(pos), Float(radius * 2.1)))
+                    markerNode.eulerAngles.z = .pi / 4
+                    markerNode.name = "token:\(token.step)"
+                    markerNode.categoryBitMask = 8
+                    container.addChildNode(markerNode)
+                }
+
+                // Preserve delicate beads while giving touch users a practical target.
+                let hitTarget = SCNSphere(radius: max(0.04, radius * 2.4))
+                let hitMaterial = SCNMaterial()
+                hitMaterial.colorBufferWriteMask = []
+                hitMaterial.writesToDepthBuffer = false
+                hitTarget.firstMaterial = hitMaterial
+                let hitNode = SCNNode(geometry: hitTarget)
+                hitNode.position = pos
+                hitNode.name = "token:\(token.step)"
+                hitNode.categoryBitMask = 8
+                container.addChildNode(hitNode)
             }
 
             globeNode.addChildNode(container)
@@ -517,7 +540,7 @@ private struct ThreadGlobeSceneView: UIViewRepresentable {
                 let n = v_norm(pos)
                 let (u, w) = tangentBasis(at: n)
                 let origin = v_add(pos, v_scale(n, 0.015))
-                let greedyID = token.greedyAlternative?.tokenID
+            let rawArgmaxID = token.rawArgmaxAlternative?.tokenID
 
                 for (j, alt) in considered.enumerated() {
                     let angle = Float(j) / Float(considered.count) * 2 * .pi
@@ -525,14 +548,14 @@ private struct ThreadGlobeSceneView: UIViewRepresentable {
                     let reach = Float(0.10 + 0.08 * alt.probability)
                     let tip = v_add(v_add(pos, v_scale(n, 0.04)), v_scale(dir, reach))
 
-                    let isOverriddenTop = token.divergedFromGreedy && alt.tokenID == greedyID
-                    let color = isOverriddenTop
+                    let isRawArgmax = token.differsFromRawArgmax && alt.tokenID == rawArgmaxID
+                    let color = isRawArgmax
                         ? UIColor(TokenVisuals.divergenceColor)
                         : UIColor(white: 0.78, alpha: 1)
-                    let opacity: CGFloat = isOverriddenTop ? 0.72 : 0.3
+                    let opacity: CGFloat = isRawArgmax ? 0.72 : 0.3
 
                     container.addChildNode(
-                        makeVessel(from: origin, to: tip, radius: isOverriddenTop ? 0.003 : 0.002, color: color, opacity: opacity)
+                        makeVessel(from: origin, to: tip, radius: isRawArgmax ? 0.003 : 0.002, color: color, opacity: opacity)
                     )
                     let dot = SCNSphere(radius: CGFloat(0.005 + 0.015 * alt.probability))
                     dot.segmentCount = 8
@@ -545,7 +568,7 @@ private struct ThreadGlobeSceneView: UIViewRepresentable {
                     dotNode.position = tip
                     container.addChildNode(dotNode)
 
-                    container.addChildNode(makeLabel(vesselLabel(alt), at: v_add(tip, v_scale(n, 0.025)), bright: isOverriddenTop))
+                    container.addChildNode(makeLabel(vesselLabel(alt), at: v_add(tip, v_scale(n, 0.025)), bright: isRawArgmax))
                 }
             }
             globeNode.addChildNode(container)
@@ -654,6 +677,7 @@ struct ThreadGlobeView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var focusedOrder = 0
     @State private var vineOn = true
     @State private var selectedTokenStep: Int?
@@ -725,7 +749,7 @@ struct ThreadGlobeView: View {
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(.white)
                 if !continents.isEmpty {
-                    Text("\(continents.count) exchanges · tap a continent, then a bead · pinch to zoom")
+                    Text("\(continents.count) traced exchanges · tap, rotate, or pinch")
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.5))
                 }
@@ -746,36 +770,67 @@ struct ThreadGlobeView: View {
     }
 
     private var legend: some View {
-        HStack(spacing: 14) {
-            Label {
-                Text("tint = confidence")
-            } icon: {
-                LinearGradient(
-                    colors: [TokenVisuals.confidenceColor(0), TokenVisuals.confidenceColor(0.5), TokenVisuals.confidenceColor(1)],
-                    startPoint: .leading, endPoint: .trailing
-                )
-                .frame(width: 18, height: 7)
-                .clipShape(Capsule())
-            }
-            Label {
-                Text("size = context share")
-            } icon: {
-                HStack(spacing: 2) {
-                    Circle().fill(.white.opacity(0.55)).frame(width: 4, height: 4)
-                    Circle().fill(.white.opacity(0.55)).frame(width: 8, height: 8)
+        VStack(alignment: .leading, spacing: 4) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 14) {
+                    rawProbabilityLegend
+                    footprintLegend
+                    rawArgmaxLegend
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    rawProbabilityLegend
+                    footprintLegend
+                    rawArgmaxLegend
                 }
             }
-            Label {
-                Text("gold halo = forks")
-            } icon: {
-                Circle().strokeBorder(TokenVisuals.divergenceColor, lineWidth: 1.5).frame(width: 9, height: 9)
-            }
+
+            Text("Sampling telemetry only: placement is chronological, not semantic. Raw probabilities precede sampler controls and do not measure correctness.")
+                .foregroundStyle(.white.opacity(0.58))
+                .fixedSize(horizontal: false, vertical: true)
+            Text("After relaunch, the \(TokenTraceStore.maxResponsesPerSession) most recent response traces are retained.")
+                .foregroundStyle(.white.opacity(0.42))
+                .fixedSize(horizontal: false, vertical: true)
         }
         .font(.caption2)
         .foregroundStyle(.white.opacity(0.48))
         .padding(.horizontal, 18)
         .padding(.vertical, 5)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var rawProbabilityLegend: some View {
+        Label {
+            Text("tint = mean raw token probability")
+        } icon: {
+            LinearGradient(
+                colors: [TokenVisuals.confidenceColor(0), TokenVisuals.confidenceColor(0.5), TokenVisuals.confidenceColor(1)],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: 18, height: 7)
+            .clipShape(Capsule())
+        }
+    }
+
+    private var footprintLegend: some View {
+        Label {
+            Text("size = estimated exchange footprint")
+        } icon: {
+            HStack(spacing: 2) {
+                Circle().fill(.white.opacity(0.55)).frame(width: 4, height: 4)
+                Circle().fill(.white.opacity(0.55)).frame(width: 8, height: 8)
+            }
+        }
+    }
+
+    private var rawArgmaxLegend: some View {
+        Label {
+            Text("gold = differs from raw argmax")
+        } icon: {
+            Image(systemName: "diamond.fill")
+                .foregroundStyle(TokenVisuals.divergenceColor)
+                .font(.system(size: 7))
+        }
     }
 
     private var vineToggle: some View {
@@ -805,6 +860,7 @@ struct ThreadGlobeView: View {
             )
             .tint(.white.opacity(0.72))
             .accessibilityLabel("Exchange position")
+            .accessibilityValue("Exchange \(focusedOrder + 1) of \(continents.count): \(focused?.promptSummary ?? "")")
             stepButton(systemImage: "chevron.right", delta: 1, label: "Next exchange")
             Text("\(focusedOrder + 1)/\(continents.count)")
                 .font(.caption.monospacedDigit())
@@ -839,9 +895,9 @@ struct ThreadGlobeView: View {
                         .font(.headline)
                         .foregroundStyle(.white)
                     Spacer()
-                    Text("\(percent(continent.avgConfidence))% avg confidence")
+                    Text("\(percent(continent.avgRawProbability))% mean raw p")
                         .font(.subheadline.monospacedDigit())
-                        .foregroundStyle(TokenVisuals.confidenceColor(continent.avgConfidence))
+                        .foregroundStyle(TokenVisuals.confidenceColor(continent.avgRawProbability))
                 }
 
                 Text(continent.promptSummary)
@@ -855,8 +911,8 @@ struct ThreadGlobeView: View {
 
                 HStack(spacing: 18) {
                     metric("\(continent.tokens.count)", "tokens")
-                    metric("\(percent(Float(continent.contextShare)))%", "of context")
-                    metric("\(continent.forkCount)", "forks")
+                    metric("\(percent(Float(continent.estimatedContextShare)))%", "estimated capacity")
+                    metric("\(continent.rawArgmaxDifferenceCount)", "raw deviations")
                 }
                 .padding(.top, 2)
 
@@ -877,10 +933,14 @@ struct ThreadGlobeView: View {
                     .background(ChatPalette.accentBlue.opacity(0.55), in: RoundedRectangle(cornerRadius: 14))
                 }
                 .padding(.top, 2)
+                .accessibilityHint("Opens an accessible token-by-token timeline with raw probability details")
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .liquidGlassPanel(tint: ChatPalette.elevatedSurface.opacity(0.72), cornerRadius: 22)
+            .liquidGlassPanel(
+                tint: reduceTransparency ? ChatPalette.elevatedSurface : ChatPalette.elevatedSurface.opacity(0.72),
+                cornerRadius: 22
+            )
             .padding(.horizontal, 12)
             .padding(.bottom, 12)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: continent.id)
@@ -912,7 +972,7 @@ struct ThreadGlobeView: View {
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 Spacer()
-                Text("\(percent(token.selectedProbability))% likely")
+                Text("\(percent(token.selectedProbability))% raw p")
                     .font(.headline.monospacedDigit())
                     .foregroundStyle(TokenVisuals.confidenceColor(token.selectedProbability))
             }
@@ -927,14 +987,17 @@ struct ThreadGlobeView: View {
 
             HStack(spacing: 18) {
                 metric(String(format: "%.2f", token.entropy), "entropy nats")
-                metric("\(percent(token.margin))", "top margin pp")
+                metric("\(percent(token.margin))", "raw margin pp")
                 metric(String(format: "%.2f", -log(max(token.selectedProbability, 1e-6))), "surprise nats")
             }
             .padding(.top, 2)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlassPanel(tint: ChatPalette.elevatedSurface.opacity(0.72), cornerRadius: 22)
+        .liquidGlassPanel(
+            tint: reduceTransparency ? ChatPalette.elevatedSurface : ChatPalette.elevatedSurface.opacity(0.72),
+            cornerRadius: 22
+        )
         .padding(.horizontal, 12)
         .padding(.bottom, 12)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: token.step)
@@ -942,16 +1005,16 @@ struct ThreadGlobeView: View {
 
     private func tokenTakeaway(_ token: TokenSnapshot) -> String {
         let selected = readableToken(token.text)
-        if token.divergedFromGreedy, let greedy = token.greedyAlternative {
-            return "Sampling chose “\(selected)” (\(percent(token.selectedProbability))%) over the model’s top pick “\(readableToken(greedy.text))” (\(percent(greedy.probability))%)."
+        if token.differsFromRawArgmax, let rawArgmax = token.rawArgmaxAlternative {
+            return "“\(selected)” was emitted at \(percent(token.selectedProbability))% raw probability; the raw argmax was “\(readableToken(rawArgmax.text))” at \(percent(rawArgmax.probability))%. Sampler controls determine the final choice."
         }
         if token.selectedProbability >= 0.75 {
-            return "“\(selected)” was the clear top option at \(percent(token.selectedProbability))%."
+            return "The raw model distribution strongly favored “\(selected)” at \(percent(token.selectedProbability))%."
         }
         if token.margin < 0.08 {
-            return "“\(selected)” won a close call — several next tokens were nearly as likely."
+            return "“\(selected)” was the raw argmax, but the two leading raw probabilities were close."
         }
-        return "“\(selected)” was the top option, but meaningful alternatives remained."
+        return "“\(selected)” was the raw argmax, with other raw alternatives still carrying probability."
     }
 
     private func readableToken(_ text: String) -> String {
