@@ -381,12 +381,36 @@ struct ChatView: View {
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+
+                quickSendChips
             }
 
             AssistantModeSelector(selection: assistantModeBinding)
         }
         .frame(maxWidth: .infinity, minHeight: 280, alignment: .center)
         .padding(20)
+    }
+
+    private var quickSendChips: some View {
+        let chips: [(label: String, prompt: String)] = [
+            ("Creative Essay", "Write an essay comparing the leadership styles of Darth Vader and SpongeBob SquarePants."),
+            ("Subtle Spice", "Is it ever justified to lie to someone for their own good? Defend your answer."),
+            ("Light Stress", "List 5 ways dreams and reality differ, then pick the most important one and argue why.")
+        ]
+        return HStack(spacing: 8) {
+            ForEach(chips, id: \.label) { chip in
+                Button(chip.label) {
+                    viewModel.inputText = chip.prompt
+                    viewModel.send()
+                }
+                .font(.caption)
+                .fontWeight(.medium)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(.ultraThinMaterial, in: Capsule())
+                .foregroundStyle(.primary)
+            }
+        }
     }
 
     private var assistantModeBinding: Binding<AssistantMode> {
