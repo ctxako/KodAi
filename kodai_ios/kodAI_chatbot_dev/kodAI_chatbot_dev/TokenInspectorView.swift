@@ -19,7 +19,7 @@ enum TokenVisuals {
     static func confidenceColor(_ probability: Float) -> Color {
         let clamped = Double(max(0, min(1, probability)))
         return Color(
-            hue: 0.72 - clamped * 0.28,
+            hue: clamped * 0.66,
             saturation: 0.66,
             brightness: 0.94
         )

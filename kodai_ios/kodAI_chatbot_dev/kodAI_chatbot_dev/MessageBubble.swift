@@ -376,7 +376,7 @@ struct MessageBubble: View {
                         .overlay(alignment: .topTrailing) {
                             if snapshot.divergedFromGreedy {
                                 Circle()
-                                    .fill(Color.cyan.opacity(0.9))
+                                    .fill(Color(hue: 0.13, saturation: 0.8, brightness: 1.0).opacity(0.9))
                                     .frame(width: 3, height: 3)
                                     .padding(1.5)
                             }
@@ -444,7 +444,7 @@ struct MessageBubble: View {
         if divergedCount > 0 {
             HStack(spacing: 4) {
                 Circle()
-                    .fill(Color.cyan.opacity(0.9))
+                    .fill(Color(hue: 0.13, saturation: 0.8, brightness: 1.0).opacity(0.9))
                     .frame(width: 4, height: 4)
                 Text("sampling overrode the top pick · \(divergedCount)×")
                     .font(.system(size: 9))
