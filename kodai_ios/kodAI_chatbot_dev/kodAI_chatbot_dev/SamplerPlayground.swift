@@ -2,201 +2,67 @@
 //  SamplerPlayground.swift
 //  kodAI_chatbot_dev
 //
-//  Glass-box learning tool. The model emits a probability for every token in
-//  its vocabulary; the "sampler" is the set of rules that collapse that list
-//  into one chosen token. This file is the pure, inference-free core: it takes
-//  a captured next-token distribution and re-derives what each knob (temperature,
-//  top-p, top-k, repeat penalty) would do to it — no calls back into llama.cpp.
+//  The sampler is the set of rules that turn the model's raw next-token scores
+//  into one chosen token. This file holds the live, working settings (`SamplerKnobs`)
+//  that drive real generation, plus the plain-language helper notes (`KnobInfo`)
+//  shown behind each ⓘ button in the tuning card. There is no visualization or
+//  mock math here anymore — every value in `SamplerKnobs` feeds the real sampler
+//  chain in `LlamaContextWrapper.makeSamplerChain`.
 //
 
 import Foundation
-import KodaiKernel
 
-/// A single candidate token entering the sampler, carrying its raw
-/// (temperature-1, pre-transform) probability straight from the model.
-struct SamplerCandidate: Identifiable {
-    let tokenID: Int32
-    let text: String
-    /// Raw model probability at temperature 1, before any sampler transforms.
-    let rawProbability: Float
-
-    var id: Int32 { tokenID }
-
-    init(tokenID: Int32, text: String, rawProbability: Float) {
-        self.tokenID = tokenID
-        self.text = text
-        self.rawProbability = rawProbability
-    }
-
-    /// Bridges a captured top-k alternative into a playground candidate.
-    init(alternative: TokenAlternative) {
-        self.tokenID = alternative.tokenID
-        self.text = alternative.text
-        self.rawProbability = alternative.probability
-    }
-}
-
-/// One candidate after the knobs have been applied.
-struct ReshapedCandidate: Identifiable {
-    let tokenID: Int32
-    let text: String
-    /// The original probability, kept so the UI can show the before/after delta.
-    let rawProbability: Float
-    /// Probability after temperature + penalty + truncation, renormalized over
-    /// the survivors. Zero when the candidate was cut by top-k or top-p.
-    let probability: Float
-    /// True when top-k or top-p removed this candidate from contention.
-    let isCut: Bool
-    /// The token greedy decoding would now pick (the surviving argmax).
-    let isWinner: Bool
-    /// Marked by the user as "already said," so the repeat penalty applies.
-    let isSeen: Bool
-
-    var id: Int32 { tokenID }
-}
-
-/// The adjustable sampler settings the playground exposes. Defaults are a
-/// no-op baseline (temperature 1, no truncation, no penalty) so the candidates
-/// open as the model's true distribution and every knob move is a visible delta.
+/// The live tuning that steers generation. Defaults come from the active model
+/// config (`LocalModelConfiguration.defaultSamplerKnobs`) so a fresh chat always
+/// starts on the shipped tuning, and the tuning card edits this same value.
+///
+/// Fields split into three groups:
+///   • Core — temperature, top-K, top-P, repeat penalty (the everyday knobs).
+///   • Advanced — min-P, frequency/presence penalties, deterministic, seed.
+///   • Generation — maxOutputTokens (a length cap, not a sampler transform, but
+///     it travels with the tuning so the card can expose it).
 struct SamplerKnobs: Equatable {
+    // Core
     var temperature: Float = 1.0
     var topP: Float = 1.0
     var topK: Int = 40
     var repeatPenalty: Float = 1.0
 
-    static let `default` = SamplerKnobs()
-}
+    // Advanced
+    /// Min-P: drop any token below this fraction of the top token's probability.
+    /// 0 = disabled.
+    var minP: Float = 0.0
+    /// OpenAI-style frequency penalty (scales with how often a token appeared).
+    /// 0 = disabled.
+    var frequencyPenalty: Float = 0.0
+    /// OpenAI-style presence penalty (flat penalty once a token has appeared).
+    /// 0 = disabled.
+    var presencePenalty: Float = 0.0
+    /// Greedy decoding: always take the single highest-scoring token. When true,
+    /// temperature / top-K / top-P / min-P no longer matter.
+    var deterministic: Bool = false
+    /// Fixed random seed for reproducible runs. `nil` = a fresh random seed every
+    /// generation (the normal, varied behavior).
+    var seed: UInt32? = nil
 
-/// Pure, inference-free re-sampling. Turns captured top-k probabilities back
-/// into pseudo-logits (softmax is shift-invariant, so `log(p)` stands in for the
-/// original logits), then applies the knobs in the same spirit as the live
-/// sampler chain — penalty → temperature → top-k → top-p — and renormalizes.
-enum SamplerPlayground {
-    /// Result of reshaping, plus summary stats for the readout.
-    struct Outcome {
-        let candidates: [ReshapedCandidate]
-        /// How many candidates survived top-k and top-p.
-        let survivingCount: Int
-        /// Shannon entropy (nats) of the reshaped, renormalized distribution.
-        let entropy: Float
+    // Generation
+    /// Hard cap on how many tokens the model may generate in one reply.
+    var maxOutputTokens: Int = 384
 
-        var winner: ReshapedCandidate? { candidates.first { $0.isWinner } }
-    }
-
-    /// Temperatures below this collapse toward argmax; floors the divisor.
+    /// Temperatures below this collapse toward argmax; floors the slider so the
+    /// math never divides by ~0.
     static let minTemperature: Float = 0.05
 
-    static func reshape(
-        _ candidates: [SamplerCandidate],
-        knobs: SamplerKnobs,
-        seenTokenIDs: Set<Int32> = []
-    ) -> Outcome {
-        let n = candidates.count
-        guard n > 0 else { return Outcome(candidates: [], survivingCount: 0, entropy: 0) }
-
-        let epsilon: Float = 1e-9
-        let temperature = max(knobs.temperature, minTemperature)
-
-        // 1. Recover relative logits, apply the repeat penalty to "seen" tokens
-        //    (llama.cpp style: positive logits divide, negative logits multiply),
-        //    then scale by temperature.
-        var logits = [Float](repeating: 0, count: n)
-        for i in 0..<n {
-            var logit = Foundation.log(max(candidates[i].rawProbability, epsilon))
-            if knobs.repeatPenalty != 1, seenTokenIDs.contains(candidates[i].tokenID) {
-                logit = logit > 0 ? logit / knobs.repeatPenalty : logit * knobs.repeatPenalty
-            }
-            logits[i] = logit / temperature
-        }
-
-        // 2. Softmax over the candidate set.
-        let maxLogit = logits.max() ?? 0
-        let exps = logits.map { Foundation.exp($0 - maxLogit) }
-        let expSum = max(exps.reduce(0, +), epsilon)
-        let probs = exps.map { $0 / expSum }
-
-        // 3. Rank by probability for truncation.
-        let order = (0..<n).sorted { probs[$0] > probs[$1] }
-
-        // top-k: keep the k highest.
-        let k = max(1, min(knobs.topK, n))
-        var kept = Set(order.prefix(k))
-
-        // top-p (nucleus): within the kept set, keep the smallest prefix whose
-        // cumulative probability reaches p.
-        var cumulative: Float = 0
-        var nucleus = Set<Int>()
-        for index in order where kept.contains(index) {
-            nucleus.insert(index)
-            cumulative += probs[index]
-            if cumulative >= knobs.topP { break }
-        }
-        kept = nucleus
-
-        // 4. Renormalize the survivors and tag the winner.
-        let survivorMass = max(kept.reduce(Float(0)) { $0 + probs[$1] }, epsilon)
-        let winnerIndex = order.first { kept.contains($0) }
-
-        var entropy: Float = 0
-        var reshaped: [ReshapedCandidate] = []
-        reshaped.reserveCapacity(n)
-        for i in 0..<n {
-            let isKept = kept.contains(i)
-            let probability = isKept ? probs[i] / survivorMass : 0
-            if probability > 0 { entropy -= probability * Foundation.log(probability) }
-            reshaped.append(
-                ReshapedCandidate(
-                    tokenID: candidates[i].tokenID,
-                    text: candidates[i].text,
-                    rawProbability: candidates[i].rawProbability,
-                    probability: probability,
-                    isCut: !isKept,
-                    isWinner: i == winnerIndex,
-                    isSeen: seenTokenIDs.contains(candidates[i].tokenID)
-                )
-            )
-        }
-
-        // Survivors first (by probability), cut candidates after (by raw rank),
-        // so the bar list reads top-to-bottom as the sampler "sees" it.
-        reshaped.sort {
-            if $0.isCut != $1.isCut { return !$0.isCut }
-            if $0.probability != $1.probability { return $0.probability > $1.probability }
-            return $0.rawProbability > $1.rawProbability
-        }
-
-        return Outcome(candidates: reshaped, survivingCount: kept.count, entropy: entropy)
-    }
-}
-
-// MARK: - Built-in example
-
-extension SamplerPlayground {
-    /// The sentence the example distribution is "continuing," shown for context.
-    static let exampleContext = "I went to the store to buy some"
-
-    /// A medium-entropy next-token distribution with a believable long tail, so
-    /// temperature, top-p, and top-k all produce visible effects. Probabilities
-    /// are raw (temperature-1) and intentionally sum below 1 — the missing mass
-    /// is the rest of the vocabulary, exactly like a real captured top-k.
-    static let exampleCandidates: [SamplerCandidate] = [
-        SamplerCandidate(tokenID: 1, text: " groceries", rawProbability: 0.22),
-        SamplerCandidate(tokenID: 2, text: " milk", rawProbability: 0.18),
-        SamplerCandidate(tokenID: 3, text: " food", rawProbability: 0.14),
-        SamplerCandidate(tokenID: 4, text: " bread", rawProbability: 0.11),
-        SamplerCandidate(tokenID: 5, text: " snacks", rawProbability: 0.08),
-        SamplerCandidate(tokenID: 6, text: " water", rawProbability: 0.06),
-        SamplerCandidate(tokenID: 7, text: " coffee", rawProbability: 0.05),
-        SamplerCandidate(tokenID: 8, text: " fruit", rawProbability: 0.04),
-        SamplerCandidate(tokenID: 9, text: " things", rawProbability: 0.03),
-        SamplerCandidate(tokenID: 10, text: " eggs", rawProbability: 0.025),
-    ]
+    /// The tuning a fresh chat starts from, sourced from the active model config
+    /// so the card sliders and the live sampler chain never drift apart.
+    static let `default` = LocalModelConfiguration.lfm2_5_1_2B_Instruct_Q4_K_M.defaultSamplerKnobs
 }
 
 // MARK: - Knob explanations
 
-/// One "ⓘ" explainer: a plain-language description of what a knob does, shown in
-/// a small sheet when the user taps the info button next to it.
+/// One "ⓘ" explainer: a plain-language, beginner-friendly description of what a
+/// knob does and an experiment to try, shown in a small sheet when the user taps
+/// the info button next to it. Written to teach, not just to define.
 struct KnobInfo: Identifiable {
     let id = UUID()
     let title: String
@@ -205,54 +71,193 @@ struct KnobInfo: Identifiable {
     static let temperature = KnobInfo(
         title: "Temperature",
         body: """
-        Flattens or sharpens the whole distribution.
+        The big creativity dial. The model scores every possible next word; \
+        temperature decides how much it favors its top pick over the long shots.
 
-        Low (0.2) makes the model almost always take its favorite — safe but \
-        repetitive. High (1.5) gives the long shots a real chance — creative but \
-        chaotic. At the floor it's nearly deterministic: always the top token.
+        • Low (0.2): almost always the safest word. Focused and consistent, but \
+        can get repetitive or boring.
+        • High (1.3+): gives unlikely words a real chance. Surprising and creative, \
+        but can wander or go off the rails.
+        • At the floor it's nearly deterministic — basically always the top word.
 
-        Watch the bars: lower temperature pulls probability toward the leader; \
-        higher temperature spreads it out across the field.
+        Rule of thumb: lower for facts, code, and structured answers; higher for \
+        brainstorming, stories, and play.
+
+        Try this: ask the same question twice at 0.2, then twice at 1.2. Notice how \
+        the low-temp answers look almost identical and the high-temp ones vary.
         """
     )
 
     static let topP = KnobInfo(
         title: "Top-P (nucleus)",
         body: """
-        Keeps only enough of the top candidates for their probabilities to add \
-        up to P, then throws the rest away.
+        A smart shortlist. The model lines its options up best-first and keeps \
+        adding them until their combined probability reaches P — then ignores the \
+        rest. It adapts: few options when the model is confident, many when it's \
+        unsure.
 
-        At 0.9 the model keeps adding tokens from the top until they sum to 90% \
-        of the mass — few when it's confident, many when it's unsure. It adapts \
-        to the shape of the distribution instead of using a fixed count.
+        • 1.0 = keep everything (off).
+        • 0.9 = keep the most likely options that together cover 90% of the odds.
+        • Low (0.5) = only the very top, safest options survive.
 
-        Drag it down and watch the tail get cut off, then the survivors \
-        renormalize to fill the bar.
+        Most people leave temperature moderate and tune top-P to trim the weird \
+        tail without killing variety.
+
+        Try this: set temperature to 1.2 (chaotic), then pull top-P down to 0.8. \
+        The output stays varied but stops producing nonsense words.
         """
     )
 
     static let topK = KnobInfo(
         title: "Top-K",
         body: """
-        A blunt cap: only the K most likely tokens stay in the running, \
-        everything else is discarded before sampling.
+        A blunt cap on the shortlist: keep only the K highest-scoring words, throw \
+        everything else away, then choose among the survivors.
 
-        top-K = 1 is greedy decoding (always the single best token). Larger \
-        values let more of the field compete. Unlike top-P this ignores how the \
-        probability is shaped — it just counts.
+        • K = 1 is greedy decoding — always the single best word (see \
+        Deterministic).
+        • K = 40 (default) lets a healthy field compete.
+        • Large K barely restricts anything.
+
+        Unlike Top-P, it ignores *how* confident the model is — it just counts. \
+        Top-K and Top-P are often used together: K sets a hard ceiling, P trims \
+        adaptively underneath it.
+
+        Try this: drop K to 2 — the model gets very predictable, because it's only \
+        ever choosing between its two favorite words.
         """
     )
 
     static let repeatPenalty = KnobInfo(
         title: "Repeat penalty",
         body: """
-        Pushes down tokens the model has already used recently, to stop it \
-        looping ("the the the").
+        Discourages the model from reusing words it has already said, to stop \
+        loops like "the the the" or one phrase repeating.
 
-        It only acts on tokens already in the text, so it does nothing here \
-        until you tap a candidate above to mark it as already-said. Then raise \
-        the penalty and watch that token's bar shrink, often handing the win to \
-        a different word.
+        • 1.0 = off.
+        • 1.05–1.15 = gentle, usually enough.
+        • 1.5+ = aggressive; can start to distort wording or grammar.
+
+        It looks back over recent tokens and lowers the score of ones already used. \
+        For finer control, see Frequency and Presence penalties in Advanced.
+
+        Try this: if a reply ever gets stuck repeating itself, nudge this up by \
+        0.05 at a time until it breaks the loop.
+        """
+    )
+
+    // MARK: Advanced
+
+    static let minP = KnobInfo(
+        title: "Min-P",
+        body: """
+        A modern, quality-first filter. It throws out any word whose probability \
+        is below a fraction of the single best word's probability.
+
+        • 0.0 = off.
+        • 0.05 = keep only words at least 5% as likely as the top pick.
+        • Higher = stricter, fewer survivors.
+
+        Why people like it: it scales with the model's confidence automatically. \
+        When the model is sure, it keeps almost nothing else; when it's torn, it \
+        keeps more. Many find Min-P alone gives better results than Top-P + Top-K.
+
+        Try this: turn Top-P and Top-K off-ish (1.0 and high), set Min-P to 0.05, \
+        and raise temperature to 1.3. You get creativity without gibberish.
+        """
+    )
+
+    static let frequencyPenalty = KnobInfo(
+        title: "Frequency penalty",
+        body: """
+        Repetition control that *grows* with overuse: the more times a word has \
+        already appeared, the harder it gets pushed down next time.
+
+        • 0.0 = off.
+        • 0.1–0.5 = trims compulsive repetition while staying natural.
+        • High = the model actively avoids any word it has used, which can read as \
+        strained "thesaurus mode."
+
+        Pairs with Presence penalty: frequency scales with count, presence is a \
+        one-time hit. This is the same idea as OpenAI's frequency_penalty.
+
+        Try this: on a long answer that keeps hammering one term, raise this to ~0.3 \
+        and watch the vocabulary spread out.
+        """
+    )
+
+    static let presencePenalty = KnobInfo(
+        title: "Presence penalty",
+        body: """
+        Encourages new topics. As soon as a word has appeared even once, it takes \
+        a flat penalty — no matter how many times it shows up after.
+
+        • 0.0 = off.
+        • 0.1–0.6 = nudges the model toward fresh words and ideas.
+        • High = strong push to keep introducing something new.
+
+        Think of it as "reward novelty." Frequency penalty fights *repetition*; \
+        presence penalty fights *staying on the same subject*. Same idea as \
+        OpenAI's presence_penalty.
+
+        Try this: for a brainstorm, set presence to ~0.5 — the model keeps branching \
+        into new directions instead of circling one.
+        """
+    )
+
+    static let deterministic = KnobInfo(
+        title: "Deterministic (greedy)",
+        body: """
+        Turns off all randomness. The model always takes its single highest-scoring \
+        word, every time — this is called greedy decoding.
+
+        • Same prompt → same answer, word for word.
+        • Temperature, Top-K, Top-P, and Min-P stop mattering (there's no sampling \
+        to shape).
+        • Output is the most "expected" continuation: reliable, sometimes flat.
+
+        Great for: debugging, comparing prompts fairly, or when you want the model's \
+        single most-confident answer.
+
+        Try this: turn this on and resend the same message a few times — identical \
+        replies. Turn it off and the answers start to vary again.
+        """
+    )
+
+    static let seed = KnobInfo(
+        title: "Seed (reproducibility)",
+        body: """
+        Randomness needs a starting number — the seed. Normally it's different every \
+        time, so you get fresh answers. Lock it and the "random" choices repeat.
+
+        • Unlocked = a new seed each generation (normal, varied).
+        • Locked = the same seed reused, so a given prompt + tuning tends to \
+        reproduce the same reply.
+
+        This is a core research/learning tool: lock the seed, change ONE knob, and \
+        any difference you see is caused by that knob — not luck.
+
+        Note: reproducibility is best-effort here. Because the chat keeps the model \
+        "warm" between turns, a brand-new chat is the most reliable way to see an \
+        identical run. Tap Reroll to jump to a different fixed seed.
+        """
+    )
+
+    static let maxLength = KnobInfo(
+        title: "Max response length",
+        body: """
+        A hard ceiling on how many tokens (roughly word-pieces) the model may \
+        produce in one reply. It does not change *what* the model says, only how \
+        long it's allowed to run before being cut off.
+
+        • Lower = snappier, cheaper, faster replies; may cut off mid-thought.
+        • Higher = room for long, detailed answers; slower and uses more of the \
+        context window.
+
+        A token is about ¾ of a word on average, so 384 tokens ≈ 280–300 words.
+
+        Try this: set it low (~96) for quick back-and-forth, then high for an essay \
+        or a long code block, and feel the difference in speed.
         """
     )
 }

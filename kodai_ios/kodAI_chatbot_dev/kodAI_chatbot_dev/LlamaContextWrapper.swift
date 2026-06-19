@@ -16,7 +16,7 @@ nonisolated final class LlamaContextWrapper: @unchecked Sendable {
 
     private let model: OpaquePointer
     private let context: OpaquePointer
-    private let sampler: UnsafeMutablePointer<llama_sampler>
+    private var sampler: UnsafeMutablePointer<llama_sampler>
     private let batchSize: Int
     private let chatTemplate: String?
     private let log = AppLog(category: "LlamaContext")
@@ -73,21 +73,11 @@ nonisolated final class LlamaContextWrapper: @unchecked Sendable {
         }
 
         onWarmupStatus(.warmingTokenizer)
-        guard let samplerChain = llama_sampler_chain_init(llama_sampler_chain_default_params()) else {
+        guard let samplerChain = Self.makeSamplerChain(configuration.defaultSamplerKnobs) else {
             llama_free(loadedContext)
             llama_model_free(loadedModel)
             throw LocalModelRuntimeError.samplerCreateFailed
         }
-
-        llama_sampler_chain_add(samplerChain, llama_sampler_init_top_p(configuration.topP, 1))
-        llama_sampler_chain_add(samplerChain, llama_sampler_init_temp(configuration.temperature))
-        if configuration.repeatPenalty != 1.0 {
-            llama_sampler_chain_add(
-                samplerChain,
-                llama_sampler_init_penalties(128, configuration.repeatPenalty, 0.0, 0.0)
-            )
-        }
-        llama_sampler_chain_add(samplerChain, llama_sampler_init_dist(UInt32.random(in: 0...UInt32.max)))
 
         self.model = loadedModel
         self.context = loadedContext
@@ -114,6 +104,60 @@ nonisolated final class LlamaContextWrapper: @unchecked Sendable {
         cancellationLock.lock()
         cancellationRequested = true
         cancellationLock.unlock()
+    }
+
+    /// Rebuilds the sampler chain from live knobs. Generation reuses one cached
+    /// context (the model load is the expensive part), but the chain itself is
+    /// cheap, so we swap it per generation to honor the playground sliders
+    /// without reloading the model.
+    nonisolated func applySamplerKnobs(_ knobs: SamplerKnobs) {
+        guard let chain = Self.makeSamplerChain(knobs) else {
+            log.event("sampler rebuild failed, keeping previous chain")
+            return
+        }
+        llama_sampler_free(sampler)
+        sampler = chain
+    }
+
+    /// Builds a fresh sampler chain from live knobs.
+    ///
+    /// Order follows llama.cpp convention: repetition penalties first (they
+    /// reshape the raw scores), then truncation (top-k → min-p → top-p), then
+    /// temperature, then the final stochastic pick. Stages that would be no-ops
+    /// are skipped so the chain stays minimal.
+    ///
+    /// `deterministic` short-circuits to greedy (argmax) after penalties, so
+    /// repetition control still applies but all sampling/truncation is bypassed —
+    /// the same prompt then yields the same output.
+    private static func makeSamplerChain(
+        _ knobs: SamplerKnobs
+    ) -> UnsafeMutablePointer<llama_sampler>? {
+        guard let chain = llama_sampler_chain_init(llama_sampler_chain_default_params()) else {
+            return nil
+        }
+
+        if knobs.repeatPenalty != 1.0 || knobs.frequencyPenalty != 0.0 || knobs.presencePenalty != 0.0 {
+            llama_sampler_chain_add(
+                chain,
+                llama_sampler_init_penalties(128, knobs.repeatPenalty, knobs.frequencyPenalty, knobs.presencePenalty)
+            )
+        }
+
+        if knobs.deterministic {
+            llama_sampler_chain_add(chain, llama_sampler_init_greedy())
+            return chain
+        }
+
+        llama_sampler_chain_add(chain, llama_sampler_init_top_k(Int32(max(1, knobs.topK))))
+        if knobs.minP > 0 {
+            llama_sampler_chain_add(chain, llama_sampler_init_min_p(knobs.minP, 1))
+        }
+        llama_sampler_chain_add(chain, llama_sampler_init_top_p(knobs.topP, 1))
+        llama_sampler_chain_add(chain, llama_sampler_init_temp(knobs.temperature))
+
+        let seed = knobs.seed ?? UInt32.random(in: 0...UInt32.max)
+        llama_sampler_chain_add(chain, llama_sampler_init_dist(seed))
+        return chain
     }
 
     nonisolated func tokenize(_ prompt: String) throws -> [llama_token] {

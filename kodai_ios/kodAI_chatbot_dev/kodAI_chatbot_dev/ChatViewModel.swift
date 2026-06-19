@@ -94,18 +94,10 @@ final class ChatViewModel {
     /// message can be inspected later; pruned to the active thread on each send.
     private(set) var tokenHistories: [ChatMessage.ID: [TokenSnapshot]] = [:]
 
-    /// Most recent real next-token distribution, used to seed the sampler
-    /// playground's "Last token" source. Walks back from the newest message to
-    /// the latest step that actually weighed more than one candidate.
-    var latestTokenAlternatives: [TokenAlternative]? {
-        for message in messages.reversed() {
-            guard let history = tokenHistories[message.id] else { continue }
-            if let snapshot = history.last(where: { $0.alternatives.count > 1 }) {
-                return snapshot.alternatives
-            }
-        }
-        return nil
-    }
+    /// Live sampler tuning for the current chat. New chats reset to `.default`
+    /// (the model's shipped tuning); the Sampler Playground binds to this so its
+    /// sliders steer real generation. Not yet persisted per-session.
+    var samplerKnobs: SamplerKnobs = .default
 
     var activeProcessSummary: InferenceProcessSummary? {
         guard activeAssistantMessageID != nil, phase != .idle else { return nil }
@@ -286,7 +278,8 @@ final class ChatViewModel {
                 let stream = await inferenceService.generate(
                     messages: promptMessages,
                     promptStack: promptStack,
-                    contextPressurePercent: contextPressurePercent
+                    contextPressurePercent: contextPressurePercent,
+                    samplerKnobs: samplerKnobs
                 )
 
                 for try await event in stream {
@@ -475,6 +468,7 @@ final class ChatViewModel {
         activeAssistantMessageID = nil
         generatedTokenCount = 0
         currentPhaseHistory = []
+        samplerKnobs = .default
         setPhase(.idle)
         log.event("generation state reset for new chat", since: sendStartedAt)
     }
@@ -1498,7 +1492,9 @@ final class ChatViewModel {
         let stream = await inferenceService.generate(
             messages: [ChatMessage(role: .user, text: prompt)],
             promptStack: makePromptStack(),
-            contextPressurePercent: contextPressurePercent
+            contextPressurePercent: contextPressurePercent,
+            // Summaries stay on the shipped tuning so user slider tweaks don't garble them.
+            samplerKnobs: .default
         )
 
         for try await event in stream {

@@ -2,257 +2,269 @@
 //  SamplerPlaygroundView.swift
 //  kodAI_chatbot_dev
 //
-//  The interactive card behind the toolbar's sliders icon. Drag the knobs and
-//  watch the model's next-token distribution reshape live — entirely from
-//  captured data, with no inference. See `SamplerPlayground` for the math.
+//  The tuning card behind the kodAI title pill. Every control here edits the
+//  live `SamplerKnobs` bound from the chat view model, so changes steer the next
+//  real generation — there is no mock visualization. Core knobs live on the card;
+//  the rest sit behind an Advanced screen. Each row has an ⓘ that opens a
+//  plain-language helper card (see `KnobInfo`). iOS 26 native throughout.
 //
 
-import KodaiKernel
 import SwiftUI
 
-struct SamplerPlaygroundView: View {
-    /// Real captured alternatives from the most recent token, if any exist yet.
-    let liveAlternatives: [TokenAlternative]?
+// MARK: - Tuning card (primary)
+
+struct ModelTuningCard: View {
+    /// The live tuning, owned by the chat view model so edits drive generation.
+    @Binding var knobs: SamplerKnobs
 
     @Environment(\.dismiss) private var dismiss
-    @State private var knobs = SamplerKnobs.default
-    @State private var seen: Set<Int32> = []
-    @State private var source: Source = .example
     @State private var info: KnobInfo?
-
-    enum Source: String, CaseIterable, Identifiable {
-        case example = "Example"
-        case live = "Last token"
-        var id: String { rawValue }
-    }
-
-    private var hasLive: Bool { (liveAlternatives?.count ?? 0) > 1 }
-
-    private var candidates: [SamplerCandidate] {
-        switch source {
-        case .example:
-            return SamplerPlayground.exampleCandidates
-        case .live:
-            return (liveAlternatives ?? []).map(SamplerCandidate.init(alternative:))
-        }
-    }
-
-    private var outcome: SamplerPlayground.Outcome {
-        SamplerPlayground.reshape(candidates, knobs: knobs, seenTokenIDs: seen)
-    }
-
-    private var maxBarProbability: Float {
-        max(outcome.candidates.map(\.probability).max() ?? 1, 0.0001)
-    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    if hasLive { sourcePicker }
-                    contextCard
-                    distributionBars
-                    readout
-                    knobSection
-                    resetButton
+                GlassEffectContainer(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        introNote
+                        coreKnobs
+                        advancedLink
+                        resetButton
+                    }
                 }
                 .padding()
-                .padding(.bottom, 24)
+                .padding(.bottom, 12)
             }
-            .background(Color.black.opacity(0.92).ignoresSafeArea())
-            .navigationTitle("Sampler Playground")
+            .scrollBounceBehavior(.basedOnSize)
+            .navigationTitle("Tuning")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
             }
-            .sheet(item: $info) { infoSheet($0) }
+            .sheet(item: $info) { KnobInfoSheet(info: $0) }
         }
-        .onChange(of: source) { _, _ in clampTopK() }
+        .presentationDetents([.medium, .large])
+        .presentationBackground(.regularMaterial)
     }
 
-    // MARK: Source
-
-    private var sourcePicker: some View {
-        Picker("Distribution", selection: $source) {
-            ForEach(Source.allCases) { Text($0.rawValue).tag($0) }
-        }
-        .pickerStyle(.segmented)
+    private var introNote: some View {
+        Text("Tune how the model writes its replies. Changes apply to the next message in this chat; a brand-new chat resets to the defaults. Tap ⓘ on any control to learn what it does.")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var contextCard: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(source == .example ? "Predicting the next word after" : "The model's actual last choice")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            if source == .example {
-                Text("“\(SamplerPlayground.exampleContext) …”")
-                    .font(.callout.italic())
-                    .foregroundStyle(.white.opacity(0.85))
-            } else {
-                Text("Reshaping the top candidates the model weighed for its most recent token.")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.7))
+    private var coreKnobs: some View {
+        TuningGroup {
+            TuningRow(title: "Temperature", value: String(format: "%.2f", knobs.temperature), info: .temperature, onInfo: showInfo) {
+                Slider(value: $knobs.temperature, in: SamplerKnobs.minTemperature...2.0, step: 0.05)
+            }
+            .modifier(DimmedWhenGreedy(active: knobs.deterministic))
+
+            Divider().opacity(0.4)
+
+            TuningRow(title: "Top-K", value: "\(knobs.topK)", info: .topK, onInfo: showInfo) {
+                Slider(value: intBinding(\.topK), in: 1...100, step: 1)
+            }
+            .modifier(DimmedWhenGreedy(active: knobs.deterministic))
+
+            Divider().opacity(0.4)
+
+            TuningRow(title: "Top-P", value: String(format: "%.2f", knobs.topP), info: .topP, onInfo: showInfo) {
+                Slider(value: $knobs.topP, in: 0.0...1.0, step: 0.01)
+            }
+            .modifier(DimmedWhenGreedy(active: knobs.deterministic))
+
+            Divider().opacity(0.4)
+
+            TuningRow(title: "Repeat penalty", value: String(format: "%.2f", knobs.repeatPenalty), info: .repeatPenalty, onInfo: showInfo) {
+                Slider(value: $knobs.repeatPenalty, in: 1.0...2.0, step: 0.05)
+            }
+
+            Divider().opacity(0.4)
+
+            TuningRow(title: "Max response length", value: "\(knobs.maxOutputTokens)", info: .maxLength, onInfo: showInfo) {
+                Slider(value: intBinding(\.maxOutputTokens), in: 64...1024, step: 32)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: Distribution
-
-    private var distributionBars: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Tap a token to mark it as already-said")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-
-            ForEach(outcome.candidates) { candidate in
-                candidateRow(candidate)
-            }
-        }
-        .animation(.snappy(duration: 0.28), value: knobs)
-        .animation(.snappy(duration: 0.28), value: seen)
-        .animation(.snappy(duration: 0.28), value: source)
-    }
-
-    private func candidateRow(_ candidate: ReshapedCandidate) -> some View {
-        Button {
-            toggleSeen(candidate.tokenID)
+    private var advancedLink: some View {
+        NavigationLink {
+            AdvancedTuningView(knobs: $knobs, info: $info)
         } label: {
-            HStack(spacing: 8) {
-                Text(TokenVisuals.displayText(candidate.text))
-                    .font(.caption.monospaced())
-                    .foregroundStyle(candidate.isCut ? .white.opacity(0.3) : .white.opacity(0.9))
-                    .strikethrough(candidate.isCut, color: .white.opacity(0.3))
-                    .frame(width: 78, alignment: .leading)
-                    .lineLimit(1)
-
-                if candidate.isSeen {
-                    Image(systemName: "arrow.uturn.backward.circle.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.orange.opacity(0.8))
-                }
-
-                probabilityBar(candidate)
-
-                Text("\(Int((candidate.probability * 100).rounded()))%")
-                    .font(.caption2.monospacedDigit())
-                    .foregroundStyle(candidate.isCut ? .white.opacity(0.3) : .white.opacity(0.55))
-                    .frame(width: 34, alignment: .trailing)
+            HStack {
+                Label("Advanced", systemImage: "slider.horizontal.2.square")
+                    .font(.subheadline.weight(.medium))
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 18))
     }
 
-    private func probabilityBar(_ candidate: ReshapedCandidate) -> some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                // Ghost of the raw probability, so the before/after shift is visible.
-                Capsule()
-                    .fill(Color.white.opacity(0.1))
-                    .frame(width: barWidth(candidate.rawProbability, in: geo.size.width))
+    private var resetButton: some View {
+        Button {
+            withAnimation(.snappy) { knobs = .default }
+        } label: {
+            Label("Reset to defaults", systemImage: "arrow.counterclockwise")
+                .font(.subheadline)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 18))
+    }
 
-                Capsule()
-                    .fill(barColor(candidate))
-                    .frame(width: barWidth(candidate.probability, in: geo.size.width))
+    private func showInfo(_ knobInfo: KnobInfo) { info = knobInfo }
+
+    /// Bridges an Int knob to the Double a `Slider` needs.
+    private func intBinding(_ keyPath: WritableKeyPath<SamplerKnobs, Int>) -> Binding<Double> {
+        Binding(
+            get: { Double(knobs[keyPath: keyPath]) },
+            set: { knobs[keyPath: keyPath] = Int($0) }
+        )
+    }
+}
+
+// MARK: - Advanced screen
+
+struct AdvancedTuningView: View {
+    @Binding var knobs: SamplerKnobs
+    /// Shared with the card so ⓘ helper sheets present from the same root.
+    @Binding var info: KnobInfo?
+
+    var body: some View {
+        ScrollView {
+            GlassEffectContainer(spacing: 16) {
+                VStack(alignment: .leading, spacing: 16) {
+                    introNote
+                    samplingGroup
+                    repetitionGroup
+                }
             }
-            .frame(maxHeight: .infinity, alignment: .center)
+            .padding()
+            .padding(.bottom, 12)
         }
-        .frame(height: 10)
+        .scrollBounceBehavior(.basedOnSize)
+        .navigationTitle("Advanced")
+        .navigationBarTitleDisplayMode(.inline)
+        .background(.regularMaterial)
     }
 
-    private func barWidth(_ probability: Float, in totalWidth: CGFloat) -> CGFloat {
-        let fraction = CGFloat(probability / maxBarProbability)
-        return max(2, totalWidth * min(1, fraction))
+    private var introNote: some View {
+        Text("Finer control over how the model picks words and avoids repeating itself. Safe to experiment — Reset on the previous screen restores everything.")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func barColor(_ candidate: ReshapedCandidate) -> Color {
-        if candidate.isCut { return Color.white.opacity(0.12) }
-        if candidate.isWinner { return Color.green.opacity(0.75) }
-        return Color.white.opacity(0.4)
-    }
+    private var samplingGroup: some View {
+        TuningGroup {
+            TuningRow(title: "Min-P", value: String(format: "%.2f", knobs.minP), info: .minP, onInfo: showInfo) {
+                Slider(value: $knobs.minP, in: 0.0...1.0, step: 0.01)
+            }
+            .modifier(DimmedWhenGreedy(active: knobs.deterministic))
 
-    // MARK: Readout
+            Divider().opacity(0.4)
 
-    private var readout: some View {
-        HStack {
-            stat(outcome.winner.map { TokenVisuals.displayText($0.text) } ?? "—", "picks")
-            Spacer()
-            stat("\(outcome.survivingCount)/\(candidates.count)", "candidates")
-            Spacer()
-            stat(String(format: "%.2f", outcome.entropy), "entropy (nats)")
+            TuningRow(title: "Deterministic", value: knobs.deterministic ? "On" : "Off", info: .deterministic, onInfo: showInfo) {
+                Toggle("Deterministic (greedy)", isOn: $knobs.deterministic)
+                    .labelsHidden()
+            }
+
+            Divider().opacity(0.4)
+
+            seedRow
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 14)
-        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
     }
 
-    private func stat(_ value: String, _ label: String) -> some View {
-        VStack(spacing: 2) {
-            Text(value)
-                .font(.subheadline.monospacedDigit().weight(.semibold))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+    private var seedRow: some View {
+        TuningRow(title: "Seed", value: knobs.seed.map { "\($0)" } ?? "Random", info: .seed, onInfo: showInfo) {
+            HStack(spacing: 12) {
+                Toggle("Lock seed", isOn: seedLocked)
+                    .labelsHidden()
+                if knobs.seed != nil {
+                    Button {
+                        knobs.seed = UInt32.random(in: 0...UInt32.max)
+                    } label: {
+                        Label("Reroll", systemImage: "die.face.5")
+                            .font(.caption.weight(.medium))
+                    }
+                    .buttonStyle(.bordered)
+                }
+                Spacer(minLength: 0)
+            }
         }
+    }
+
+    private var repetitionGroup: some View {
+        TuningGroup {
+            TuningRow(title: "Frequency penalty", value: String(format: "%.2f", knobs.frequencyPenalty), info: .frequencyPenalty, onInfo: showInfo) {
+                Slider(value: $knobs.frequencyPenalty, in: 0.0...2.0, step: 0.05)
+            }
+
+            Divider().opacity(0.4)
+
+            TuningRow(title: "Presence penalty", value: String(format: "%.2f", knobs.presencePenalty), info: .presencePenalty, onInfo: showInfo) {
+                Slider(value: $knobs.presencePenalty, in: 0.0...2.0, step: 0.05)
+            }
+        }
+    }
+
+    private func showInfo(_ knobInfo: KnobInfo) { info = knobInfo }
+
+    private var seedLocked: Binding<Bool> {
+        Binding(
+            get: { knobs.seed != nil },
+            set: { locked in
+                knobs.seed = locked ? (knobs.seed ?? UInt32.random(in: 0...UInt32.max)) : nil
+            }
+        )
+    }
+}
+
+// MARK: - Shared row + group
+
+/// A glass card that groups related rows.
+private struct TuningGroup<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(spacing: 10) {
+            content
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
         .frame(maxWidth: .infinity)
+        .glassEffect(.regular, in: .rect(cornerRadius: 20))
     }
+}
 
-    // MARK: Knobs
+/// One labeled control row: title · ⓘ · value on top, the control beneath.
+private struct TuningRow<Control: View>: View {
+    let title: String
+    let value: String
+    let info: KnobInfo
+    let onInfo: (KnobInfo) -> Void
+    @ViewBuilder var control: Control
 
-    private var knobSection: some View {
-        VStack(spacing: 18) {
-            knob(
-                title: "Temperature",
-                value: String(format: "%.2f", knobs.temperature),
-                info: .temperature
-            ) {
-                Slider(value: $knobs.temperature, in: SamplerPlayground.minTemperature...2.0, step: 0.05)
-            }
-
-            knob(
-                title: "Top-P",
-                value: String(format: "%.2f", knobs.topP),
-                info: .topP
-            ) {
-                Slider(value: $knobs.topP, in: 0.0...1.0, step: 0.01)
-            }
-
-            knob(
-                title: "Top-K",
-                value: "\(min(knobs.topK, candidates.count)) / \(candidates.count)",
-                info: .topK
-            ) {
-                Slider(value: topKBinding, in: 1...Double(max(candidates.count, 1)), step: 1)
-            }
-
-            knob(
-                title: "Repeat penalty",
-                value: String(format: "%.2f", knobs.repeatPenalty),
-                info: .repeatPenalty
-            ) {
-                Slider(value: $knobs.repeatPenalty, in: 1.0...2.0, step: 0.05)
-            }
-        }
-    }
-
-    private func knob(
-        title: String,
-        value: String,
-        info knobInfo: KnobInfo,
-        @ViewBuilder slider: () -> some View
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Text(title)
                     .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.white)
                 Button {
-                    info = knobInfo
+                    onInfo(info)
                 } label: {
                     Image(systemName: "info.circle")
                         .font(.caption)
@@ -263,71 +275,46 @@ struct SamplerPlaygroundView: View {
                 Spacer()
                 Text(value)
                     .font(.caption.monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(.secondary)
             }
-            slider()
-                .tint(.green.opacity(0.85))
+            control
         }
     }
+}
 
-    private var topKBinding: Binding<Double> {
-        Binding(
-            get: { Double(min(knobs.topK, max(candidates.count, 1))) },
-            set: { knobs.topK = Int($0) }
-        )
+/// Dims and disables a row when greedy decoding makes it irrelevant.
+private struct DimmedWhenGreedy: ViewModifier {
+    let active: Bool
+    func body(content: Content) -> some View {
+        content
+            .disabled(active)
+            .opacity(active ? 0.35 : 1)
     }
+}
 
-    private var resetButton: some View {
-        Button {
-            withAnimation(.snappy) {
-                knobs = .default
-                seen = []
-            }
-        } label: {
-            Label("Reset", systemImage: "arrow.counterclockwise")
-                .font(.subheadline)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.white.opacity(0.8))
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
-    }
+// MARK: - Info helper sheet
 
-    // MARK: Info sheet
+private struct KnobInfoSheet: View {
+    let info: KnobInfo
+    @Environment(\.dismiss) private var dismiss
 
-    private func infoSheet(_ knobInfo: KnobInfo) -> some View {
+    var body: some View {
         NavigationStack {
             ScrollView {
-                Text(knobInfo.body)
-                    .font(.body)
-                    .foregroundStyle(.white.opacity(0.9))
+                Text(info.body)
+                    .font(.callout)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding()
             }
-            .background(Color.black.opacity(0.92).ignoresSafeArea())
-            .navigationTitle(knobInfo.title)
+            .navigationTitle(info.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { info = nil }
+                    Button("Done") { dismiss() }
                 }
             }
         }
-        .presentationDetents([.medium])
-    }
-
-    // MARK: Actions
-
-    private func toggleSeen(_ tokenID: Int32) {
-        if seen.contains(tokenID) {
-            seen.remove(tokenID)
-        } else {
-            seen.insert(tokenID)
-        }
-    }
-
-    private func clampTopK() {
-        knobs.topK = min(knobs.topK, max(candidates.count, 1))
+        .presentationDetents([.medium, .large])
+        .presentationBackground(.regularMaterial)
     }
 }

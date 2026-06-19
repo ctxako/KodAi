@@ -29,7 +29,8 @@ actor LocalModelRuntime {
 
     func generate(
         messages: [ChatMessage],
-        promptStack: ModelPromptStack
+        promptStack: ModelPromptStack,
+        samplerKnobs: SamplerKnobs
     ) -> AsyncThrowingStream<InferenceEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task.detached(priority: .userInitiated) { [weak self] in
@@ -39,7 +40,7 @@ actor LocalModelRuntime {
                 }
 
                 do {
-                    try await self.run(messages: messages, promptStack: promptStack, continuation: continuation)
+                    try await self.run(messages: messages, promptStack: promptStack, samplerKnobs: samplerKnobs, continuation: continuation)
                 } catch is CancellationError {
                     await self.logCancellation()
                     continuation.yield(.cancelled)
@@ -64,6 +65,7 @@ actor LocalModelRuntime {
     private func run(
         messages: [ChatMessage],
         promptStack: ModelPromptStack,
+        samplerKnobs: SamplerKnobs,
         continuation: AsyncThrowingStream<InferenceEvent, Error>.Continuation
     ) async throws {
         let context = try await loadContext(continuation: continuation)
@@ -76,6 +78,7 @@ actor LocalModelRuntime {
             promptStack: promptStack,
             context: context,
             configuration: configuration,
+            samplerKnobs: samplerKnobs,
             continuation: continuation
         )
 
@@ -141,11 +144,25 @@ nonisolated struct LocalModelConfiguration: Sendable {
     let maxGeneratedTokens: Int32
     let temperature: Float
     let topP: Float
+    let topK: Int32
     let batchSize: Int32
     let repeatPenalty: Float
 
     var expectedModelFileName: String {
         "\(modelResourceName).\(modelResourceExtension)"
+    }
+
+    /// The sampler tuning a fresh chat starts from. Bridges the loose config
+    /// fields into the `SamplerKnobs` value the playground edits and the sampler
+    /// chain is rebuilt from, so defaults have a single source of truth.
+    var defaultSamplerKnobs: SamplerKnobs {
+        SamplerKnobs(
+            temperature: temperature,
+            topP: topP,
+            topK: Int(topK),
+            repeatPenalty: repeatPenalty,
+            maxOutputTokens: Int(maxGeneratedTokens)
+        )
     }
 
     nonisolated static let lfm2_5_1_2B_Instruct_Q4_K_M = LocalModelConfiguration(
@@ -156,6 +173,7 @@ nonisolated struct LocalModelConfiguration: Sendable {
         maxGeneratedTokens: 384,
         temperature: 0.45,
         topP: 0.92,
+        topK: 40,
         batchSize: 64,
         repeatPenalty: 1.05
     )

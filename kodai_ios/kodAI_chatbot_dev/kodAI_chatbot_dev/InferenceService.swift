@@ -15,7 +15,8 @@ actor InferenceService {
     func generate(
         messages: [ChatMessage],
         promptStack: ModelPromptStack,
-        contextPressurePercent: Int
+        contextPressurePercent: Int,
+        samplerKnobs: SamplerKnobs
     ) async -> AsyncThrowingStream<InferenceEvent, Error> {
         AsyncThrowingStream { continuation in
             Task {
@@ -46,7 +47,8 @@ actor InferenceService {
 
                 let stream = await runtime.generate(
                     messages: messages,
-                    promptStack: constrainedPromptStack.withAmbientContext(ambientResult.context)
+                    promptStack: constrainedPromptStack.withAmbientContext(ambientResult.context),
+                    samplerKnobs: samplerKnobs
                 )
 
                 do {

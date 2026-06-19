@@ -56,7 +56,8 @@ struct kodAI_chatbot_devTests {
             print("[PromptTest] prompt=\(prompt.debugDescription)")
             let stream = await runtime.generate(
                 messages: [ChatMessage(role: .user, text: prompt)],
-                promptStack: promptStack
+                promptStack: promptStack,
+                samplerKnobs: .default
             )
             for try await event in stream {
                 switch event {

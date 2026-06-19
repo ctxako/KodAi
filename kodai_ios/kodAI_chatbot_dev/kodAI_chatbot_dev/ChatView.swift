@@ -13,7 +13,7 @@ struct ChatView: View {
     @State private var viewModel = ChatViewModel()
     @State private var expandedProcessMessageIDs: Set<ChatMessage.ID> = []
     @State private var isMenuOpen = false
-    @State private var isPlaygroundPresented = false
+    @State private var isTuningPresented = false
     @State private var commentEditor: MessageCommentEditor?
     @AppStorage(PrefKey.messageTextSize) private var messageTextSize: MessageTextSize = .small
     @AppStorage(PrefKey.reduceMotion) private var reduceMotion = false
@@ -69,9 +69,8 @@ struct ChatView: View {
                     onConfirm: viewModel.confirmSummaryCompaction
                 )
             }
-            .sheet(isPresented: $isPlaygroundPresented) {
-                SamplerPlaygroundView(
-                    liveAlternatives: viewModel.latestTokenAlternatives,
+            .sheet(isPresented: $isTuningPresented) {
+                ModelTuningCard(
                     knobs: Binding(
                         get: { viewModel.samplerKnobs },
                         set: { viewModel.samplerKnobs = $0 }
@@ -250,12 +249,26 @@ struct ChatView: View {
                 .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Capsule())
                 .accessibilityLabel("Menu")
 
-                Text("kodAI")
-                    .font(.headline)
-                    .foregroundStyle(.white)
+                Button {
+                    isTuningPresented = true
+                    Haptics.lightTap()
+                } label: {
+                    HStack(spacing: 5) {
+                        Text("kodAI")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.6))
+                    }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 7)
-                    .glassEffect(.regular.tint(ChatPalette.elevatedSurface), in: Capsule())
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Capsule())
+                .accessibilityLabel("Model tuning")
+                .accessibilityHint("Adjust how the model writes replies")
 
                 Spacer(minLength: 0)
 
@@ -280,18 +293,6 @@ struct ChatView: View {
                     in: Capsule()
                 )
                 .accessibilityLabel("Surprise highlighting")
-
-                Button {
-                    isPlaygroundPresented = true
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .frame(width: 38, height: 36)
-                }
-                .buttonStyle(.plain)
-                .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Capsule())
-                .accessibilityLabel("Sampler playground")
             }
 
             if let warmupStatus = viewModel.warmupStatus {

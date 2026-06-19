@@ -41,9 +41,13 @@ actor LlamaRuntime {
         promptStack: ModelPromptStack,
         context: LlamaContextWrapper,
         configuration: LocalModelConfiguration,
+        samplerKnobs: SamplerKnobs,
         continuation: AsyncThrowingStream<InferenceEvent, Error>.Continuation
     ) async throws -> GenerationFinishReason {
         try Task.checkCancellation()
+
+        context.applySamplerKnobs(samplerKnobs)
+        log.event("sampler knobs temp=\(samplerKnobs.temperature) topP=\(samplerKnobs.topP) topK=\(samplerKnobs.topK) repeat=\(samplerKnobs.repeatPenalty)")
 
         continuation.yield(.phase(.formattingPrompt))
         log.event("prompt formatting started")
@@ -53,11 +57,13 @@ actor LlamaRuntime {
         log.event("raw formatted prompt sent to llama.cpp=\(formattedPrompt.debugDescription)")
         #endif
 
+        let maxOutputTokens = Int32(max(1, samplerKnobs.maxOutputTokens))
+
         continuation.yield(.phase(.tokenizing))
         log.event("tokenization started")
         let promptTokens = try context.tokenize(formattedPrompt)
         log.event(
-            "prompt messages=\(promptBuildResult.includedMessageCount) promptTokens=\(promptTokens.count) maxGeneratedTokens=\(configuration.maxGeneratedTokens) historyIncluded=\(promptBuildResult.historyIncluded)"
+            "prompt messages=\(promptBuildResult.includedMessageCount) promptTokens=\(promptTokens.count) maxOutputTokens=\(maxOutputTokens) historyIncluded=\(promptBuildResult.historyIncluded)"
         )
         #if DEBUG
         log.event("first 20 prompt token ids=\(Array(promptTokens.prefix(20)))")
@@ -76,7 +82,7 @@ actor LlamaRuntime {
 
         var yieldedCharacterCount = 0
         let finishReason = try context.decode(
-            maxTokens: configuration.maxGeneratedTokens,
+            maxTokens: maxOutputTokens,
             onDecision: { decision in
                 continuation.yield(.tokenDecision(decision))
             },
