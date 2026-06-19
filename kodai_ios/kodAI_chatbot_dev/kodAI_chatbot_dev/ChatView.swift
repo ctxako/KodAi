@@ -21,8 +21,6 @@ struct ChatView: View {
     @AppStorage(PrefKey.surpriseHighlighting) private var surpriseHighlighting = false
     @State private var isMessageListNearBottom = true
     @FocusState private var isInputFocused: Bool
-    @State private var isAttachmentMenuOpen = false
-
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
@@ -31,12 +29,6 @@ struct ChatView: View {
 
                 if isMenuOpen {
                     menuOverlay(width: min(geometry.size.width * 0.83, 326))
-                }
-
-                if isAttachmentMenuOpen {
-                    attachmentMenuOverlay
-                        .transition(.opacity.combined(with: .scale(scale: 0.93, anchor: .bottomLeading)))
-                        .zIndex(4)
                 }
             }
             .animation(.easeInOut(duration: 0.22), value: isMenuOpen)
@@ -137,10 +129,10 @@ struct ChatView: View {
                 text: $viewModel.inputText,
                 isGenerating: viewModel.isGenerating,
                 isInputFocused: $isInputFocused,
-                onOpenPrompts: {
-                    withAnimation(.spring(duration: 0.25)) {
-                        isAttachmentMenuOpen.toggle()
-                    }
+                modeSelection: assistantModeBinding,
+                onQuickSend: { prompt in
+                    viewModel.inputText = prompt
+                    viewModel.send()
                 },
                 onSend: {
                     Haptics.lightTap()
@@ -425,36 +417,10 @@ struct ChatView: View {
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-
-                quickSendChips
             }
-
-            AssistantModeSelector(selection: assistantModeBinding)
         }
         .frame(maxWidth: .infinity, minHeight: 280, alignment: .center)
         .padding(20)
-    }
-
-    private var quickSendChips: some View {
-        let chips: [(label: String, prompt: String)] = [
-            ("Creative Essay", "Write an essay comparing the leadership styles of Darth Vader and SpongeBob SquarePants."),
-            ("Subtle Spice", "Is it ever justified to lie to someone for their own good? Defend your answer."),
-            ("Light Stress", "List 5 ways dreams and reality differ, then pick the most important one and argue why.")
-        ]
-        return HStack(spacing: 8) {
-            ForEach(chips, id: \.label) { chip in
-                Button(chip.label) {
-                    viewModel.inputText = chip.prompt
-                    viewModel.send()
-                }
-                .font(.caption)
-                .fontWeight(.medium)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background(.ultraThinMaterial, in: Capsule())
-                .foregroundStyle(.primary)
-            }
-        }
     }
 
     private var assistantModeBinding: Binding<AssistantMode> {
@@ -469,59 +435,6 @@ struct ChatView: View {
         return activeSession.messages.isEmpty
             && activeSession.streamID == nil
             && !viewModel.favoriteStreams.isEmpty
-    }
-}
-
-// MARK: - Attachment Menu
-
-private extension ChatView {
-    var attachmentMenuOverlay: some View {
-        ZStack(alignment: .bottomLeading) {
-            Color.clear
-                .contentShape(Rectangle())
-                .ignoresSafeArea()
-                .onTapGesture {
-                    withAnimation(.spring(duration: 0.2)) {
-                        isAttachmentMenuOpen = false
-                    }
-                }
-
-            VStack(alignment: .leading, spacing: 0) {
-                attachmentRow(icon: "camera", label: "Camera")
-                attachmentRow(icon: "photo.on.rectangle.angled", label: "Photos")
-                attachmentRow(icon: "paperclip", label: "Files")
-                attachmentRow(icon: "puzzlepiece", label: "Plugins")
-            }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 8)
-            .background(Color(white: 0.1).opacity(0.97), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .padding(.leading, 16)
-            .padding(.bottom, 96)
-        }
-    }
-
-    func attachmentRow(icon: String, label: String) -> some View {
-        Button {
-            withAnimation(.spring(duration: 0.2)) {
-                isAttachmentMenuOpen = false
-            }
-        } label: {
-            HStack(spacing: 16) {
-                Image(systemName: icon)
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundStyle(.white)
-                    .frame(width: 52, height: 52)
-                    .background(Color(white: 0.22), in: Circle())
-
-                Text(label)
-                    .font(.title3)
-                    .foregroundStyle(.white)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 }
 

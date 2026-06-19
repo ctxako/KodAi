@@ -1,12 +1,19 @@
 import KodaiKernel
 import SwiftUI
 
+private let quickChips: [(label: String, prompt: String)] = [
+    ("Creative Essay", "Write an essay comparing the leadership styles of Darth Vader and SpongeBob SquarePants."),
+    ("Subtle Spice", "Is it ever justified to lie to someone for their own good? Defend your answer."),
+    ("Light Stress", "List 5 ways dreams and reality differ, then pick the most important one and argue why.")
+]
+
 struct InputBar: View {
     @Binding var text: String
 
     let isGenerating: Bool
     let isInputFocused: FocusState<Bool>.Binding
-    let onOpenPrompts: (() -> Void)?
+    @Binding var modeSelection: AssistantMode
+    let onQuickSend: (String) -> Void
     let onSend: () -> Void
     let onStop: () -> Void
     let onSpeechInput: (() -> Void)?
@@ -44,16 +51,28 @@ struct InputBar: View {
             GlassEffectContainer(spacing: 8) {
                 HStack(alignment: .bottom, spacing: 8) {
                     HStack(alignment: .center, spacing: 6) {
-                        if let onOpenPrompts {
-                            Button { onOpenPrompts() } label: {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(0.7))
-                                    .frame(width: 28, height: 28)
+                        Menu {
+                            Picker("Mode", selection: $modeSelection) {
+                                ForEach(AssistantMode.allCases) { mode in
+                                    Text(mode.title).tag(mode)
+                                }
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Quick prompts")
+                            .pickerStyle(.inline)
+
+                            Section("Quick Prompts") {
+                                ForEach(quickChips, id: \.label) { chip in
+                                    Button(chip.label) {
+                                        onQuickSend(chip.prompt)
+                                    }
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.7))
+                                .frame(width: 28, height: 28)
                         }
+                        .accessibilityLabel("Quick actions")
 
                         TextField("Ask KodAi", text: $text, axis: .vertical)
                             .textFieldStyle(.plain)
@@ -97,7 +116,7 @@ struct InputBar: View {
                             .accessibilityLabel("Send message")
                         }
                     }
-                    .padding(.leading, onOpenPrompts != nil ? 10 : 14)
+                    .padding(.leading, 10)
                     .padding(.trailing, 6)
                     .padding(.vertical, 6)
                     .liquidGlassPanel(tint: .clear, cornerRadius: 20)
