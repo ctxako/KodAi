@@ -27,8 +27,8 @@ import SwiftUI
 private enum GlobeLayout {
     static func positions(count: Int) -> [SCNVector3] {
         guard count > 0 else { return [] }
-        // More tokens → more turns, capped so the ribbon never becomes a blur.
-        let turns = Double(min(9, max(2, count / 14 + 2)))
+        // Scale smoothly with length so longer traces keep useful separation.
+        let turns = min(18, max(2, sqrt(Double(count)) * 0.8))
         var result: [SCNVector3] = []
         result.reserveCapacity(count)
         for i in 0..<count {
@@ -88,8 +88,9 @@ private struct GlobeSceneView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> SCNView {
         let view = SCNView()
-        view.backgroundColor = .black
-        view.antialiasingMode = .multisampling2X
+        view.backgroundColor = .clear
+        view.isOpaque = false
+        view.antialiasingMode = .multisampling4X
         view.scene = context.coordinator.buildScene()
         view.pointOfView = context.coordinator.cameraNode
 
@@ -113,7 +114,7 @@ private struct GlobeSceneView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: SCNView, context: Context) {
-        context.coordinator.tokens = tokens
+        context.coordinator.update(tokens: tokens)
         if let step = activeStep, step != context.coordinator.currentStep {
             let animated = !UIAccessibility.isReduceMotionEnabled
             context.coordinator.focus(step: step, animated: animated)
@@ -130,8 +131,10 @@ private struct GlobeSceneView: UIViewRepresentable {
         let cameraNode = SCNNode()
         private let globeNode = SCNNode()
         private var beadPositions: [Int: SCNVector3] = [:]
+        private var depthCuedNodes: [SCNNode] = []
         private var shardContainer: SCNNode?
         private var selectedBead: SCNNode?
+        private var renderedSteps: [Int] = []
 
         // Orientation = spin (to face the active bead) + manual drag offset.
         private var spinYaw: Float = 0
@@ -147,49 +150,61 @@ private struct GlobeSceneView: UIViewRepresentable {
 
         func buildScene() -> SCNScene {
             let scene = SCNScene()
+            scene.background.contents = UIColor.clear
 
             cameraNode.camera = SCNCamera()
-            cameraNode.position = SCNVector3(0, 0, 3.2)
+            cameraNode.camera?.fieldOfView = 48
+            cameraNode.position = SCNVector3(0, 0, 3.6)
             scene.rootNode.addChildNode(cameraNode)
-
-            let ambient = SCNNode()
-            ambient.light = SCNLight()
-            ambient.light?.type = .ambient
-            ambient.light?.intensity = 650
-            scene.rootNode.addChildNode(ambient)
-
-            let key = SCNNode()
-            key.light = SCNLight()
-            key.light?.type = .omni
-            key.light?.intensity = 900
-            key.position = SCNVector3(2, 3, 4)
-            scene.rootNode.addChildNode(key)
 
             buildGlobe()
             scene.rootNode.addChildNode(globeNode)
             return scene
         }
 
+        func update(tokens newTokens: [TokenSnapshot]) {
+            let steps = newTokens.map(\.step)
+            tokens = newTokens
+            guard steps != renderedSteps else { return }
+
+            let stepToRestore = currentStep ?? steps.first
+            buildGlobe()
+            if let stepToRestore, beadPositions[stepToRestore] != nil {
+                focus(step: stepToRestore, animated: false)
+            }
+        }
+
         private func buildGlobe() {
             globeNode.childNodes.forEach { $0.removeFromParentNode() }
             beadPositions.removeAll()
+            depthCuedNodes.removeAll()
+            selectedBead = nil
+            shardContainer = nil
+            renderedSteps = tokens.map(\.step)
 
             let positions = GlobeLayout.positions(count: tokens.count)
 
-            // Glass shell: transparent, non-depth-writing so interior beads and
-            // the back of the sphere stay visible through it.
+            // A nearly clear shell plus three restrained great-circle guides.
+            // Constant materials avoid the blown-out highlights produced by a
+            // two-sided physically based glass material.
             let shell = SCNSphere(radius: 0.97)
-            shell.segmentCount = 64
+            shell.segmentCount = 48
             let glass = SCNMaterial()
-            glass.diffuse.contents = UIColor(white: 0.78, alpha: 1)
-            glass.transparency = 0.10
-            glass.lightingModel = .blinn
+            glass.diffuse.contents = UIColor(red: 0.18, green: 0.55, blue: 0.72, alpha: 1)
+            glass.transparency = 0.025
+            glass.transparencyMode = .singleLayer
+            glass.blendMode = .screen
+            glass.lightingModel = .constant
             glass.isDoubleSided = true
             glass.writesToDepthBuffer = false
             shell.firstMaterial = glass
             let shellNode = SCNNode(geometry: shell)
-            shellNode.renderingOrder = 10 // draw after beads so it blends over them
+            shellNode.renderingOrder = -10
             globeNode.addChildNode(shellNode)
+
+            globeNode.addChildNode(makeGuideRing(eulerAngles: SCNVector3(0, 0, 0)))
+            globeNode.addChildNode(makeGuideRing(eulerAngles: SCNVector3(Float.pi / 2, 0, 0)))
+            globeNode.addChildNode(makeGuideRing(eulerAngles: SCNVector3(0, 0, Float.pi / 2)))
 
             // Ribbon: a single neutral line strip threading the chosen path. Color
             // lives on the beads; the thread just shows the order of decisions.
@@ -202,7 +217,8 @@ private struct GlobeSceneView: UIViewRepresentable {
                 let pos = positions[i]
                 beadPositions[token.step] = pos
 
-                let radius = 0.018 + 0.014 * CGFloat(min(1, token.entropy / TokenVisuals.entropyReferenceMax))
+                let densityScale = max(0.58, min(1, sqrt(140 / CGFloat(max(tokens.count, 1)))))
+                let radius = densityScale * (0.018 + 0.014 * CGFloat(min(1, token.entropy / TokenVisuals.entropyReferenceMax)))
                 let bead = SCNSphere(radius: radius)
                 let mat = SCNMaterial()
                 mat.diffuse.contents = UIColor(TokenVisuals.confidenceColor(token.selectedProbability))
@@ -211,10 +227,25 @@ private struct GlobeSceneView: UIViewRepresentable {
                 let node = SCNNode(geometry: bead)
                 node.position = pos
                 node.name = "bead:\(token.step)"
+                node.categoryBitMask = 2
                 globeNode.addChildNode(node)
+                depthCuedNodes.append(node)
+
+                // Keep the visual bead delicate while meeting a forgiving touch
+                // target through a larger invisible hit-test sphere.
+                let hitTarget = SCNSphere(radius: max(0.055, radius * 2.2))
+                let hitMaterial = SCNMaterial()
+                hitMaterial.colorBufferWriteMask = []
+                hitMaterial.writesToDepthBuffer = false
+                hitTarget.firstMaterial = hitMaterial
+                let hitNode = SCNNode(geometry: hitTarget)
+                hitNode.position = pos
+                hitNode.name = "bead:\(token.step)"
+                hitNode.categoryBitMask = 2
+                globeNode.addChildNode(hitNode)
 
                 if token.divergedFromGreedy {
-                    let moon = SCNSphere(radius: 0.012)
+                    let moon = SCNPyramid(width: 0.026, height: 0.036, length: 0.026)
                     let moonMat = SCNMaterial()
                     moonMat.diffuse.contents = UIColor.systemRed
                     moonMat.lightingModel = .constant
@@ -222,9 +253,14 @@ private struct GlobeSceneView: UIViewRepresentable {
                     let moonNode = SCNNode(geometry: moon)
                     moonNode.position = v_add(pos, v_scale(v_norm(pos), 0.045))
                     moonNode.name = "bead:\(token.step)" // tappable as the same token
+                    moonNode.categoryBitMask = 2
+                    moonNode.eulerAngles.z = .pi / 4
                     globeNode.addChildNode(moonNode)
+                    depthCuedNodes.append(moonNode)
                 }
             }
+
+            updateDepthCues()
         }
 
         private func makeRibbon(_ positions: [SCNVector3]) -> SCNNode {
@@ -241,10 +277,26 @@ private struct GlobeSceneView: UIViewRepresentable {
             )
             let geometry = SCNGeometry(sources: [source], elements: [element])
             let mat = SCNMaterial()
-            mat.diffuse.contents = UIColor(white: 1, alpha: 0.4)
+            mat.diffuse.contents = UIColor(white: 1, alpha: 0.18)
             mat.lightingModel = .constant
             geometry.firstMaterial = mat
             return SCNNode(geometry: geometry)
+        }
+
+        private func makeGuideRing(eulerAngles: SCNVector3) -> SCNNode {
+            let ring = SCNTorus(ringRadius: 0.974, pipeRadius: 0.0015)
+            ring.ringSegmentCount = 96
+            ring.pipeSegmentCount = 4
+            let material = SCNMaterial()
+            material.diffuse.contents = UIColor(red: 0.30, green: 0.82, blue: 0.94, alpha: 1)
+            material.transparency = 0.13
+            material.lightingModel = .constant
+            material.writesToDepthBuffer = false
+            ring.firstMaterial = material
+            let node = SCNNode(geometry: ring)
+            node.eulerAngles = eulerAngles
+            node.renderingOrder = -8
+            return node
         }
 
         // MARK: Focus + shards
@@ -259,6 +311,8 @@ private struct GlobeSceneView: UIViewRepresentable {
             let ring = sqrt(pos.x * pos.x + pos.z * pos.z)
             spinYaw = -atan2(pos.x, pos.z)
             spinPitch = atan2(pos.y, ring)
+            dragYaw = 0
+            dragPitch = 0
 
             applyOrientation(animated: animated)
             rebuildShards(for: step, at: pos)
@@ -272,9 +326,20 @@ private struct GlobeSceneView: UIViewRepresentable {
                 SCNTransaction.animationDuration = 0.55
                 SCNTransaction.animationTimingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 globeNode.eulerAngles = target
+                SCNTransaction.completionBlock = { [weak self] in
+                    self?.updateDepthCues()
+                }
                 SCNTransaction.commit()
             } else {
                 globeNode.eulerAngles = target
+                updateDepthCues()
+            }
+        }
+
+        private func updateDepthCues() {
+            for node in depthCuedNodes {
+                let z = node.presentation.worldPosition.z
+                node.opacity = z < -0.08 ? 0.24 : (z < 0.18 ? 0.58 : 1)
             }
         }
 
@@ -294,18 +359,9 @@ private struct GlobeSceneView: UIViewRepresentable {
 
             let container = SCNNode()
 
-            // The token's own text, billboarded just above its bead.
-            let label = makeLabelNode(
-                TokenVisuals.displayText(token.text),
-                color: .white,
-                scale: 0.16
-            )
-            label.position = v_add(pos, v_scale(v_norm(pos), 0.10))
-            container.addChildNode(label)
-
-            // Top-k alternatives as shards on a small ring in the bead's tangent
-            // plane; the actually-sampled one reads brightest.
-            let alts = token.alternatives
+            // Alternatives remain graphical here; readable labels live in the
+            // inspector, where they can never collide with one another.
+            let alts = Array(token.alternatives.prefix(5))
             if alts.count > 1 {
                 let n = v_norm(pos)
                 var u = v_cross(n, SCNVector3(0, 1, 0))
@@ -322,63 +378,18 @@ private struct GlobeSceneView: UIViewRepresentable {
                     let r = CGFloat(0.008 + 0.020 * alt.probability)
                     let shard = SCNSphere(radius: r)
                     let mat = SCNMaterial()
-                    mat.diffuse.contents = alt.isSelected
-                        ? UIColor.white
-                        : UIColor(white: 1, alpha: 0.45)
+                    let color = UIColor(TokenVisuals.confidenceColor(alt.probability))
+                    mat.diffuse.contents = color.withAlphaComponent(alt.isSelected ? 0.95 : 0.38)
                     mat.lightingModel = .constant
                     shard.firstMaterial = mat
                     let shardNode = SCNNode(geometry: shard)
                     shardNode.position = shardPos
                     container.addChildNode(shardNode)
-
-                    let altLabel = makeLabelNode(
-                        "\(TokenVisuals.displayText(alt.text)) \(Int((alt.probability * 100).rounded()))%",
-                        color: alt.isSelected ? .white : UIColor(white: 1, alpha: 0.6),
-                        scale: 0.085
-                    )
-                    altLabel.position = v_add(shardPos, v_scale(dir, 0.05))
-                    container.addChildNode(altLabel)
                 }
             }
 
             globeNode.addChildNode(container)
             shardContainer = container
-        }
-
-        /// A camera-facing text label: text rasterized to an image on a plane,
-        /// constrained to always billboard toward the viewer.
-        private func makeLabelNode(_ text: String, color: UIColor, scale: CGFloat) -> SCNNode {
-            let (image, size) = Self.textImage(text, color: color)
-            let aspect = size.height > 0 ? size.width / size.height : 1
-            let plane = SCNPlane(width: scale * aspect, height: scale)
-            let mat = SCNMaterial()
-            mat.diffuse.contents = image
-            mat.lightingModel = .constant
-            mat.isDoubleSided = true
-            mat.writesToDepthBuffer = false
-            plane.firstMaterial = mat
-            let node = SCNNode(geometry: plane)
-            node.renderingOrder = 20
-            let billboard = SCNBillboardConstraint()
-            billboard.freeAxes = .all
-            node.constraints = [billboard]
-            return node
-        }
-
-        private static func textImage(_ text: String, color: UIColor) -> (UIImage, CGSize) {
-            let font = UIFont.monospacedSystemFont(ofSize: 48, weight: .semibold)
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: font,
-                .foregroundColor: color,
-            ]
-            let bounds = (text as NSString).size(withAttributes: attrs)
-            let pad: CGFloat = 16
-            let canvas = CGSize(width: bounds.width + pad * 2, height: bounds.height + pad * 2)
-            let renderer = UIGraphicsImageRenderer(size: canvas)
-            let image = renderer.image { _ in
-                (text as NSString).draw(at: CGPoint(x: pad, y: pad), withAttributes: attrs)
-            }
-            return (image, canvas)
         }
 
         // MARK: Gestures
@@ -396,7 +407,8 @@ private struct GlobeSceneView: UIViewRepresentable {
             guard let view = scnView else { return }
             let point = gesture.location(in: view)
             let hits = view.hitTest(point, options: [
-                .searchMode: SCNHitTestSearchMode.closest.rawValue
+                .searchMode: SCNHitTestSearchMode.all.rawValue,
+                .categoryBitMask: 2,
             ])
             for hit in hits {
                 guard let name = hit.node.name, name.hasPrefix("bead:"),
@@ -415,7 +427,10 @@ struct GlobeView: View {
     let history: [TokenSnapshot]
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var activeStep: Int?
+    @State private var isInspectorExpanded = false
 
     /// Only tokens carrying a distribution map to beads; end-of-stream flush
     /// chunks (no alternatives) are dropped so the globe reflects real decisions.
@@ -425,20 +440,44 @@ struct GlobeView: View {
         tokens.first { $0.step == activeStep } ?? tokens.first
     }
 
+    private var activeIndex: Int {
+        tokens.firstIndex { $0.step == activeStep } ?? 0
+    }
+
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            LiquidGlassBackground()
 
-            if tokens.isEmpty {
-                emptyState
-            } else {
-                GlobeSceneView(tokens: tokens, activeStep: $activeStep)
-                    .ignoresSafeArea()
-                scrubber
-                focusedCard
+            RadialGradient(
+                colors: [ChatPalette.accentBlue.opacity(0.16), .clear],
+                center: .center,
+                startRadius: 20,
+                endRadius: 330
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                header
+
+                if tokens.isEmpty {
+                    emptyState
+                        .frame(maxHeight: .infinity)
+                } else {
+                    legend
+
+                    ZStack {
+                        GlobeSceneView(tokens: tokens, activeStep: $activeStep)
+                            .accessibilityHidden(true)
+                        playhead
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+
+                    timeline
+                    focusedCard
+                }
             }
-
-            header
         }
         .statusBarHidden()
         .onAppear { if activeStep == nil { activeStep = tokens.first?.step } }
@@ -447,48 +486,116 @@ struct GlobeView: View {
     // MARK: Chrome
 
     private var header: some View {
-        VStack {
-            HStack(alignment: .top) {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Token Globe")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(.white)
                 if !tokens.isEmpty {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Decision Globe")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white)
-                        Text("\(tokens.count) tokens · generation trace")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Spacer()
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title2)
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.white.opacity(0.85))
+                    Text("\(tokens.count) tokens · generated from top to bottom")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.5))
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
             Spacer()
+
+            Button { dismiss() } label: {
+                Image(systemName: "xmark")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .frame(width: 44, height: 44)
+                    .background(.white.opacity(0.1), in: Circle())
+            }
+            .accessibilityLabel("Close generation globe")
         }
+        .padding(.horizontal, 18)
+        .padding(.top, 10)
+        .padding(.bottom, 6)
     }
 
-    /// Vertical scrubber on the right edge: drag through generation time and the
-    /// globe spins the active token to front-center.
-    private var scrubber: some View {
-        HStack {
-            Spacer()
-            if tokens.count > 1 {
-                Slider(value: stepIndexBinding, in: 0...Double(tokens.count - 1), step: 1)
-                    .rotationEffect(.degrees(-90))
-                    .frame(width: 220)
-                    .tint(.white.opacity(0.7))
-                    .padding(.trailing, -78)
+    private var legend: some View {
+        HStack(spacing: 14) {
+            Label {
+                Text("color = likelihood")
+            } icon: {
+                Circle()
+                    .fill(TokenVisuals.confidenceColor(0.75))
+                    .frame(width: 7, height: 7)
             }
+
+            Label {
+                Text("diamond = alternate pick")
+            } icon: {
+                Image(systemName: "diamond.fill")
+                    .foregroundStyle(.red)
+                    .font(.system(size: 7))
+            }
+
+            Label("time runs down", systemImage: "arrow.down")
         }
-        .padding(.trailing, 24)
+        .font(.caption2)
+        .foregroundStyle(.white.opacity(0.48))
+        .padding(.horizontal, 18)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var playhead: some View {
+        ZStack {
+            Circle()
+                .stroke(
+                    Color.cyan.opacity(0.42),
+                    style: StrokeStyle(lineWidth: 1, dash: [4, 4])
+                )
+                .frame(width: 52, height: 52)
+            Circle()
+                .fill(Color.cyan.opacity(0.72))
+                .frame(width: 4, height: 4)
+            Rectangle()
+                .fill(Color.cyan.opacity(0.28))
+                .frame(width: 70, height: 0.5)
+            Rectangle()
+                .fill(Color.cyan.opacity(0.28))
+                .frame(width: 0.5, height: 70)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private var timeline: some View {
+        HStack(spacing: 10) {
+            timelineButton(systemImage: "chevron.left", delta: -1, label: "Previous token")
+
+            Slider(value: stepIndexBinding, in: 0...Double(max(tokens.count - 1, 1)), step: 1)
+                .tint(.white.opacity(0.72))
+                .accessibilityLabel("Generation position")
+                .accessibilityValue("Decision \(activeIndex + 1) of \(tokens.count)")
+
+            timelineButton(systemImage: "chevron.right", delta: 1, label: "Next token")
+
+            Text("\(activeIndex + 1)/\(tokens.count)")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.white.opacity(0.55))
+                .frame(minWidth: 48, alignment: .trailing)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 6)
+    }
+
+    private func timelineButton(systemImage: String, delta: Int, label: String) -> some View {
+        Button {
+            let next = min(max(0, activeIndex + delta), tokens.count - 1)
+            activeStep = tokens[next].step
+            Haptics.lightTap()
+        } label: {
+            Image(systemName: systemImage)
+                .font(.caption.weight(.semibold))
+                .frame(width: 32, height: 32)
+                .background(.white.opacity(0.08), in: Circle())
+        }
+        .foregroundStyle(.white.opacity(0.8))
+        .disabled(activeIndex + delta < 0 || activeIndex + delta >= tokens.count)
+        .accessibilityLabel(label)
     }
 
     private var stepIndexBinding: Binding<Double> {
@@ -506,63 +613,142 @@ struct GlobeView: View {
     @ViewBuilder
     private var focusedCard: some View {
         if let token = activeToken {
-            VStack {
-                Spacer()
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(TokenVisuals.displayText(token.text))
+            VStack(alignment: .leading, spacing: 10) {
+                Button {
+                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                        isInspectorExpanded.toggle()
+                    }
+                } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(readableTokenText(token.text))
                             .font(.title3.monospaced().bold())
                             .foregroundStyle(.white)
                             .lineLimit(1)
                         Spacer()
-                        Text("\(percent(token.selectedProbability))%")
-                            .font(.title3.monospacedDigit())
+                        Text("\(percent(token.selectedProbability))% likely")
+                            .font(.headline.monospacedDigit())
                             .foregroundStyle(TokenVisuals.confidenceColor(token.selectedProbability))
+
+                        Image(systemName: "chevron.up")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.45))
+                            .rotationEffect(.degrees(isInspectorExpanded ? 180 : 0))
                     }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Text("Token \(activeIndex + 1) of \(tokens.count) · tap for details")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.43))
+
+                Text(contextText(for: token))
+                    .font(.caption.monospaced())
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Text(takeaway(for: token))
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.7))
+
+                if isInspectorExpanded {
+                    Divider().overlay(.white.opacity(0.12))
+
+                    Text("Probability is not correctness. It only shows how expected this next token was before sampling controls.")
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.45))
 
                     if token.divergedFromGreedy, let greedy = token.greedyAlternative {
                         Label(
-                            "Sampled over greedy “\(TokenVisuals.displayText(greedy.text))” at \(percent(greedy.probability))%",
-                            systemImage: "arrow.triangle.branch"
+                            "Raw top option: \(readableTokenText(greedy.text)) (\(percent(greedy.probability))%)",
+                            systemImage: "diamond.fill"
                         )
-                        .font(.caption)
-                        .foregroundStyle(.red.opacity(0.9))
+                        .font(.caption2)
+                        .foregroundStyle(.red.opacity(0.82))
                     }
 
                     HStack(spacing: 18) {
-                        metric("entropy", String(format: "%.2f", token.entropy))
-                        metric("margin", "\(percent(token.margin))%")
-                        metric("surprise", String(format: "%.2f", -log(max(token.selectedProbability, 1e-6))))
+                        metric("Entropy", String(format: "%.2f nats", token.entropy))
+                        metric("Top margin", "\(percent(token.margin)) pp")
+                        metric("Surprise", String(format: "%.2f nats", -log(max(token.selectedProbability, 1e-6))))
                     }
 
                     if token.alternatives.count > 1 {
                         Divider().overlay(.white.opacity(0.12))
+                        Text("Top raw candidates")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.52))
                         TokenAlternativesList(alternatives: token.alternatives)
                     }
                 }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20).stroke(.white.opacity(0.08), lineWidth: 1)
-                )
-                .padding(.horizontal, 12)
-                .padding(.bottom, 14)
             }
-            .allowsHitTesting(false)
-            .animation(.easeInOut(duration: 0.2), value: token.step)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .liquidGlassPanel(
+                tint: reduceTransparency ? ChatPalette.elevatedSurface : ChatPalette.elevatedSurface.opacity(0.72),
+                cornerRadius: 22
+            )
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: token.step)
         }
     }
 
     private func metric(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(value)
-                .font(.subheadline.monospacedDigit())
+                .font(.caption.monospacedDigit())
                 .foregroundStyle(.white.opacity(0.9))
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private func contextText(for token: TokenSnapshot) -> AttributedString {
+        guard let index = tokens.firstIndex(where: { $0.step == token.step }) else {
+            return AttributedString(readableTokenText(token.text))
+        }
+
+        let start = max(0, index - 2)
+        let end = min(tokens.count - 1, index + 2)
+        var result = AttributedString()
+        for position in start...end {
+            let raw = tokens[position].text.replacingOccurrences(of: "\n", with: " ↵ ")
+            let isSelected = position == index
+            let text: String
+            if isSelected {
+                let leadingSpace = raw.first?.isWhitespace == true ? " " : ""
+                text = leadingSpace + "[\(readableTokenText(raw))]"
+            } else {
+                text = raw
+            }
+
+            var piece = AttributedString(text)
+            piece.foregroundColor = isSelected ? .cyan : .white.opacity(0.62)
+            result += piece
+        }
+        return result
+    }
+
+    private func takeaway(for token: TokenSnapshot) -> String {
+        let selected = readableTokenText(token.text)
+        if token.divergedFromGreedy, let greedy = token.greedyAlternative {
+            return "Sampling chose “\(selected)” (\(percent(token.selectedProbability))%) instead of the model’s top option “\(readableTokenText(greedy.text))” (\(percent(greedy.probability))%)."
+        }
+        if token.selectedProbability >= 0.75 {
+            return "“\(selected)” was the model’s clear top option at \(percent(token.selectedProbability))%."
+        }
+        if token.margin < 0.08 {
+            return "“\(selected)” won a close call; several next tokens had similar likelihood."
+        }
+        return "“\(selected)” was the top option, but meaningful alternatives remained."
+    }
+
+    private func readableTokenText(_ text: String) -> String {
+        if text == "\n" { return "newline" }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "space" : trimmed
     }
 
     private var emptyState: some View {

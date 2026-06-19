@@ -48,12 +48,29 @@ public struct TokenDistribution: Sendable {
     )
 }
 
+/// One sampled-token decision captured before UTF-8 assembly and textual stop
+/// filtering. Keeping this separate from visible text deltas prevents delayed
+/// output from being paired with the wrong next-token distribution.
+public struct TokenDecision: Sendable {
+    public let step: Int
+    public let tokenID: Int32
+    public let text: String
+    public let distribution: TokenDistribution
+
+    public init(step: Int, tokenID: Int32, text: String, distribution: TokenDistribution) {
+        self.step = step
+        self.tokenID = tokenID
+        self.text = text
+        self.distribution = distribution
+    }
+}
+
 public enum InferenceEvent: @unchecked Sendable {
     case phase(InferencePhase)
     case warmup(WarmupStatus)
     case diagnostic(String)
     case token(String, generatedTokenCount: Int)
-    case tokenAlternatives(TokenDistribution)
+    case tokenDecision(TokenDecision)
     case completed(InferenceResult)
     case done(GenerationFinishReason)
     case cancelled

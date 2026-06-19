@@ -92,6 +92,24 @@ The user should be able to see:
 
 This is especially important because KodAi is also a learning project for building AI systems.
 
+### 6. Inspection should feel like exploration
+
+KodAi should expose model behavior without collapsing into a conventional diagnostics dashboard. Inspection views should feel like expeditions through the model's decisions: calm, spatial, tactile, and rewarding to explore.
+
+The educational layer should:
+
+- translate probability, uncertainty, sampling, and context into honest visual metaphors
+- explain the active decision in plain language before presenting raw metrics
+- keep raw tokens and model data available as a deeper layer rather than hiding them
+- distinguish measured data encodings from decorative or compositional movement
+- reveal complexity progressively so curiosity is rewarded without overwhelming the user
+
+## Visual language: a nocturnal field guide
+
+KodAi's inspection surfaces should combine the restraint of an Apple-native interface with the atmosphere of scientific fieldwork at night. Midnight backgrounds, luminous currents, restrained glass, and warm uncertainty accents should make the system feel alive without turning it into spectacle.
+
+The river is a signature expression of this direction: generated text becomes a journey through possible next tokens. Wider water means more possibilities, brighter paths mean stronger probability, tributaries show alternatives, and a distinct fork shows when sampling chose exploration over the strongest prediction. Every visual mapping should be teachable, accessible without color alone, and technically faithful to the local model's telemetry.
+
 ## Target user
 
 The first target user is the builder.

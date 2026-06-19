@@ -14,10 +14,22 @@ import SwiftUI
 /// Rendering helpers shared by the live trajectory (MessageBubble) and the
 /// post-generation inspector so confidence is encoded consistently.
 enum TokenVisuals {
-    /// 0.0 (uncertain) → warm red, 1.0 (confident) → green.
+    /// Sequential violet-to-mint scale. It avoids implying that model
+    /// probability means wrong/right and stays distinct from red fork markers.
     static func confidenceColor(_ probability: Float) -> Color {
         let clamped = Double(max(0, min(1, probability)))
-        return Color(hue: clamped * 0.33, saturation: 0.72, brightness: 0.92)
+        return Color(
+            hue: 0.72 - clamped * 0.28,
+            saturation: 0.66,
+            brightness: 0.94
+        )
+    }
+
+    static func probabilityText(_ probability: Float) -> String {
+        let percentage = max(0, probability) * 100
+        if percentage > 0, percentage < 1 { return "<1%" }
+        if percentage < 10 { return String(format: "%.1f%%", percentage) }
+        return "\(Int(percentage.rounded()))%"
     }
 
     /// Makes whitespace-only and newline tokens legible in compact rows.
@@ -96,7 +108,7 @@ struct TokenAlternativesList: View {
                     }
                     .frame(maxWidth: .infinity, minHeight: 5, maxHeight: 5)
 
-                    Text("\(Int((alt.probability * 100).rounded()))%")
+                    Text(TokenVisuals.probabilityText(alt.probability))
                         .font(.caption2)
                         .foregroundStyle(.white.opacity(0.42))
                         .frame(width: 30, alignment: .trailing)
@@ -126,13 +138,14 @@ struct TokenInspectorView: View {
     private static let lowConfidenceThreshold: Float = 0.6
 
     private var averageConfidence: Double {
-        guard !history.isEmpty else { return 0 }
-        let total = history.reduce(0.0) { $0 + Double($1.selectedProbability) }
-        return total / Double(history.count)
+        let analyzed = history.filter(\.isAnalyzed)
+        guard !analyzed.isEmpty else { return 0 }
+        let total = analyzed.reduce(0.0) { $0 + Double($1.selectedProbability) }
+        return total / Double(analyzed.count)
     }
 
     private var lowConfidenceCount: Int {
-        history.filter { $0.selectedProbability < Self.lowConfidenceThreshold }.count
+        history.filter { $0.isAnalyzed && $0.selectedProbability < Self.lowConfidenceThreshold }.count
     }
 
     var body: some View {
@@ -160,7 +173,7 @@ struct TokenInspectorView: View {
                 }
             }
             .background(Color.black.opacity(0.92).ignoresSafeArea())
-            .navigationTitle("Model Reasoning")
+            .navigationTitle("Generation Trace")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -219,8 +232,8 @@ struct TokenInspectorView: View {
 
         var result = AttributedString()
         for snapshot in history {
-            guard !snapshot.text.isEmpty else { continue }
-            var piece = AttributedString(snapshot.text)
+            guard !snapshot.visibleText.isEmpty else { continue }
+            var piece = AttributedString(snapshot.visibleText)
             let intensity = Double(1 - TokenVisuals.metricValue(snapshot, metric: heatMetric))
             piece.foregroundColor = .white
             piece.backgroundColor = Color.orange.opacity(intensity * 0.55)

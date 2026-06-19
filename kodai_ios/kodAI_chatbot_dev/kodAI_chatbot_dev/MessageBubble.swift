@@ -158,8 +158,8 @@ struct MessageBubble: View {
 
     private var surpriseAttributedText: AttributedString {
         var result = AttributedString()
-        for snapshot in tokenHistory where !snapshot.text.isEmpty {
-            var piece = AttributedString(snapshot.text)
+        for snapshot in tokenHistory where !snapshot.visibleText.isEmpty {
+            var piece = AttributedString(snapshot.visibleText)
             let intensity = Double(TokenVisuals.surpriseIntensity(snapshot))
             piece.foregroundColor = .white
             piece.backgroundColor = Color.orange.opacity(intensity * 0.6)

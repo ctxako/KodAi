@@ -21,13 +21,16 @@ struct PendingSummaryConfirmation: Identifiable, Equatable {
 }
 
 /// One sampled-token decision captured for the interpretation/observation UI.
-/// `text` is the emitted chunk so concatenating snapshots in order reproduces
-/// the rendered message text, keeping the certainty heatmap aligned with what
-/// the user actually sees.
+/// `text` is the model's raw token piece, recorded independently from filtered
+/// visible text so it always matches this decision's probability distribution.
 struct TokenSnapshot: Identifiable {
     let id = UUID()
     let step: Int
+    /// The raw tokenizer piece used by the decision visualizations.
     let text: String
+    /// User-visible output emitted after UTF-8 assembly and stop filtering.
+    /// This stays separate because output can be delayed across token boundaries.
+    private(set) var visibleText: String
     let alternatives: [TokenAlternative]
     /// True probability of the sampled token (raw, pre-sampling distribution).
     let selectedProbability: Float
@@ -35,6 +38,21 @@ struct TokenSnapshot: Identifiable {
     let entropy: Float
     /// Top-1 minus top-2 probability.
     let margin: Float
+
+    init(decision: TokenDecision) {
+        let distribution = decision.distribution
+        step = decision.step
+        text = decision.text
+        visibleText = ""
+        alternatives = distribution.alternatives
+        selectedProbability = distribution.selectedProbability
+        entropy = distribution.entropy
+        margin = distribution.margin
+    }
+
+    mutating func appendVisibleText(_ text: String) {
+        visibleText += text
+    }
 
     /// False for end-of-stream flush chunks that carry no distribution; those
     /// are excluded from confidence stats and drawn neutral in the heatmap.
@@ -194,8 +212,6 @@ final class ChatViewModel {
     private var pendingAssistantText = ""
     private var pendingAssistantMessageID: ChatMessage.ID?
     private var pendingGeneratedTokenCount = 0
-    private var pendingDistribution: TokenDistribution = .empty
-    private var tokenSnapshotStep = 0
     private let maxTokenSnapshotsPerMessage = 2048
     private var currentPhaseHistory: [InferencePhase] = []
     private var currentDiagnostics: [String] = []
@@ -251,8 +267,6 @@ final class ChatViewModel {
         isGenerating = true
         activeAssistantMessageID = assistantMessageID
         generatedTokenCount = 0
-        tokenSnapshotStep = 0
-        pendingDistribution = .empty
         pruneTokenHistories()
         currentPhaseHistory = []
         currentDiagnostics = []
@@ -289,8 +303,8 @@ final class ChatViewModel {
                         setWarmupStatus(status)
                     case .diagnostic(let message):
                         appendDiagnostic(message)
-                    case .tokenAlternatives(let distribution):
-                        pendingDistribution = distribution
+                    case .tokenDecision(let decision):
+                        recordTokenSnapshot(decision: decision, for: assistantMessageID)
                     case .token(let chunk, let generatedTokenCount):
                         if !hasReceivedFirstToken {
                             hasReceivedFirstToken = true
@@ -298,10 +312,9 @@ final class ChatViewModel {
                             log.event("first token received", since: sendStartedAt)
                             playGenerationHaptic(.streamingStarted, for: assistantMessageID)
                         }
-                        recordTokenSnapshot(chunk: chunk, for: assistantMessageID)
+                        recordVisibleTokenChunk(chunk, generatedTokenCount: generatedTokenCount, for: assistantMessageID)
                         buffer(chunk, generatedTokenCount: generatedTokenCount, toAssistantMessage: assistantMessageID)
                     case .done(let finishReason):
-                        resetTokenTrajectoryTracking()
                         flushPendingAssistantText(reason: "finished")
                         ensureAssistantHasVisibleText(for: assistantMessageID, finishReason: finishReason)
                         log.event("final assistant text length=\(assistantTextLength(for: assistantMessageID))", since: sendStartedAt)
@@ -315,7 +328,6 @@ final class ChatViewModel {
                         updateActiveSession()
                         saveSessions()
                     case .cancelled:
-                        resetTokenTrajectoryTracking()
                         flushPendingAssistantText(reason: "cancelled")
                         log.event("final assistant text length=\(assistantTextLength(for: assistantMessageID))", since: sendStartedAt)
                         setPhase(.cancelled)
@@ -340,7 +352,6 @@ final class ChatViewModel {
                     return
                 }
 
-                resetTokenTrajectoryTracking()
                 flushPendingAssistantText(reason: "failed")
                 showFailure(error.localizedDescription, inAssistantMessage: assistantMessageID)
                 log.event("final assistant text length=\(assistantTextLength(for: assistantMessageID))", since: sendStartedAt)
@@ -1502,7 +1513,7 @@ final class ChatViewModel {
                 setWarmupStatus(status)
             case .diagnostic(let message):
                 appendDiagnostic(message)
-            case .tokenAlternatives:
+            case .tokenDecision:
                 break
             case .token(let chunk, let generatedTokenCount):
                 summary += chunk
@@ -2052,32 +2063,22 @@ final class ChatViewModel {
         pendingGeneratedTokenCount = 0
     }
 
-    /// Captures the current token decision against the active assistant message.
-    /// `.tokenAlternatives` always immediately precedes its `.token` in the
-    /// stream, so the stashed `pendingTokenAlternatives` belong to this chunk.
-    private func recordTokenSnapshot(chunk: String, for id: ChatMessage.ID) {
-        let snapshot = TokenSnapshot(
-            step: tokenSnapshotStep,
-            text: chunk,
-            alternatives: pendingDistribution.alternatives,
-            selectedProbability: pendingDistribution.selectedProbability,
-            entropy: pendingDistribution.entropy,
-            margin: pendingDistribution.margin
-        )
-        tokenSnapshotStep += 1
-        pendingDistribution = .empty
-
+    /// Captures a sampled token independently from filtered visible text deltas.
+    private func recordTokenSnapshot(decision: TokenDecision, for id: ChatMessage.ID) {
         var history = tokenHistories[id, default: []]
-        history.append(snapshot)
+        history.append(TokenSnapshot(decision: decision))
         if history.count > maxTokenSnapshotsPerMessage {
             history.removeFirst(history.count - maxTokenSnapshotsPerMessage)
         }
         tokenHistories[id] = history
     }
 
-    private func resetTokenTrajectoryTracking() {
-        pendingDistribution = .empty
-        tokenSnapshotStep = 0
+    private func recordVisibleTokenChunk(_ chunk: String, generatedTokenCount: Int, for id: ChatMessage.ID) {
+        guard !chunk.isEmpty, var history = tokenHistories[id], !history.isEmpty else { return }
+        let emittedStep = max(0, generatedTokenCount - 1)
+        let index = history.lastIndex(where: { $0.step == emittedStep }) ?? history.index(before: history.endIndex)
+        history[index].appendVisibleText(chunk)
+        tokenHistories[id] = history
     }
 
     /// Keeps only histories for messages still present in the active thread so
