@@ -12,28 +12,23 @@ struct ToolProposalConfirmationCard: View {
     let onConfirm: () -> Void
     let onCancel: () -> Void
 
-    private var taskProposal: CreateTaskProposal? {
-        switch proposal.kind {
-        case .createTask(let p): return p
-        }
-    }
-
     var body: some View {
-        if let task = taskProposal {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.circle.badge.questionmark")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(theme.primaryAccent.opacity(0.9))
-                    Text("Create task?")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.primary)
-                }
-
-                Text(task.title)
-                    .font(.system(size: 14, weight: .medium))
+        let content = proposal.confirmationContent
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.badge.questionmark")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(theme.primaryAccent.opacity(0.9))
+                Text(content.heading)
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.primary)
+            }
 
+            Text(content.subject)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.primary)
+
+            if case .createTask(let task) = proposal.kind {
                 if task.dueDate != nil || task.projectName != nil || task.rationale != nil {
                     VStack(alignment: .leading, spacing: 4) {
                         if let due = task.dueDate {
@@ -47,42 +42,42 @@ struct ToolProposalConfirmationCard: View {
                         }
                     }
                 }
+            }
 
-                HStack(spacing: 10) {
-                    Button(action: onCancel) {
-                        Text("Cancel")
-                            .font(.system(size: 12, weight: .medium))
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.vertical, 6)
-                    .background(.white.opacity(0.06))
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(.white.opacity(0.12), lineWidth: 1)
-                    }
+            HStack(spacing: 10) {
+                Button(action: onCancel) {
+                    Text("Cancel")
+                        .font(.system(size: 12, weight: .medium))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+                .padding(.vertical, 6)
+                .background(.white.opacity(0.06))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(.white.opacity(0.12), lineWidth: 1)
+                }
 
-                    Button(action: onConfirm) {
-                        Text("Create Task")
-                            .font(.system(size: 12, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.vertical, 6)
-                    .background(theme.primaryAccent.opacity(0.25))
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(theme.primaryAccent.opacity(0.4), lineWidth: 1)
-                    }
+                Button(action: onConfirm) {
+                    Text(content.buttonLabel)
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+                .padding(.vertical, 6)
+                .background(theme.primaryAccent.opacity(0.25))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(theme.primaryAccent.opacity(0.4), lineWidth: 1)
                 }
             }
-            .padding(14)
-            .frame(maxWidth: 560, alignment: .leading)
-            .kodaiGlass(cornerRadius: 16)
-            .transition(.move(edge: .bottom).combined(with: .opacity))
         }
+        .padding(14)
+        .frame(maxWidth: 560, alignment: .leading)
+        .kodaiGlass(cornerRadius: 16)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     private func detailRow(_ icon: String, _ text: String) -> some View {

@@ -65,6 +65,7 @@ final class ChatViewModel {
     private var activeFirstTokenAt: Date?
     private var activeLastTokenAt: Date?
     private var activePromptTokens: Int = 0
+    private var recentCreatedTaskCorrectionTarget: (taskID: UUID, sessionID: UUID)?
 
     var lastAssistantMessage: String {
         messages.reversed().first { $0.role == .assistant }?.text ?? ""
@@ -115,6 +116,11 @@ final class ChatViewModel {
 
     func send(context: ModelContext, projects: [KodaiProject] = []) {
         let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if handleRecentTaskDueDateCorrection(trimmed, context: context) {
+            return
+        }
+        recentCreatedTaskCorrectionTarget = nil
+
         if let command = KodaiSlashCommandParser.parse(trimmed) {
             switch command.kind {
             case .summary:
@@ -331,6 +337,9 @@ final class ChatViewModel {
     func createProject(title: String = "New project", details: String = "", context: ModelContext) -> KodaiProject {
         let project = KodaiProject(title: title, details: details)
         context.insert(project)
+#if DEBUG
+        print("[PersistenceCheck] insert KodaiProject id=\(project.id) store=KodaiWorkspace")
+#endif
         saveModelContext(context)
         return project
     }
@@ -409,11 +418,21 @@ final class ChatViewModel {
         dueDate: Date? = nil,
         context: ModelContext
     ) -> KodaiTask {
-        let task = KodaiTask(title: title, notes: notes, priority: priority, dueDate: dueDate, project: project)
+        let normalizedDueDate = dueDate.flatMap { TaskDueDateSemantics.normalized($0) }
+        let task = KodaiTask(
+            title: title,
+            notes: notes,
+            priority: priority,
+            dueDate: normalizedDueDate,
+            project: project
+        )
         context.insert(task)
-        project.tasks.append(task)
+#if DEBUG
+        print("[PersistenceCheck] insert KodaiTask id=\(task.id) store=KodaiWorkspace")
+#endif
+        if project.tasks != nil { project.tasks!.append(task) } else { project.tasks = [task] }
         project.updatedAt = .now
-        let dueSuffix = dueDate.map { " (due \(shortDateString($0)))" } ?? ""
+        let dueSuffix = normalizedDueDate.map { " (due \(shortDateString($0)))" } ?? ""
         ledgerRecorder.recordActivity(kind: .taskChange, summary: "created: \(title)\(dueSuffix)", context: context)
         saveModelContext(context)
         return task
@@ -448,10 +467,11 @@ final class ChatViewModel {
     }
 
     func updateTaskDueDate(_ task: KodaiTask, dueDate: Date?, context: ModelContext) {
-        task.dueDate = dueDate
+        let normalizedDueDate = dueDate.flatMap { TaskDueDateSemantics.normalized($0) }
+        task.dueDate = normalizedDueDate
         task.updatedAt = .now
         let summary: String
-        if let date = dueDate {
+        if let date = normalizedDueDate {
             summary = "rescheduled: \(task.title) → \(shortDateString(date))"
         } else {
             summary = "cleared due date: \(task.title)"
@@ -949,7 +969,7 @@ final class ChatViewModel {
         let endOfToday = Calendar.current.startOfDay(for: Date()).addingTimeInterval(86400)
         return projects
             .filter { $0.status == .active }
-            .flatMap { $0.tasks }
+            .flatMap { $0.tasks ?? [] }
             .filter { task in
                 guard !task.isCompleted, let due = task.dueDate else { return false }
                 return due < endOfToday
@@ -1068,7 +1088,7 @@ final class ChatViewModel {
 
         // Active tasks — titles-only, ≤3 highest priority, injected when project has open tasks
         if let project = currentProject(in: projects) {
-            let activeTitles = project.tasks
+            let activeTitles = (project.tasks ?? [])
                 .filter { !$0.isCompleted }
                 .sorted { $0.priority.sortOrder < $1.priority.sortOrder }
                 .prefix(3)
@@ -1248,10 +1268,10 @@ final class ChatViewModel {
 
     func confirmProposal(context: ModelContext, projects: [KodaiProject]) {
         guard let proposal = pendingToolProposal else { return }
-        let currentSession = ensureCurrentChat(context: context)
 
         switch proposal.kind {
         case .createTask(let p):
+            let currentSession = ensureCurrentChat(context: context)
             let project: KodaiProject? = {
                 if let id = p.projectID {
                     return projects.first { $0.id == id }
@@ -1268,11 +1288,29 @@ final class ChatViewModel {
             }
 
             let priority = TaskPriority(rawValue: p.priority.lowercased()) ?? .medium
-            createTask(in: project, title: p.title, priority: priority, dueDate: p.dueDate, context: context)
+            let task = createTask(
+                in: project,
+                title: p.title,
+                priority: priority,
+                dueDate: p.dueDate,
+                context: context
+            )
+            recentCreatedTaskCorrectionTarget = (task.id, currentSession.id)
 
             var parts: [String] = [priority.rawValue]
-            if let due = p.dueDate { parts.append("due \(shortDateString(due))") }
+            if let due = task.dueDate { parts.append("due \(shortDateString(due))") }
             let msg = "Created task: \(p.title) (\(parts.joined(separator: ", ")))"
+            messages.append(ChatMessage(role: .assistant, text: msg))
+            saveStoredMessage(role: .assistant, content: msg, in: currentSession, context: context)
+        case .createProject(let p):
+            let currentSession = ensureCurrentChat(context: context)
+            let project = createProject(title: p.title, context: context)
+            ledgerRecorder.recordActivity(
+                kind: .taskChange,
+                summary: "created project: \(project.title)",
+                context: context
+            )
+            let msg = "Created project: \(project.title)"
             messages.append(ChatMessage(role: .assistant, text: msg))
             saveStoredMessage(role: .assistant, content: msg, in: currentSession, context: context)
         }
@@ -1289,7 +1327,13 @@ final class ChatViewModel {
         )
         pendingToolProposal = nil
         let currentSession = ensureCurrentChat(context: context)
-        let msg = "Canceled task creation."
+        let msg: String
+        switch proposal.kind {
+        case .createTask:
+            msg = "Canceled task creation."
+        case .createProject:
+            msg = "Canceled project creation."
+        }
         messages.append(ChatMessage(role: .assistant, text: msg))
         saveStoredMessage(role: .assistant, content: msg, in: currentSession, context: context)
     }
@@ -1300,7 +1344,39 @@ final class ChatViewModel {
             var parts = ["proposed task: \(p.title)"]
             if let name = p.projectName { parts.append("project: \(name)") }
             return parts.joined(separator: ", ")
+        case .createProject(let p):
+            return "proposed project: \(p.title)"
         }
+    }
+
+    private func handleRecentTaskDueDateCorrection(_ input: String, context: ModelContext) -> Bool {
+        guard let target = recentCreatedTaskCorrectionTarget,
+              target.sessionID == selectedChat?.id,
+              let correctedDate = TaskDueDateSemantics.correctionDate(from: input) else {
+            return false
+        }
+
+        let taskID = target.taskID
+        var descriptor = FetchDescriptor<KodaiTask>(
+            predicate: #Predicate { $0.id == taskID }
+        )
+        descriptor.fetchLimit = 1
+        guard let task = try? context.fetch(descriptor).first else {
+            recentCreatedTaskCorrectionTarget = nil
+            return false
+        }
+
+        inputText = ""
+        recentCreatedTaskCorrectionTarget = nil
+        let currentSession = ensureCurrentChat(context: context)
+        messages.append(ChatMessage(role: .user, text: input))
+        saveStoredMessage(role: .user, content: input, in: currentSession, context: context)
+
+        updateTaskDueDate(task, dueDate: correctedDate, context: context)
+        let reply = "Updated task: \(task.title) (due \(shortDateString(correctedDate)))"
+        messages.append(ChatMessage(role: .assistant, text: reply))
+        saveStoredMessage(role: .assistant, content: reply, in: currentSession, context: context)
+        return true
     }
 
     private func recentConversationHistory(limit: Int = 10) -> String {
@@ -1363,7 +1439,7 @@ final class ChatViewModel {
         }
 
         guard let queryTitle = command.title, !queryTitle.isEmpty else {
-            let openTasks = project.tasks
+            let openTasks = (project.tasks ?? [])
                 .filter { !$0.isCompleted }
                 .sorted { $0.priority.sortOrder < $1.priority.sortOrder }
             if openTasks.isEmpty {
@@ -1376,7 +1452,7 @@ final class ChatViewModel {
         }
 
         let query = queryTitle.lowercased()
-        let matches = project.tasks.filter { !$0.isCompleted && $0.title.lowercased().contains(query) }
+        let matches = (project.tasks ?? []).filter { !$0.isCompleted && $0.title.lowercased().contains(query) }
 
         switch matches.count {
         case 0:

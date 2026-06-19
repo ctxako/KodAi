@@ -55,7 +55,7 @@ final class StoreMigrationTests: XCTestCase {
             try context.save()
         }
 
-        let schema = Schema(versionedSchema: KodaiLocalStoreSchemaV3.self)
+        let schema = Schema(versionedSchema: KodaiLocalStoreSchemaV4.self)
         let container = try ModelContainer(
             for: schema,
             migrationPlan: KodaiLocalStoreMigrationPlan.self,
@@ -72,5 +72,92 @@ final class StoreMigrationTests: XCTestCase {
         XCTAssertEqual(sessions.first { $0.id == sessionID }?.projectID, projectID)
         XCTAssertNil(sessions.first { $0.id == looseSessionID }?.projectID)
         XCTAssertEqual(summaries.first { $0.id == summaryID }?.projectID, projectID)
+
+        XCTAssertNil(schema.entitiesByName["KodaiProject"])
+        XCTAssertNil(schema.entitiesByName["KodaiTask"])
+    }
+
+    func testV3LocalStoreMigratesInsideSplitStoreContainer() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("KodaiSplitStoreMigration-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let localStoreURL = directory.appendingPathComponent("default.store")
+        let workspaceStoreURL = directory.appendingPathComponent("KodaiWorkspace.store")
+
+        do {
+            let v3Schema = Schema(versionedSchema: KodaiLocalStoreSchemaV3.self)
+            _ = try ModelContainer(
+                for: v3Schema,
+                configurations: ModelConfiguration(
+                    schema: v3Schema,
+                    url: localStoreURL,
+                    cloudKitDatabase: .none
+                )
+            )
+        }
+
+        let localSchema = Schema(versionedSchema: KodaiLocalStoreSchemaV4.self)
+        let workspaceSchema = Schema([KodaiProject.self, KodaiTask.self])
+        let fullSchema = Schema([
+            KodaiProject.self,
+            KodaiTask.self,
+            KodaiChatSession.self,
+            KodaiChatMessage.self,
+            KodaiSummary.self,
+            KodaiStream.self,
+            TurnRecord.self,
+            ActivityEvent.self,
+            ModelPerformanceMetric.self,
+            ToolCall.self
+        ])
+
+        do {
+            _ = try ModelContainer(
+                for: localSchema,
+                migrationPlan: KodaiLocalStoreMigrationPlan.self,
+                configurations: ModelConfiguration(
+                    schema: localSchema,
+                    url: localStoreURL,
+                    cloudKitDatabase: .none
+                )
+            )
+        }
+
+        _ = try ModelContainer(
+            for: fullSchema,
+            configurations: [
+                ModelConfiguration(
+                    schema: localSchema,
+                    url: localStoreURL,
+                    cloudKitDatabase: .none
+                ),
+                ModelConfiguration(
+                    "KodaiWorkspace",
+                    schema: workspaceSchema,
+                    url: workspaceStoreURL,
+                    cloudKitDatabase: .none
+                )
+            ]
+        )
+    }
+
+    func testWorkspaceSchemaSupportsCloudKitConfiguration() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("KodaiCloudKitValidation-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let schema = Schema([KodaiProject.self, KodaiTask.self])
+        _ = try ModelContainer(
+            for: schema,
+            configurations: ModelConfiguration(
+                "KodaiWorkspaceCloudKitValidation",
+                schema: schema,
+                url: directory.appendingPathComponent("KodaiWorkspace.store"),
+                cloudKitDatabase: .private("iCloud.com.ctxa.kodai")
+            )
+        )
     }
 }

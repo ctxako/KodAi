@@ -13,6 +13,7 @@ struct ContentView: View {
     private enum MainContentRoute: Equatable {
         case chat
         case glassBox
+        case stream
     }
 
     @Environment(\.modelContext) private var modelContext
@@ -102,6 +103,8 @@ struct ContentView: View {
                             }
                         }
                     )
+                case .stream:
+                    streamContent
                 }
             }
             .padding(.leading, contentLeadingPadding)
@@ -212,6 +215,46 @@ struct ContentView: View {
         }
     }
 
+    private var streamContent: some View {
+        StreamView(
+            projects: projects,
+            onCreateProject: {
+                let project = viewModel.createProject(context: modelContext)
+                viewModel.createNewChat(context: modelContext, project: project)
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    mainContentRoute = .chat
+                }
+            },
+            onCreateTask: { project, title, notes, priority, dueDate in
+                viewModel.createTask(in: project, title: title, notes: notes, priority: priority, dueDate: dueDate, context: modelContext)
+            },
+            onToggleTask: { task in
+                viewModel.toggleTask(task, context: modelContext)
+            },
+            onDeleteTask: { task in
+                viewModel.deleteTask(task, context: modelContext)
+            },
+            onSelectProject: { project in
+                let sorted = allChatSessions
+                    .filter { $0.projectID == project.id }
+                    .sorted { $0.updatedAt > $1.updatedAt }
+                if let latest = sorted.first {
+                    viewModel.selectChat(latest, context: modelContext)
+                } else {
+                    viewModel.createNewChat(context: modelContext, project: project)
+                }
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    mainContentRoute = .chat
+                }
+            },
+            onClose: {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    mainContentRoute = .chat
+                }
+            }
+        )
+    }
+
     private var sidebar: some View {
         KodaiSidebar(
             sidebarOpen: $sidebarOpen,
@@ -239,6 +282,11 @@ struct ContentView: View {
             onOpenGlassBox: {
                 withAnimation(.easeInOut(duration: 0.18)) {
                     mainContentRoute = .glassBox
+                }
+            },
+            onOpenStream: {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    mainContentRoute = .stream
                 }
             },
             onNewSession: { project in

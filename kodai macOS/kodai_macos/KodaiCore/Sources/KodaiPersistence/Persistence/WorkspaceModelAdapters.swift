@@ -97,7 +97,7 @@ extension KodaiProject {
             createdAt: createdAt,
             updatedAt: updatedAt,
             deadline: deadline,
-            tasks: tasks
+            tasks: (tasks ?? [])
                 .sorted {
                     if $0.priority.sortOrder != $1.priority.sortOrder {
                         return $0.priority.sortOrder < $1.priority.sortOrder

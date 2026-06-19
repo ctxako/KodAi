@@ -6,7 +6,6 @@ struct InputBar: View {
 
     let isGenerating: Bool
     let isInputFocused: FocusState<Bool>.Binding
-    let modelName: String
     let onNewChat: (() -> Void)?
     let onSend: () -> Void
     let onStop: () -> Void
@@ -42,18 +41,7 @@ struct InputBar: View {
                     .transition(.opacity)
             }
 
-            TextField("Message", text: $text, axis: .vertical)
-                .textFieldStyle(.plain)
-                .foregroundStyle(.white)
-                .lineLimit(1...6)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .liquidGlassPanel(tint: ChatPalette.inputField, cornerRadius: 20)
-                .disabled(isGenerating)
-                .focused(isInputFocused)
-                .onSubmit(sendIfPossible)
-
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 if let onNewChat {
                     Button { onNewChat() } label: {
                         Image(systemName: "square.and.pencil")
@@ -66,28 +54,8 @@ struct InputBar: View {
                     .accessibilityLabel("New chat")
                     .transition(.scale.combined(with: .opacity))
                 }
-
-                Text(modelName)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.82))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .liquidGlassPanel(tint: ChatPalette.elevatedSurface, cornerRadius: 20)
-
                 Spacer()
-
-                if isGenerating {
-                    Button { onStop() } label: {
-                        Image(systemName: "stop.fill")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 38, height: 38)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .tint(.red)
-                    .accessibilityLabel("Stop generating")
-                    .transition(.scale.combined(with: .opacity))
-                } else if !canSend, let onSpeechInput {
+                if let onSpeechInput, !isGenerating, !canSend {
                     Button { onSpeechInput() } label: {
                         Image(systemName: "mic")
                             .font(.system(size: 16, weight: .semibold))
@@ -97,20 +65,47 @@ struct InputBar: View {
                     .buttonStyle(.plain)
                     .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Circle())
                     .accessibilityLabel("Dictate message")
+                    .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .animation(.smooth(duration: 0.18), value: canSend)
+
+            HStack(alignment: .center, spacing: 8) {
+                TextField("Message", text: $text, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .foregroundStyle(.white)
+                    .lineLimit(1...6)
+                    .disabled(isGenerating)
+                    .focused(isInputFocused)
+                    .onSubmit(sendIfPossible)
+
+                if isGenerating {
+                    Button { onStop() } label: {
+                        Image(systemName: "stop.fill")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 32, height: 32)
+                            .background(.red, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Stop generating")
                 } else {
                     Button { sendIfPossible() } label: {
                         Image(systemName: "arrow.up")
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(.white)
-                            .frame(width: 38, height: 38)
+                            .frame(width: 32, height: 32)
+                            .background(canSend ? ChatPalette.accentBlue : ChatPalette.elevatedSurface, in: Circle())
                     }
-                    .buttonStyle(.glassProminent)
-                    .tint(ChatPalette.accentBlue)
+                    .buttonStyle(.plain)
                     .disabled(!canSend)
-                    .opacity(canSend ? 1 : 0.45)
                     .accessibilityLabel("Send message")
                 }
             }
+            .padding(.leading, 14)
+            .padding(.trailing, 6)
+            .padding(.vertical, 6)
+            .liquidGlassPanel(tint: ChatPalette.inputField, cornerRadius: 20)
             .animation(.smooth(duration: 0.18), value: canSend)
             .animation(.smooth(duration: 0.18), value: isGenerating)
         }

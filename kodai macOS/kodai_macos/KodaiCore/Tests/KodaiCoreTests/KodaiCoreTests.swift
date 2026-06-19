@@ -140,7 +140,7 @@ struct ModelCreationTests {
         #expect(project.details == "")
         #expect(project.summary == nil)
         #expect(project.deadline == nil)
-        #expect(project.tasks.isEmpty)
+        #expect((project.tasks ?? []).isEmpty)
     }
 
     @Test func sessionDefaults() throws {

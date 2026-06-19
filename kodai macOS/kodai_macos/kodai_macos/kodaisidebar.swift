@@ -50,6 +50,7 @@ struct KodaiSidebar: View {
     let onRenameChat: (KodaiChatSession, String) -> Void
     let onDeleteChat: (KodaiChatSession) -> Void
     let onOpenGlassBox: () -> Void
+    let onOpenStream: () -> Void
     let onNewSession: (KodaiProject?) -> Void
     let onSelectChat: (KodaiChatSession) -> Void
     let onResetSession: () -> Void
@@ -89,6 +90,10 @@ struct KodaiSidebar: View {
                             onOpen: onOpenGlassBox
                         )
                         .frame(maxWidth: .infinity)
+
+                        sidebarRow("Stream", icon: "bolt.horizontal.fill") {
+                            onOpenStream()
+                        }
 
                         sidebarRow("New thread", icon: "plus") {
                             onNewSession(activeProject)
@@ -382,7 +387,7 @@ struct KodaiSidebar: View {
         let isExpanded = expandedProjectIDs.contains(project.id)
         let hasActiveChat = sessions(in: project).contains { $0.id == selectedChatID }
         let startOfToday = Calendar.current.startOfDay(for: Date())
-        let overdueCount = project.tasks.filter {
+        let overdueCount = (project.tasks ?? []).filter {
             !$0.isCompleted && ($0.dueDate.map { $0 < startOfToday } ?? false)
         }.count
 

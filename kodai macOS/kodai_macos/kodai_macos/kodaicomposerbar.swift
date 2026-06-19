@@ -72,6 +72,7 @@ struct KodaiComposerBar: View {
                         .font(.system(.body, design: .rounded))
                         .lineLimit(1...5)
                         .padding(.leading, Metrics.horizontalPadding)
+                        .padding(.trailing, 4)
                         .padding(.vertical, 8)
                         .onKeyPress(.return, phases: .down) { press in
                             if press.modifiers.contains(.shift) {

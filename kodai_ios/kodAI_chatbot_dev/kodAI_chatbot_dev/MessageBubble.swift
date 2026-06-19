@@ -18,6 +18,8 @@ struct MessageBubble: View {
 
     @State private var isAlternativesExpanded = false
     @State private var showsInspector = false
+    @State private var showsRiver = false
+    @State private var showsGlobe = false
     @State private var summaryAppeared = false
     @State private var selectedHeatmapStep: Int?
     @State private var heatMetric: HeatMetric = .confidence
@@ -96,7 +98,19 @@ struct MessageBubble: View {
                     Button {
                         showsInspector = true
                     } label: {
-                        Label("Inspect Reasoning", systemImage: "brain")
+                        Label("Inspect Tokens", systemImage: "brain")
+                    }
+
+                    Button {
+                        showsRiver = true
+                    } label: {
+                        Label("Follow the River", systemImage: "water.waves")
+                    }
+
+                    Button {
+                        showsGlobe = true
+                    } label: {
+                        Label("Generation Trace", systemImage: "globe")
                     }
                 }
 
@@ -112,6 +126,12 @@ struct MessageBubble: View {
             }
             .sheet(isPresented: $showsInspector) {
                 TokenInspectorView(messageText: message.text, history: tokenHistory)
+            }
+            .fullScreenCover(isPresented: $showsRiver) {
+                RiverView(messageText: message.text, history: tokenHistory)
+            }
+            .fullScreenCover(isPresented: $showsGlobe) {
+                GlobeView(messageText: message.text, history: tokenHistory)
             }
     }
 
