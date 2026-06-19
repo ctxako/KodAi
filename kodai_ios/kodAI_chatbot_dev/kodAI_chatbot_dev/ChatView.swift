@@ -21,7 +21,7 @@ struct ChatView: View {
     @AppStorage(PrefKey.surpriseHighlighting) private var surpriseHighlighting = false
     @State private var isMessageListNearBottom = true
     @FocusState private var isInputFocused: Bool
-    @State private var isPromptsSheetPresented = false
+    @State private var isAttachmentMenuOpen = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -31,6 +31,12 @@ struct ChatView: View {
 
                 if isMenuOpen {
                     menuOverlay(width: min(geometry.size.width * 0.83, 326))
+                }
+
+                if isAttachmentMenuOpen {
+                    attachmentMenuOverlay
+                        .transition(.opacity.combined(with: .scale(scale: 0.93, anchor: .bottomLeading)))
+                        .zIndex(4)
                 }
             }
             .animation(.easeInOut(duration: 0.22), value: isMenuOpen)
@@ -76,9 +82,6 @@ struct ChatView: View {
                         set: { viewModel.samplerKnobs = $0 }
                     )
                 )
-            }
-            .sheet(isPresented: $isPromptsSheetPresented) {
-                quickPromptsSheet
             }
         }
     }
@@ -134,7 +137,11 @@ struct ChatView: View {
                 text: $viewModel.inputText,
                 isGenerating: viewModel.isGenerating,
                 isInputFocused: $isInputFocused,
-                onOpenPrompts: { isPromptsSheetPresented = true },
+                onOpenPrompts: {
+                    withAnimation(.spring(duration: 0.25)) {
+                        isAttachmentMenuOpen.toggle()
+                    }
+                },
                 onSend: {
                     Haptics.lightTap()
                     viewModel.send()
@@ -253,14 +260,9 @@ struct ChatView: View {
                     isTuningPresented = true
                     Haptics.lightTap()
                 } label: {
-                    HStack(spacing: 5) {
-                        Text("kodAI")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.6))
-                    }
+                    Text("kodAI")
+                        .font(.headline)
+                        .foregroundStyle(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 7)
                     .contentShape(Capsule())
@@ -470,50 +472,56 @@ struct ChatView: View {
     }
 }
 
-// MARK: - Quick Prompts Sheet
+// MARK: - Attachment Menu
 
 private extension ChatView {
-    var quickPromptsSheet: some View {
-        let chips: [(label: String, prompt: String)] = [
-            ("Creative Essay", "Write an essay comparing the leadership styles of Darth Vader and SpongeBob SquarePants."),
-            ("Subtle Spice", "Is it ever justified to lie to someone for their own good? Defend your answer."),
-            ("Light Stress", "List 5 ways dreams and reality differ, then pick the most important one and argue why.")
-        ]
-        return VStack(alignment: .leading, spacing: 20) {
-            Text("Quick Prompts")
-                .font(.headline)
-                .foregroundStyle(.primary)
-                .padding(.top, 8)
-
-            VStack(spacing: 10) {
-                ForEach(chips, id: \.label) { chip in
-                    Button {
-                        isPromptsSheetPresented = false
-                        viewModel.inputText = chip.prompt
-                        viewModel.send()
-                    } label: {
-                        HStack {
-                            Text(chip.label)
-                                .font(.subheadline.weight(.medium))
-                            Spacer()
-                            Image(systemName: "arrow.up.right")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 13)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    var attachmentMenuOverlay: some View {
+        ZStack(alignment: .bottomLeading) {
+            Color.clear
+                .contentShape(Rectangle())
+                .ignoresSafeArea()
+                .onTapGesture {
+                    withAnimation(.spring(duration: 0.2)) {
+                        isAttachmentMenuOpen = false
                     }
-                    .foregroundStyle(.primary)
-                    .buttonStyle(.plain)
                 }
-            }
 
-            Spacer()
+            VStack(alignment: .leading, spacing: 0) {
+                attachmentRow(icon: "camera", label: "Camera")
+                attachmentRow(icon: "photo.on.rectangle.angled", label: "Photos")
+                attachmentRow(icon: "paperclip", label: "Files")
+                attachmentRow(icon: "puzzlepiece", label: "Plugins")
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 8)
+            .background(Color(white: 0.1).opacity(0.97), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .padding(.leading, 16)
+            .padding(.bottom, 96)
         }
-        .padding(.horizontal, 20)
-        .presentationDetents([.height(260)])
-        .presentationDragIndicator(.visible)
+    }
+
+    func attachmentRow(icon: String, label: String) -> some View {
+        Button {
+            withAnimation(.spring(duration: 0.2)) {
+                isAttachmentMenuOpen = false
+            }
+        } label: {
+            HStack(spacing: 16) {
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundStyle(.white)
+                    .frame(width: 52, height: 52)
+                    .background(Color(white: 0.22), in: Circle())
+
+                Text(label)
+                    .font(.title3)
+                    .foregroundStyle(.white)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
