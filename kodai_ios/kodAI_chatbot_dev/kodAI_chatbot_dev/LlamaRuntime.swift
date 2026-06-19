@@ -75,13 +75,19 @@ actor LlamaRuntime {
         try Task.checkCancellation()
 
         var yieldedCharacterCount = 0
-        let finishReason = try context.decode(maxTokens: configuration.maxGeneratedTokens) { chunk, generatedTokenCount in
-            yieldedCharacterCount += chunk.count
-            #if DEBUG
-            log.event("yielding token chunk to stream chars=\(chunk.count) totalChars=\(yieldedCharacterCount) text=\(chunk.debugDescription)")
-            #endif
-            continuation.yield(.token(chunk, generatedTokenCount: generatedTokenCount))
-        }
+        let finishReason = try context.decode(
+            maxTokens: configuration.maxGeneratedTokens,
+            onDecision: { decision in
+                continuation.yield(.tokenDecision(decision))
+            },
+            onText: { chunk, generatedTokenCount in
+                yieldedCharacterCount += chunk.count
+                #if DEBUG
+                log.event("yielding token chunk to stream chars=\(chunk.count) totalChars=\(yieldedCharacterCount) text=\(chunk.debugDescription)")
+                #endif
+                continuation.yield(.token(chunk, generatedTokenCount: generatedTokenCount))
+            }
+        )
 
         log.event("generation finish reason=\(finishReason.logValue)")
         log.event("finishReason=\(finishReason.logValue) stopString=\(context.lastStopStringForLog ?? "nil")")

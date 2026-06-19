@@ -9,6 +9,7 @@
 
 import Foundation
 import FoundationModels
+import KodaiCore
 
 // MARK: - Task creation request
 
@@ -27,6 +28,12 @@ struct TaskCreationRequest {
     var dueDate: String
 }
 
+@Generable(description: "A request to propose creating a new project")
+struct ProjectCreationRequest {
+    @Guide(description: "The name of the project, e.g. 'WGU'")
+    var title: String
+}
+
 // MARK: - Pending tool proposal
 
 struct PendingToolProposal: Identifiable, Equatable {
@@ -38,6 +45,7 @@ struct PendingToolProposal: Identifiable, Equatable {
 
 enum PendingToolProposalKind: Equatable {
     case createTask(CreateTaskProposal)
+    case createProject(CreateProjectProposal)
 }
 
 struct CreateTaskProposal: Equatable {
@@ -47,6 +55,107 @@ struct CreateTaskProposal: Equatable {
     var projectID: UUID?
     var projectName: String?
     var rationale: String?
+}
+
+struct CreateProjectProposal: Equatable {
+    var title: String
+}
+
+struct ToolProposalConfirmationContent: Equatable {
+    let heading: String
+    let subject: String
+    let buttonLabel: String
+}
+
+extension PendingToolProposal {
+    var confirmationContent: ToolProposalConfirmationContent {
+        switch kind {
+        case .createTask(let proposal):
+            return ToolProposalConfirmationContent(
+                heading: "Create task?",
+                subject: proposal.title,
+                buttonLabel: "Create Task"
+            )
+        case .createProject(let proposal):
+            return ToolProposalConfirmationContent(
+                heading: "Create project?",
+                subject: "Create \(proposal.title) project",
+                buttonLabel: "Create Project"
+            )
+        }
+    }
+}
+
+enum TaskDueDateSemantics {
+    nonisolated static func normalized(_ date: Date, calendar: Calendar = .current) -> Date? {
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        return calendar.date(from: components).map { calendar.startOfDay(for: $0) }
+    }
+
+    nonisolated static func parse(
+        _ raw: String,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Date? {
+        guard let parsed = KodaiSlashCommandParser.parseDueValue(
+            sanitizedDateToken(raw),
+            now: now,
+            calendar: calendar
+        ) else {
+            return nil
+        }
+        return normalized(parsed, calendar: calendar)
+    }
+
+    nonisolated static func correctionDate(
+        from input: String,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Date? {
+        let lowercased = input.lowercased()
+        let isExplicitCorrection =
+            lowercased.hasPrefix("no") ||
+            lowercased.contains("wrong date") ||
+            lowercased.contains("make it due")
+        guard isExplicitCorrection,
+              lowercased.contains("due") || lowercased.contains("wrong date") else {
+            return nil
+        }
+
+        let cleaned = lowercased.map { character -> Character in
+            if character.isLetter || character.isNumber || character == "-" || character == "/" {
+                return character
+            }
+            return " "
+        }
+        let tokens = String(cleaned).split(whereSeparator: \.isWhitespace).map(String.init)
+
+        for token in tokens.reversed() {
+            if let date = parse(token, now: now, calendar: calendar) {
+                return date
+            }
+        }
+
+        guard tokens.count >= 2 else { return nil }
+        for index in stride(from: tokens.count - 2, through: 0, by: -1) {
+            let candidate = tokens[index] + sanitizedDateToken(tokens[index + 1])
+            if let date = parse(candidate, now: now, calendar: calendar) {
+                return date
+            }
+        }
+        return nil
+    }
+
+    nonisolated private static func sanitizedDateToken(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        for suffix in ["th", "st", "nd", "rd"] where trimmed.hasSuffix(suffix) {
+            let withoutSuffix = String(trimmed.dropLast(suffix.count))
+            if Int(withoutSuffix) != nil {
+                return withoutSuffix
+            }
+        }
+        return trimmed
+    }
 }
 
 // MARK: - Collector
@@ -82,25 +191,7 @@ struct CreateTaskTool: Tool {
     func call(arguments: TaskCreationRequest) async throws -> String {
         let trimmedTitle = arguments.title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedDue = arguments.dueDate.trimmingCharacters(in: .whitespaces)
-
-        var parsedDate: Date?
-        if !trimmedDue.isEmpty {
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US")
-            for fmt in ["yyyy-MM-dd", "MMM d", "MMM dd"] {
-                formatter.dateFormat = fmt
-                if let d = formatter.date(from: trimmedDue) {
-                    if !fmt.contains("y") {
-                        var comps = Calendar.current.dateComponents([.month, .day], from: d)
-                        comps.year = Calendar.current.component(.year, from: Date())
-                        parsedDate = Calendar.current.date(from: comps)
-                    } else {
-                        parsedDate = d
-                    }
-                    break
-                }
-            }
-        }
+        let parsedDate = trimmedDue.isEmpty ? nil : TaskDueDateSemantics.parse(trimmedDue)
 
         let proposal = PendingToolProposal(
             id: UUID(),
@@ -121,5 +212,29 @@ struct CreateTaskTool: Tool {
             return f.string(from: $0)
         } ?? "none"
         return "Proposed task: \(trimmedTitle) (priority: \(arguments.priority), due: \(dueLabel)). Awaiting user confirmation."
+    }
+}
+
+// MARK: - CreateProjectTool
+
+struct CreateProjectTool: Tool {
+    typealias Arguments = ProjectCreationRequest
+
+    let collector: ToolProposalCollector
+
+    var description: String {
+        "Propose creating a new project. Returns a plain-text proposal and waits for user confirmation before persisting it."
+    }
+
+    func call(arguments: ProjectCreationRequest) async throws -> String {
+        let trimmedTitle = arguments.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let proposal = PendingToolProposal(
+            id: UUID(),
+            kind: .createProject(CreateProjectProposal(title: trimmedTitle)),
+            createdAt: Date(),
+            sourceTurnID: nil
+        )
+        await collector.collect(proposal)
+        return "Proposed project: \(trimmedTitle). Awaiting user confirmation."
     }
 }

@@ -79,14 +79,14 @@ struct KodaiProjectHeader: View {
     }
 
     private var openTaskCount: Int {
-        project.tasks.filter { !$0.isCompleted }.count
+        (project.tasks ?? []).filter { !$0.isCompleted }.count
     }
 
     private var sortedTasks: [KodaiTask] {
-        let active = project.tasks
+        let active = (project.tasks ?? [])
             .filter { !$0.isCompleted }
             .sorted { $0.priority.sortOrder < $1.priority.sortOrder }
-        let done = project.tasks
+        let done = (project.tasks ?? [])
             .filter { $0.isCompleted }
             .sorted { ($0.completedAt ?? $0.updatedAt) > ($1.completedAt ?? $1.updatedAt) }
         return active + done
@@ -125,11 +125,23 @@ struct KodaiProjectHeader: View {
         return lines.joined(separator: "\n")
     }
 
+    private var activeTasks: [KodaiTask] {
+        (project.tasks ?? [])
+            .filter { !$0.isCompleted }
+            .sorted { $0.priority.sortOrder < $1.priority.sortOrder }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             titleRow
                 .padding(.horizontal, 16)
                 .padding(.top, 10)
+
+            if !activeTasks.isEmpty {
+                activeTaskTicker
+                    .padding(.horizontal, 16)
+                    .padding(.top, 4)
+            }
 
             if project.summary != nil || editingSummary {
                 summaryRow
@@ -154,6 +166,42 @@ struct KodaiProjectHeader: View {
         .onChange(of: editingTaskID) { _, id in
             if id != nil { renameTaskFocused = true }
         }
+    }
+
+    // MARK: – Active task ticker
+
+    private var activeTaskTicker: some View {
+        let visible = Array(activeTasks.prefix(3))
+        let overflow = activeTasks.count - visible.count
+
+        return HStack(spacing: 6) {
+            ForEach(visible, id: \.id) { task in
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(priorityColor(task.priority))
+                        .frame(width: 5, height: 5)
+                    Text(task.title)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.6))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(.white.opacity(0.07))
+                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+            }
+
+            if overflow > 0 {
+                Text("+\(overflow) more")
+                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.35))
+            }
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: – Title row

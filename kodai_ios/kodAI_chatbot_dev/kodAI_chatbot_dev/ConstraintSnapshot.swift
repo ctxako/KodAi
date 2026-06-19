@@ -87,14 +87,6 @@ extension ConstraintSnapshot {
             diagnostics.append("Using compressed context.")
         }
 
-        if internetAccessEnabled == false {
-            diagnostics.append("Internet disabled.")
-        }
-
-        if weatherAvailable == false {
-            diagnostics.append("Weather unavailable.")
-        }
-
         if lowPowerModeEnabled == true {
             diagnostics.append("Low power mode.")
         }

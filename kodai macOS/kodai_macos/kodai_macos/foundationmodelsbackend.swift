@@ -40,7 +40,10 @@ final class FoundationModelsBackend: KodaiInferenceBackend {
     private let kodaiTools: [any Tool]
 
     init() {
-        kodaiTools = [CreateTaskTool(collector: proposalCollector)]
+        kodaiTools = [
+            CreateTaskTool(collector: proposalCollector),
+            CreateProjectTool(collector: proposalCollector)
+        ]
     }
 
     // MARK: KodaiInferenceBackend

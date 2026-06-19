@@ -76,7 +76,7 @@ enum ProjectsJSONMigration {
                 continue
             }
             project.apply(value)
-            let tasksByID = Dictionary(project.tasks.map { ($0.id, $0) }) { first, _ in first }
+            let tasksByID = Dictionary((project.tasks ?? []).map { ($0.id, $0) }) { first, _ in first }
             for taskValue in value.tasks {
                 if let task = tasksByID[taskValue.id] {
                     task.apply(taskValue)
@@ -100,7 +100,7 @@ enum ProjectsJSONMigration {
             guard project.title == value.title else {
                 throw ProjectsJSONMigrationError.verificationFailed("title mismatch for project \(value.id)")
             }
-            let taskIDs = Set(project.tasks.map(\.id))
+            let taskIDs = Set((project.tasks ?? []).map(\.id))
             for taskValue in value.tasks where !taskIDs.contains(taskValue.id) {
                 throw ProjectsJSONMigrationError.verificationFailed(
                     "missing task \(taskValue.id) in project \(value.id)"

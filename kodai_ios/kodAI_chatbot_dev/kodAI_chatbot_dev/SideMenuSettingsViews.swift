@@ -60,6 +60,7 @@ struct SideMenuSettingsContent: View {
             }
 
             SettingsSection(title: "Appearance") {
+                AppIconPickerRow()
                 SettingsValueRow(title: "Theme", value: "System · Coming soon", systemImage: "circle.lefthalf.filled")
                 SettingsValueRow(title: "Glass intensity", value: "Default · Coming soon", systemImage: "sparkles")
                 SettingsValueRow(title: "Message density", value: "Default · Coming soon", systemImage: "text.line.first.and.arrowtriangle.forward")
@@ -296,5 +297,39 @@ private struct SettingsPickerRow: View {
             .pickerStyle(.segmented)
         }
         .padding(.vertical, 6)
+    }
+}
+
+/// Swaps the home-screen app icon between the bundled alternates. Self-contained:
+/// reads the live icon on appear and applies the change immediately on selection.
+private struct AppIconPickerRow: View {
+    @State private var selection: AppIconOption = .one
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: "app.badge")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22)
+
+                Text("App icon")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white)
+            }
+
+            Picker("App icon", selection: $selection) {
+                ForEach(AppIconOption.allCases) { option in
+                    Text(option.title)
+                        .tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: selection) { _, newValue in
+                AppIconOption.apply(newValue)
+            }
+        }
+        .padding(.vertical, 6)
+        .onAppear { selection = AppIconOption.current }
     }
 }

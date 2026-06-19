@@ -12,8 +12,7 @@
 //  ProjectTaskStore so the user never loses projects/tasks.
 //
 //  Chats stay JSON-only: this store never reads or writes KodaiChatSession,
-//  KodaiChatMessage, KodaiSummary, or KodaiStream, even though the closed
-//  SwiftData relationship graph forces them into the container schema.
+//  KodaiChatMessage, KodaiSummary, or KodaiStream.
 //
 
 import Foundation
@@ -74,6 +73,13 @@ actor WorkspaceProjectStore {
         let context = ModelContext(container)
         try reconcile(projects, in: context)
         try context.save()
+#if DEBUG
+        let projectIDs = projects.map(\.id.uuidString).joined(separator: ",")
+        log.event(
+            "persistence check store=KodaiWorkspace cloudKit=" +
+            "\(WorkspaceModelContainer.cloudKitContainerIdentifier) projectIDs=[\(projectIDs)]"
+        )
+#endif
         log.event("projects saved count=\(projects.count)")
     }
 
@@ -116,7 +122,7 @@ actor WorkspaceProjectStore {
                 continue
             }
             project.apply(value)
-            var tasksByID = Dictionary(project.tasks.map { ($0.id, $0) }) { first, _ in first }
+            var tasksByID = Dictionary((project.tasks ?? []).map { ($0.id, $0) }) { first, _ in first }
             for taskValue in value.tasks {
                 if let task = tasksByID.removeValue(forKey: taskValue.id) {
                     task.apply(taskValue)

@@ -111,12 +111,10 @@ struct SideMenuDrawer: View {
         .padding(.bottom, 14)
         .frame(width: width, alignment: .topLeading)
         .frame(maxHeight: .infinity, alignment: .topLeading)
-        .background(ChatPalette.mainCanvas.opacity(0.92))
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .glassEffect(.regular.tint(ChatPalette.mainCanvas.opacity(0.82)), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(ChatPalette.glassStroke.opacity(0.72), lineWidth: 0.55)
+                .stroke(ChatPalette.glassStroke.opacity(0.65), lineWidth: 0.75)
         }
         .padding(.vertical, 8)
         .padding(.leading, 8)

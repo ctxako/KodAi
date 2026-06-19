@@ -6,6 +6,17 @@ import Testing
 @testable import KodAi
 
 struct WorkspaceModelContainerTests {
+    @Test func workspaceSchemaContainsOnlyProjectsAndTasks() {
+        #expect(
+            Set(WorkspaceModelContainer.schema.entitiesByName.keys) ==
+            ["KodaiProject", "KodaiTask"]
+        )
+        #expect(
+            WorkspaceModelContainer.cloudKitContainerIdentifier ==
+            "iCloud.com.ctxa.kodai"
+        )
+    }
+
     @Test func inMemoryContainerInitializes() throws {
         let container = try WorkspaceModelContainer.makeInMemory()
         let context = ModelContext(container)
@@ -18,6 +29,6 @@ struct WorkspaceModelContainerTests {
 
         let projects = try context.fetch(FetchDescriptor<KodaiProject>())
         #expect(projects.count == 1)
-        #expect(projects.first?.tasks.count == 1)
+        #expect((projects.first?.tasks ?? []).count == 1)
     }
 }

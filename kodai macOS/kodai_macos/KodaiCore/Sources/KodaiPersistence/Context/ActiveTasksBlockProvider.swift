@@ -13,7 +13,7 @@ public struct ActiveTasksBlockProvider: ContextBlockProvider {
               let project = resolveProject(projectID) else {
             return nil
         }
-        let openTasks = project.tasks.filter { !$0.isCompleted }
+        let openTasks = (project.tasks ?? []).filter { !$0.isCompleted }
         guard !openTasks.isEmpty else { return nil }
 
         let lines = openTasks

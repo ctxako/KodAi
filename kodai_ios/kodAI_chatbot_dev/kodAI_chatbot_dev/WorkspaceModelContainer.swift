@@ -4,12 +4,13 @@ import SwiftData
 
 /// SwiftData container for workspace data (projects/tasks).
 ///
-/// K2F: iOS syncs KodaiProject and KodaiTask via CloudKit (iCloud container
-/// "iCloud.ctxa.kodAI-chatbot-dev"). Chats, sessions, summaries, turns,
+/// iOS syncs KodaiProject and KodaiTask via CloudKit container
+/// "iCloud.com.ctxa.kodai". Chats, sessions, summaries, turns,
 /// activity events, metrics, and tools are not part of this schema and remain
-/// local-only in their own stores. macOS CloudKit container split is deferred
-/// to K2G.
+/// local-only in their own stores.
 enum WorkspaceModelContainer {
+    static let cloudKitContainerIdentifier = "iCloud.com.ctxa.kodai"
+
     static let schema = Schema([
         KodaiProject.self,
         KodaiTask.self
@@ -19,6 +20,14 @@ enum WorkspaceModelContainer {
 
     /// On-disk store under Application Support, synced via CloudKit on iOS.
     static func makeLocal() throws -> ModelContainer {
+#if DEBUG
+        let entityNames = Set(schema.entitiesByName.keys)
+        precondition(entityNames == ["KodaiProject", "KodaiTask"])
+        print(
+            "[PersistenceCheck] iOS workspace store=KodaiWorkspace " +
+            "entities=\(entityNames.sorted()) cloudKit=\(cloudKitContainerIdentifier)"
+        )
+#endif
         let supportURL = try FileManager.default.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
@@ -29,7 +38,7 @@ enum WorkspaceModelContainer {
             "KodaiWorkspace",
             schema: schema,
             url: supportURL.appendingPathComponent(storeFileName),
-            cloudKitDatabase: .automatic
+            cloudKitDatabase: .private(cloudKitContainerIdentifier)
         )
         return try ModelContainer(for: schema, configurations: [configuration])
     }

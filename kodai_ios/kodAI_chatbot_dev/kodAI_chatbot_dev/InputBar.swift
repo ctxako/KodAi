@@ -6,7 +6,6 @@ struct InputBar: View {
 
     let isGenerating: Bool
     let isInputFocused: FocusState<Bool>.Binding
-    let modelName: String
     let onNewChat: (() -> Void)?
     let onSend: () -> Void
     let onStop: () -> Void
@@ -42,70 +41,74 @@ struct InputBar: View {
                     .transition(.opacity)
             }
 
-            HStack(alignment: .bottom, spacing: 8) {
-                if let onNewChat {
-                    Button { onNewChat() } label: {
-                        Image(systemName: "square.and.pencil")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 38, height: 38)
+            GlassEffectContainer(spacing: 8) {
+                HStack(alignment: .bottom, spacing: 8) {
+                    if let onNewChat {
+                        Button { onNewChat() } label: {
+                            Image(systemName: "square.and.pencil")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 40, height: 40)
+                        }
+                        .buttonStyle(.plain)
+                        .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Circle())
+                        .accessibilityLabel("New chat")
                     }
-                    .buttonStyle(.plain)
-                    .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Circle())
-                    .accessibilityLabel("New chat")
-                }
 
-                TextField("Message", text: $text, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .foregroundStyle(.white)
-                    .lineLimit(1...6)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
+                    HStack(alignment: .center, spacing: 8) {
+                        TextField("Message", text: $text, axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .foregroundStyle(.white)
+                            .lineLimit(1...6)
+                            .disabled(isGenerating)
+                            .focused(isInputFocused)
+                            .onSubmit(sendIfPossible)
+
+                        if isGenerating {
+                            Button { onStop() } label: {
+                                Image(systemName: "stop.fill")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 32, height: 32)
+                                    .background(.red, in: Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Stop generating")
+                        } else if !canSend, let onSpeechInput {
+                            Button { onSpeechInput() } label: {
+                                Image(systemName: "mic")
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 32, height: 32)
+                                    .background(ChatPalette.elevatedSurface, in: Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Dictate message")
+                            .transition(.scale.combined(with: .opacity))
+                        } else {
+                            Button { sendIfPossible() } label: {
+                                Image(systemName: "arrow.up")
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 32, height: 32)
+                                    .background(canSend ? ChatPalette.accentBlue : ChatPalette.elevatedSurface, in: Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!canSend)
+                            .accessibilityLabel("Send message")
+                        }
+                    }
+                    .padding(.leading, 14)
+                    .padding(.trailing, 6)
+                    .padding(.vertical, 6)
                     .liquidGlassPanel(tint: ChatPalette.inputField, cornerRadius: 20)
-                    .disabled(isGenerating)
-                    .focused(isInputFocused)
-                    .onSubmit(sendIfPossible)
-
-                if isGenerating {
-                    Button { onStop() } label: {
-                        Image(systemName: "stop.fill")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 38, height: 38)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .tint(.red)
-                    .accessibilityLabel("Stop generating")
-                    .transition(.scale.combined(with: .opacity))
-                } else if !canSend, let onSpeechInput {
-                    Button { onSpeechInput() } label: {
-                        Image(systemName: "mic")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 38, height: 38)
-                    }
-                    .buttonStyle(.plain)
-                    .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Circle())
-                    .accessibilityLabel("Dictate message")
-                } else {
-                    Button { sendIfPossible() } label: {
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .frame(width: 38, height: 38)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .tint(ChatPalette.accentBlue)
-                    .disabled(!canSend)
-                    .opacity(canSend ? 1 : 0.45)
-                    .accessibilityLabel("Send message")
                 }
             }
             .animation(.smooth(duration: 0.18), value: canSend)
             .animation(.smooth(duration: 0.18), value: isGenerating)
         }
         .padding(.horizontal, 12)
-        .padding(.bottom, 12)
+        .padding(.bottom, 2)
     }
 
     private var commandPicker: some View {

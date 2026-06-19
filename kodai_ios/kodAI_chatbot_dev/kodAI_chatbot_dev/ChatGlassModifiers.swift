@@ -39,19 +39,11 @@ private struct DrawerGlassRow: ViewModifier {
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
-        let tint = isSelected ? ChatPalette.statusSurface : ChatPalette.inputField
-        let fillOpacity = isSelected ? 0.28 : 0.14
-        let strokeOpacity = isSelected ? 0.09 : 0.04
 
         content
             .padding(.horizontal, 10)
             .padding(.vertical, verticalPadding)
-            .background(tint.opacity(fillOpacity), in: shape)
-            .background(.ultraThinMaterial, in: shape)
-            .glassEffect(.regular.tint(tint.opacity(fillOpacity)), in: shape)
-            .overlay {
-                shape.stroke(Color.white.opacity(strokeOpacity), lineWidth: 0.45)
-            }
+            .background(Color.white.opacity(isSelected ? 0.09 : 0), in: shape)
             .opacity(isDimmed ? 0.58 : 1)
     }
 }

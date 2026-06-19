@@ -14,6 +14,33 @@ struct kodAI_chatbot_devTests {
     @Test func example() async throws {
     }
 
+    @Test func tokenSnapshotKeepsDecisionPiecePairedWithItsDistribution() {
+        let alternatives = [
+            TokenAlternative(tokenID: 11, text: " skills", probability: 0.82, isSelected: true),
+            TokenAlternative(tokenID: 12, text: " abilities", probability: 0.13, isSelected: false),
+        ]
+        let decision = TokenDecision(
+            step: 7,
+            tokenID: 11,
+            text: " skills",
+            distribution: TokenDistribution(
+                alternatives: alternatives,
+                selectedProbability: 0.82,
+                entropy: 0.70,
+                margin: 0.69
+            )
+        )
+
+        var snapshot = TokenSnapshot(decision: decision)
+        snapshot.appendVisibleText("visible output")
+
+        #expect(snapshot.step == 7)
+        #expect(snapshot.text == " skills")
+        #expect(snapshot.visibleText == "visible output")
+        #expect(snapshot.alternatives.first(where: \.isSelected)?.text == snapshot.text)
+        #expect(snapshot.selectedProbability == 0.82)
+    }
+
     @Test func generationDiagnostics() async throws {
         let runtime = LocalModelRuntime()
         let prompts = [

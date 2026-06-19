@@ -13,10 +13,12 @@ struct ChatView: View {
     @State private var viewModel = ChatViewModel()
     @State private var expandedProcessMessageIDs: Set<ChatMessage.ID> = []
     @State private var isMenuOpen = false
+    @State private var isPlaygroundPresented = false
     @State private var commentEditor: MessageCommentEditor?
     @AppStorage(PrefKey.messageTextSize) private var messageTextSize: MessageTextSize = .small
     @AppStorage(PrefKey.reduceMotion) private var reduceMotion = false
     @AppStorage(PrefKey.compactMessageSpacing) private var compactMessageSpacing = false
+    @AppStorage(PrefKey.surpriseHighlighting) private var surpriseHighlighting = false
     @State private var isMessageListNearBottom = true
     @FocusState private var isInputFocused: Bool
 
@@ -65,6 +67,9 @@ struct ChatView: View {
                     onCancel: viewModel.cancelSummaryConfirmation,
                     onConfirm: viewModel.confirmSummaryCompaction
                 )
+            }
+            .sheet(isPresented: $isPlaygroundPresented) {
+                SamplerPlaygroundView(liveAlternatives: viewModel.latestTokenAlternatives)
             }
         }
     }
@@ -120,7 +125,6 @@ struct ChatView: View {
                 text: $viewModel.inputText,
                 isGenerating: viewModel.isGenerating,
                 isInputFocused: $isInputFocused,
-                modelName: viewModel.settingsSnapshot.shortDisplayName,
                 onNewChat: inputBarNewChatAction,
                 onSend: {
                     Haptics.lightTap()
@@ -253,6 +257,36 @@ struct ChatView: View {
                 Text(viewModel.headerTelemetryText)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+
+                Button {
+                    surpriseHighlighting.toggle()
+                    Haptics.lightTap()
+                } label: {
+                    Image(systemName: "highlighter")
+                        .font(.headline)
+                        .foregroundStyle(surpriseHighlighting ? Color.orange : .white)
+                        .frame(width: 38, height: 36)
+                }
+                .buttonStyle(.plain)
+                .glassEffect(
+                    .regular
+                        .tint(surpriseHighlighting ? Color.orange.opacity(0.5) : ChatPalette.elevatedSurface)
+                        .interactive(),
+                    in: Capsule()
+                )
+                .accessibilityLabel("Surprise highlighting")
+
+                Button {
+                    isPlaygroundPresented = true
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(width: 38, height: 36)
+                }
+                .buttonStyle(.plain)
+                .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Capsule())
+                .accessibilityLabel("Sampler playground")
             }
 
             if let warmupStatus = viewModel.warmupStatus {
@@ -282,11 +316,11 @@ struct ChatView: View {
     }
 
     private func messageList(width: CGFloat) -> some View {
-        let maxBubbleWidth = min(560, width * 0.78)
+        let maxBubbleWidth = min(720, width * 0.9)
 
         return ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: compactMessageSpacing ? 6 : 12) {
+                VStack(alignment: .leading, spacing: compactMessageSpacing ? 6 : 12) {
                     if viewModel.messages.isEmpty {
                         emptyState
                     } else {
@@ -300,6 +334,8 @@ struct ChatView: View {
                                 activeProcessSummary: activeProcessSummary(for: message),
                                 isProcessExpanded: expandedProcessMessageIDs.contains(message.id),
                                 generationStartDate: message.id == viewModel.activeAssistantMessageID ? viewModel.sendStartedAt : nil,
+                                tokenHistory: viewModel.tokenHistories[message.id] ?? [],
+                                surpriseHighlighting: surpriseHighlighting,
                                 onToggleProcess: {
                                     toggleProcessSummary(for: message.id)
                                 },
@@ -340,7 +376,7 @@ struct ChatView: View {
             .onChange(of: viewModel.generatedTokenCount) { _, _ in
                 guard viewModel.isGenerating, isMessageListNearBottom else { return }
 
-                scrollToBottom(with: proxy)
+                scrollToBottom(with: proxy, animated: false)
             }
             .onChange(of: viewModel.messages.count) { _, _ in
                 guard isMessageListNearBottom || viewModel.isGenerating else { return }
@@ -431,8 +467,12 @@ struct ChatView: View {
 // MARK: - ChatView Helpers
 
 private extension ChatView {
-    private func scrollToBottom(with proxy: ScrollViewProxy) {
-        withAnimation(.easeOut(duration: 0.16)) {
+    private func scrollToBottom(with proxy: ScrollViewProxy, animated: Bool = true) {
+        if animated {
+            withAnimation(.easeOut(duration: 0.16)) {
+                proxy.scrollTo(MessageListAnchor.bottom, anchor: .bottom)
+            }
+        } else {
             proxy.scrollTo(MessageListAnchor.bottom, anchor: .bottom)
         }
     }

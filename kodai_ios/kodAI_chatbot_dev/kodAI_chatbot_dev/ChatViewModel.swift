@@ -20,6 +20,55 @@ struct PendingSummaryConfirmation: Identifiable, Equatable {
     let summary: String
 }
 
+/// One sampled-token decision captured for the interpretation/observation UI.
+/// `text` is the model's raw token piece, recorded independently from filtered
+/// visible text so it always matches this decision's probability distribution.
+struct TokenSnapshot: Identifiable {
+    let id = UUID()
+    let step: Int
+    /// The raw tokenizer piece used by the decision visualizations.
+    let text: String
+    /// User-visible output emitted after UTF-8 assembly and stop filtering.
+    /// This stays separate because output can be delayed across token boundaries.
+    private(set) var visibleText: String
+    let alternatives: [TokenAlternative]
+    /// True probability of the sampled token (raw, pre-sampling distribution).
+    let selectedProbability: Float
+    /// Full-vocab Shannon entropy in nats.
+    let entropy: Float
+    /// Top-1 minus top-2 probability.
+    let margin: Float
+
+    init(decision: TokenDecision) {
+        let distribution = decision.distribution
+        step = decision.step
+        text = decision.text
+        visibleText = ""
+        alternatives = distribution.alternatives
+        selectedProbability = distribution.selectedProbability
+        entropy = distribution.entropy
+        margin = distribution.margin
+    }
+
+    mutating func appendVisibleText(_ text: String) {
+        visibleText += text
+    }
+
+    /// False for end-of-stream flush chunks that carry no distribution; those
+    /// are excluded from confidence stats and drawn neutral in the heatmap.
+    var isAnalyzed: Bool { !alternatives.isEmpty }
+
+    /// The model's top-ranked candidate (what greedy decoding would pick).
+    /// `alternatives` is probability-sorted, so the argmax is first.
+    var greedyAlternative: TokenAlternative? { alternatives.first }
+
+    /// True when sampling chose a token other than the model's top pick — a
+    /// fork point where randomness changed the output.
+    var divergedFromGreedy: Bool {
+        isAnalyzed && !(alternatives.first?.isSelected ?? true)
+    }
+}
+
 @Observable
 @MainActor
 final class ChatViewModel {
@@ -41,6 +90,22 @@ final class ChatViewModel {
     private(set) var pendingToolProposal: PendingToolProposalLite?
     private(set) var recentActivityEvents: [ActivityEventLite] = []
     private(set) var latestContextSnapshot: ContextSnapshotLite?
+    /// Per-message ordered token decisions. Survives generation so a completed
+    /// message can be inspected later; pruned to the active thread on each send.
+    private(set) var tokenHistories: [ChatMessage.ID: [TokenSnapshot]] = [:]
+
+    /// Most recent real next-token distribution, used to seed the sampler
+    /// playground's "Last token" source. Walks back from the newest message to
+    /// the latest step that actually weighed more than one candidate.
+    var latestTokenAlternatives: [TokenAlternative]? {
+        for message in messages.reversed() {
+            guard let history = tokenHistories[message.id] else { continue }
+            if let snapshot = history.last(where: { $0.alternatives.count > 1 }) {
+                return snapshot.alternatives
+            }
+        }
+        return nil
+    }
 
     var activeProcessSummary: InferenceProcessSummary? {
         guard activeAssistantMessageID != nil, phase != .idle else { return nil }
@@ -147,6 +212,7 @@ final class ChatViewModel {
     private var pendingAssistantText = ""
     private var pendingAssistantMessageID: ChatMessage.ID?
     private var pendingGeneratedTokenCount = 0
+    private let maxTokenSnapshotsPerMessage = 2048
     private var currentPhaseHistory: [InferencePhase] = []
     private var currentDiagnostics: [String] = []
     private var generationHapticEventsByMessageID: [ChatMessage.ID: Set<GenerationHapticEvent>] = [:]
@@ -201,6 +267,7 @@ final class ChatViewModel {
         isGenerating = true
         activeAssistantMessageID = assistantMessageID
         generatedTokenCount = 0
+        pruneTokenHistories()
         currentPhaseHistory = []
         currentDiagnostics = []
         generationHapticEventsByMessageID[assistantMessageID] = []
@@ -236,6 +303,8 @@ final class ChatViewModel {
                         setWarmupStatus(status)
                     case .diagnostic(let message):
                         appendDiagnostic(message)
+                    case .tokenDecision(let decision):
+                        recordTokenSnapshot(decision: decision, for: assistantMessageID)
                     case .token(let chunk, let generatedTokenCount):
                         if !hasReceivedFirstToken {
                             hasReceivedFirstToken = true
@@ -243,6 +312,7 @@ final class ChatViewModel {
                             log.event("first token received", since: sendStartedAt)
                             playGenerationHaptic(.streamingStarted, for: assistantMessageID)
                         }
+                        recordVisibleTokenChunk(chunk, generatedTokenCount: generatedTokenCount, for: assistantMessageID)
                         buffer(chunk, generatedTokenCount: generatedTokenCount, toAssistantMessage: assistantMessageID)
                     case .done(let finishReason):
                         flushPendingAssistantText(reason: "finished")
@@ -1443,6 +1513,8 @@ final class ChatViewModel {
                 setWarmupStatus(status)
             case .diagnostic(let message):
                 appendDiagnostic(message)
+            case .tokenDecision:
+                break
             case .token(let chunk, let generatedTokenCount):
                 summary += chunk
                 self.generatedTokenCount = generatedTokenCount
@@ -1989,6 +2061,31 @@ final class ChatViewModel {
         pendingAssistantText = ""
         pendingAssistantMessageID = nil
         pendingGeneratedTokenCount = 0
+    }
+
+    /// Captures a sampled token independently from filtered visible text deltas.
+    private func recordTokenSnapshot(decision: TokenDecision, for id: ChatMessage.ID) {
+        var history = tokenHistories[id, default: []]
+        history.append(TokenSnapshot(decision: decision))
+        if history.count > maxTokenSnapshotsPerMessage {
+            history.removeFirst(history.count - maxTokenSnapshotsPerMessage)
+        }
+        tokenHistories[id] = history
+    }
+
+    private func recordVisibleTokenChunk(_ chunk: String, generatedTokenCount: Int, for id: ChatMessage.ID) {
+        guard !chunk.isEmpty, var history = tokenHistories[id], !history.isEmpty else { return }
+        let emittedStep = max(0, generatedTokenCount - 1)
+        let index = history.lastIndex(where: { $0.step == emittedStep }) ?? history.index(before: history.endIndex)
+        history[index].appendVisibleText(chunk)
+        tokenHistories[id] = history
+    }
+
+    /// Keeps only histories for messages still present in the active thread so
+    /// the in-memory map stays bounded across a long session.
+    private func pruneTokenHistories() {
+        let liveIDs = Set(messages.map(\.id))
+        tokenHistories = tokenHistories.filter { liveIDs.contains($0.key) }
     }
 
     private func assistantTextLength(for id: ChatMessage.ID) -> Int {

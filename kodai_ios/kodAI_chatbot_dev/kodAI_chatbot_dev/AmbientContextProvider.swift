@@ -34,7 +34,7 @@ actor AmbientContextProvider {
 
         let date = Date()
         let timezone = TimeZone.autoupdatingCurrent
-        var diagnostics = ["Local timezone resolved"]
+        var diagnostics: [String] = []
         let cachedWeather = cachedWeatherForToday(now: date)
         let wantsWeather = Self.isWeatherRelated(userPrompt)
         let needsAutomaticWeather = cachedWeather == nil && !hasFetchedWeatherToday(now: date)
@@ -53,11 +53,8 @@ actor AmbientContextProvider {
                 cache(weather: fetchedWeather)
                 weather = fetchedWeather
                 diagnostics.append("Weather fetched successfully")
-            } else if cachedWeather != nil {
-                diagnostics.append("Weather lookup failed; continued with cached weather")
-            } else {
+            } else if cachedWeather == nil {
                 markWeatherFetchAttempt(now: date)
-                diagnostics.append(wantsWeather ? "Weather lookup failed; continued with time/date only" : "Weather unavailable; continued with time/date only")
             }
         }
 
