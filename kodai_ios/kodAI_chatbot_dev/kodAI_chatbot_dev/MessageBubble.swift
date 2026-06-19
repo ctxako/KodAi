@@ -15,15 +15,7 @@ struct MessageBubble: View {
     let onEditComment: () -> Void
 
     var body: some View {
-        HStack {
-            if message.role == .assistant {
-                bubble
-                Spacer(minLength: 44)
-            } else {
-                Spacer(minLength: 44)
-                bubble
-            }
-        }
+        bubble
     }
 
     private var bubble: some View {
@@ -49,7 +41,7 @@ struct MessageBubble: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .messageBubbleGlass(tint: bubbleTint, isUser: message.role == .user)
-            .frame(maxWidth: maxBubbleWidth, alignment: message.role == .user ? .trailing : .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contextMenu {
                 Button {
                     UIPasteboard.general.string = message.text

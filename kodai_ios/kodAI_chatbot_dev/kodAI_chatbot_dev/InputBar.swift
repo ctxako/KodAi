@@ -42,18 +42,7 @@ struct InputBar: View {
                     .transition(.opacity)
             }
 
-            TextField("Message", text: $text, axis: .vertical)
-                .textFieldStyle(.plain)
-                .foregroundStyle(.white)
-                .lineLimit(1...6)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .liquidGlassPanel(tint: ChatPalette.inputField, cornerRadius: 20)
-                .disabled(isGenerating)
-                .focused(isInputFocused)
-                .onSubmit(sendIfPossible)
-
-            HStack(spacing: 10) {
+            HStack(alignment: .bottom, spacing: 8) {
                 if let onNewChat {
                     Button { onNewChat() } label: {
                         Image(systemName: "square.and.pencil")
@@ -64,17 +53,18 @@ struct InputBar: View {
                     .buttonStyle(.plain)
                     .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Circle())
                     .accessibilityLabel("New chat")
-                    .transition(.scale.combined(with: .opacity))
                 }
 
-                Text(modelName)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.82))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .liquidGlassPanel(tint: ChatPalette.elevatedSurface, cornerRadius: 20)
-
-                Spacer()
+                TextField("Message", text: $text, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .foregroundStyle(.white)
+                    .lineLimit(1...6)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .liquidGlassPanel(tint: ChatPalette.inputField, cornerRadius: 20)
+                    .disabled(isGenerating)
+                    .focused(isInputFocused)
+                    .onSubmit(sendIfPossible)
 
                 if isGenerating {
                     Button { onStop() } label: {
@@ -116,7 +106,6 @@ struct InputBar: View {
         }
         .padding(.horizontal, 12)
         .padding(.bottom, 12)
-        .padding(.top, 6)
     }
 
     private var commandPicker: some View {
