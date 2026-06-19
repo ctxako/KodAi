@@ -24,7 +24,6 @@ private struct LiquidGlassPanel: ViewModifier {
 
         content
             .background(tint.opacity(0.62), in: shape)
-            .background(.ultraThinMaterial, in: shape)
             .glassEffect(.regular.tint(tint.opacity(0.62)), in: shape)
             .overlay {
                 shape.stroke(ChatPalette.glassStroke, lineWidth: 0.7)
