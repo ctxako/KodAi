@@ -22,6 +22,7 @@ enum PrefKey {
     static let reduceMotion = "pref.reduceMotion"
     static let haptics = "pref.haptics"
     static let compactMessageSpacing = "pref.compactMessageSpacing"
+    static let surpriseHighlighting = "pref.surpriseHighlighting"
 }
 
 enum Haptics {

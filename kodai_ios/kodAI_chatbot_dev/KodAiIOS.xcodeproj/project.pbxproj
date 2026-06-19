@@ -36,7 +36,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		3C1A893D2FD48C3E003E89DE /* Exceptions for "kodAI_chatbot_dev" folder in "kodAI_chatbot_dev" target */ = {
+		3C1A893D2FD48C3E003E89DE /* Exceptions for "kodAI_chatbot_dev" folder in "KodAi iOS" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -46,20 +46,20 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		3C1A891C2FD48C3C003E89DE /* KodAi iOS */ = {
+		3C1A891C2FD48C3C003E89DE /* kodAI_chatbot_dev */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				3C1A893D2FD48C3E003E89DE /* Exceptions for "kodAI_chatbot_dev" folder in "kodAI_chatbot_dev" target */,
+				3C1A893D2FD48C3E003E89DE /* Exceptions for "kodAI_chatbot_dev" folder in "KodAi iOS" target */,
 			);
 			path = kodAI_chatbot_dev;
 			sourceTree = "<group>";
 		};
-		3C1A892E2FD48C3E003E89DE /* KodAi iOSTests */ = {
+		3C1A892E2FD48C3E003E89DE /* kodAI_chatbot_devTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = kodAI_chatbot_devTests;
 			sourceTree = "<group>";
 		};
-		3C1A89382FD48C3E003E89DE /* KodAi iOSUITests */ = {
+		3C1A89382FD48C3E003E89DE /* kodAI_chatbot_devUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = kodAI_chatbot_devUITests;
 			sourceTree = "<group>";
@@ -97,9 +97,9 @@
 		3C1A89112FD48C3C003E89DE = {
 			isa = PBXGroup;
 			children = (
-				3C1A891C2FD48C3C003E89DE /* KodAi iOS */,
-				3C1A892E2FD48C3E003E89DE /* KodAi iOSTests */,
-				3C1A89382FD48C3E003E89DE /* KodAi iOSUITests */,
+				3C1A891C2FD48C3C003E89DE /* kodAI_chatbot_dev */,
+				3C1A892E2FD48C3E003E89DE /* kodAI_chatbot_devTests */,
+				3C1A89382FD48C3E003E89DE /* kodAI_chatbot_devUITests */,
 				3C1A891B2FD48C3C003E89DE /* Products */,
 			);
 			sourceTree = "<group>";
@@ -119,7 +119,7 @@
 /* Begin PBXNativeTarget section */
 		3C1A89192FD48C3C003E89DE /* KodAi iOS */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 3C1A893E2FD48C3E003E89DE /* Build configuration list for PBXNativeTarget "kodAI_chatbot_dev" */;
+			buildConfigurationList = 3C1A893E2FD48C3E003E89DE /* Build configuration list for PBXNativeTarget "KodAi iOS" */;
 			buildPhases = (
 				3C1A89162FD48C3C003E89DE /* Sources */,
 				3C1A89172FD48C3C003E89DE /* Frameworks */,
@@ -130,7 +130,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				3C1A891C2FD48C3C003E89DE /* KodAi iOS */,
+				3C1A891C2FD48C3C003E89DE /* kodAI_chatbot_dev */,
 			);
 			name = "KodAi iOS";
 			packageProductDependencies = (
@@ -144,7 +144,7 @@
 		};
 		3C1A892A2FD48C3E003E89DE /* KodAi iOSTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 3C1A89432FD48C3E003E89DE /* Build configuration list for PBXNativeTarget "kodAI_chatbot_devTests" */;
+			buildConfigurationList = 3C1A89432FD48C3E003E89DE /* Build configuration list for PBXNativeTarget "KodAi iOSTests" */;
 			buildPhases = (
 				3C1A89272FD48C3E003E89DE /* Sources */,
 				3C1A89282FD48C3E003E89DE /* Frameworks */,
@@ -156,7 +156,7 @@
 				3C1A892D2FD48C3E003E89DE /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				3C1A892E2FD48C3E003E89DE /* KodAi iOSTests */,
+				3C1A892E2FD48C3E003E89DE /* kodAI_chatbot_devTests */,
 			);
 			name = "KodAi iOSTests";
 			packageProductDependencies = (
@@ -167,7 +167,7 @@
 		};
 		3C1A89342FD48C3E003E89DE /* KodAi iOSUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 3C1A89462FD48C3E003E89DE /* Build configuration list for PBXNativeTarget "kodAI_chatbot_devUITests" */;
+			buildConfigurationList = 3C1A89462FD48C3E003E89DE /* Build configuration list for PBXNativeTarget "KodAi iOSUITests" */;
 			buildPhases = (
 				3C1A89312FD48C3E003E89DE /* Sources */,
 				3C1A89322FD48C3E003E89DE /* Frameworks */,
@@ -179,7 +179,7 @@
 				3C1A89372FD48C3E003E89DE /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				3C1A89382FD48C3E003E89DE /* KodAi iOSUITests */,
+				3C1A89382FD48C3E003E89DE /* kodAI_chatbot_devUITests */,
 			);
 			name = "KodAi iOSUITests";
 			packageProductDependencies = (
@@ -211,7 +211,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 3C1A89152FD48C3C003E89DE /* Build configuration list for PBXProject "kodAI_chatbot_dev" */;
+			buildConfigurationList = 3C1A89152FD48C3C003E89DE /* Build configuration list for PBXProject "KodAiIOS" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -301,7 +301,8 @@
 		3C1A893F2FD48C3E003E89DE /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = 2;
+				ASSETCATALOG_COMPILER_APPICON_NAME = 1;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = kodAI_chatbot_dev/kodAI_chatbot_dev.entitlements;
 				CODE_SIGN_STYLE = Automatic;
@@ -335,7 +336,8 @@
 		3C1A89402FD48C3E003E89DE /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = 2;
+				ASSETCATALOG_COMPILER_APPICON_NAME = 1;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = kodAI_chatbot_dev/kodAI_chatbot_dev.entitlements;
 				CODE_SIGN_STYLE = Automatic;
@@ -497,7 +499,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ctxa.kodai.ios.tests";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ctxa.kodai.ios.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -519,7 +521,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ctxa.kodai.ios.tests";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ctxa.kodai.ios.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -539,7 +541,7 @@
 				DEVELOPMENT_TEAM = 8DYF4R2M73;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ctxa.kodai.ios.uitests";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ctxa.kodai.ios.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -559,7 +561,7 @@
 				DEVELOPMENT_TEAM = 8DYF4R2M73;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ctxa.kodai.ios.uitests";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ctxa.kodai.ios.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -574,7 +576,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		3C1A89152FD48C3C003E89DE /* Build configuration list for PBXProject "kodAI_chatbot_dev" */ = {
+		3C1A89152FD48C3C003E89DE /* Build configuration list for PBXProject "KodAiIOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3C1A89412FD48C3E003E89DE /* Debug */,
@@ -583,7 +585,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		3C1A893E2FD48C3E003E89DE /* Build configuration list for PBXNativeTarget "kodAI_chatbot_dev" */ = {
+		3C1A893E2FD48C3E003E89DE /* Build configuration list for PBXNativeTarget "KodAi iOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3C1A893F2FD48C3E003E89DE /* Debug */,
@@ -592,7 +594,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		3C1A89432FD48C3E003E89DE /* Build configuration list for PBXNativeTarget "kodAI_chatbot_devTests" */ = {
+		3C1A89432FD48C3E003E89DE /* Build configuration list for PBXNativeTarget "KodAi iOSTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3C1A89442FD48C3E003E89DE /* Debug */,
@@ -601,7 +603,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		3C1A89462FD48C3E003E89DE /* Build configuration list for PBXNativeTarget "kodAI_chatbot_devUITests" */ = {
+		3C1A89462FD48C3E003E89DE /* Build configuration list for PBXNativeTarget "KodAi iOSUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3C1A89472FD48C3E003E89DE /* Debug */,

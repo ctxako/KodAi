@@ -12,6 +12,7 @@ struct MessageBubble: View {
     let isProcessExpanded: Bool
     let generationStartDate: Date?
     let tokenHistory: [TokenSnapshot]
+    let surpriseHighlighting: Bool
     let onToggleProcess: () -> Void
     let onEditComment: () -> Void
 
@@ -51,10 +52,7 @@ struct MessageBubble: View {
                 }
             }
 
-            Text(message.text.isEmpty ? " " : message.text)
-                .font(messageFont)
-                .foregroundStyle(.white)
-                .textSelection(.enabled)
+            messageTextView
         }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -115,6 +113,39 @@ struct MessageBubble: View {
             .sheet(isPresented: $showsInspector) {
                 TokenInspectorView(messageText: message.text, history: tokenHistory)
             }
+    }
+
+    /// The assistant text rendered plainly, or — when surprise highlighting is on
+    /// and we have a token history — tinted per token by how surprised the model
+    /// was to emit it (−log p). The user's own messages are never tinted.
+    @ViewBuilder
+    private var messageTextView: some View {
+        if shouldHighlightSurprise {
+            Text(surpriseAttributedText)
+                .font(messageFont)
+                .textSelection(.enabled)
+        } else {
+            Text(message.text.isEmpty ? " " : message.text)
+                .font(messageFont)
+                .foregroundStyle(.white)
+                .textSelection(.enabled)
+        }
+    }
+
+    private var shouldHighlightSurprise: Bool {
+        surpriseHighlighting && message.role == .assistant && !tokenHistory.isEmpty
+    }
+
+    private var surpriseAttributedText: AttributedString {
+        var result = AttributedString()
+        for snapshot in tokenHistory where !snapshot.text.isEmpty {
+            var piece = AttributedString(snapshot.text)
+            let intensity = Double(TokenVisuals.surpriseIntensity(snapshot))
+            piece.foregroundColor = .white
+            piece.backgroundColor = Color.orange.opacity(intensity * 0.6)
+            result += piece
+        }
+        return result.characters.isEmpty ? AttributedString(message.text) : result
     }
 
     private var bubbleTint: Color {
@@ -427,6 +458,8 @@ struct MessageBubble: View {
             return "Entropy — how many ways this word could've gone"
         case .margin:
             return "Margin — how close the call was between the top two"
+        case .surprise:
+            return "Surprise — how unexpected this word was (−log of its odds)"
         }
     }
 

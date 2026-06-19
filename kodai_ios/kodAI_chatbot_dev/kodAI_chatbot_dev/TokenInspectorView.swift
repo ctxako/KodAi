@@ -33,6 +33,18 @@ enum TokenVisuals {
     /// ~4 nats ≈ a uniform choice over ~55 tokens.
     static let entropyReferenceMax: Float = 4.0
 
+    /// Surprise (−log p, nats) treated as "maximally surprising"; ~4 nats ≈ the
+    /// model having assigned the chosen token only ~1.8% probability.
+    static let surpriseReferenceMax: Float = 4.0
+
+    /// Per-token surprise (−log p of the sampled token) normalized to 0–1, where
+    /// 1 = the model was caught completely off guard. Drives the inline highlight.
+    static func surpriseIntensity(_ snapshot: TokenSnapshot) -> Float {
+        guard snapshot.isAnalyzed else { return 0 }
+        let surprise = -Foundation.log(max(snapshot.selectedProbability, 1e-6))
+        return max(0, min(1, surprise / surpriseReferenceMax))
+    }
+
     /// Normalizes a snapshot to a 0–1 "goodness" score for the chosen metric
     /// (1 = confident/green, 0 = uncertain/red).
     static func metricValue(_ snapshot: TokenSnapshot, metric: HeatMetric) -> Float {
@@ -43,6 +55,8 @@ enum TokenVisuals {
             return snapshot.margin
         case .entropy:
             return max(0, 1 - min(1, snapshot.entropy / entropyReferenceMax))
+        case .surprise:
+            return 1 - surpriseIntensity(snapshot)
         }
     }
 
@@ -57,6 +71,7 @@ enum HeatMetric: String, CaseIterable, Identifiable {
     case confidence = "Confidence"
     case entropy = "Entropy"
     case margin = "Margin"
+    case surprise = "Surprise"
     var id: String { rawValue }
 }
 
@@ -99,6 +114,7 @@ struct TokenInspectorView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var mode: Mode = .heatmap
+    @State private var heatMetric: HeatMetric = .confidence
     @State private var expandedSteps: Set<Int> = []
 
     enum Mode: String, CaseIterable, Identifiable {
@@ -182,6 +198,11 @@ struct TokenInspectorView: View {
 
     private var heatmapView: some View {
         VStack(alignment: .leading, spacing: 14) {
+            Picker("Lens", selection: $heatMetric) {
+                ForEach(HeatMetric.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+
             Text(attributedHeatmap)
                 .font(.body)
                 .textSelection(.enabled)
@@ -191,6 +212,8 @@ struct TokenInspectorView: View {
         }
     }
 
+    /// Tints each token by how "bad" it scored on the selected lens, so the same
+    /// warm highlight reads across Confidence, Entropy, Margin, and Surprise.
     private var attributedHeatmap: AttributedString {
         guard !history.isEmpty else { return AttributedString(messageText) }
 
@@ -198,9 +221,9 @@ struct TokenInspectorView: View {
         for snapshot in history {
             guard !snapshot.text.isEmpty else { continue }
             var piece = AttributedString(snapshot.text)
-            let uncertainty = Double(1 - snapshot.selectedProbability)
+            let intensity = Double(1 - TokenVisuals.metricValue(snapshot, metric: heatMetric))
             piece.foregroundColor = .white
-            piece.backgroundColor = Color.orange.opacity(uncertainty * 0.55)
+            piece.backgroundColor = Color.orange.opacity(intensity * 0.55)
             result += piece
         }
         return result.characters.isEmpty ? AttributedString(messageText) : result
@@ -208,7 +231,7 @@ struct TokenInspectorView: View {
 
     private var heatmapLegend: some View {
         HStack(spacing: 8) {
-            Text("Confident")
+            Text(heatMetric == .surprise ? "Expected" : "Confident")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             LinearGradient(
@@ -218,7 +241,7 @@ struct TokenInspectorView: View {
             )
             .frame(height: 6)
             .clipShape(Capsule())
-            Text("Uncertain")
+            Text(heatMetric == .surprise ? "Surprised" : "Uncertain")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }

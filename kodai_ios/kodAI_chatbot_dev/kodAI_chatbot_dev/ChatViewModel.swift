@@ -76,6 +76,19 @@ final class ChatViewModel {
     /// message can be inspected later; pruned to the active thread on each send.
     private(set) var tokenHistories: [ChatMessage.ID: [TokenSnapshot]] = [:]
 
+    /// Most recent real next-token distribution, used to seed the sampler
+    /// playground's "Last token" source. Walks back from the newest message to
+    /// the latest step that actually weighed more than one candidate.
+    var latestTokenAlternatives: [TokenAlternative]? {
+        for message in messages.reversed() {
+            guard let history = tokenHistories[message.id] else { continue }
+            if let snapshot = history.last(where: { $0.alternatives.count > 1 }) {
+                return snapshot.alternatives
+            }
+        }
+        return nil
+    }
+
     var activeProcessSummary: InferenceProcessSummary? {
         guard activeAssistantMessageID != nil, phase != .idle else { return nil }
 
