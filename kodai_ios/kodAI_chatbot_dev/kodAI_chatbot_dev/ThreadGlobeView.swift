@@ -135,6 +135,10 @@ private struct ThreadGlobeSceneView: UIViewRepresentable {
     @Binding var focusedOrder: Int
     @Binding var selectedTokenStep: Int?
     let vineOn: Bool
+    /// How many leading continents the vine connects. Equals the continent count
+    /// normally; during replay it tracks the focused exchange so the thread draws
+    /// itself one segment at a time.
+    let vineRevealCount: Int
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
@@ -163,7 +167,7 @@ private struct ThreadGlobeSceneView: UIViewRepresentable {
         view.addGestureRecognizer(pinch)
         context.coordinator.scnView = view
 
-        context.coordinator.setVine(visible: vineOn)
+        context.coordinator.configureVine(visible: vineOn, reveal: vineRevealCount)
         if let first = continents.first {
             context.coordinator.focus(order: first.order, animated: false)
         }
@@ -171,10 +175,10 @@ private struct ThreadGlobeSceneView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: SCNView, context: Context) {
-        context.coordinator.setVine(visible: vineOn)
         if focusedOrder != context.coordinator.currentOrder {
             context.coordinator.focus(order: focusedOrder, animated: !UIAccessibility.isReduceMotionEnabled)
         }
+        context.coordinator.configureVine(visible: vineOn, reveal: vineRevealCount)
         context.coordinator.syncTokenSelection(selectedTokenStep)
     }
 
@@ -197,6 +201,8 @@ private struct ThreadGlobeSceneView: UIViewRepresentable {
         private var detailContainer: SCNNode?      // focused continent's tokens
         private var vineNode: SCNNode?
         private var localStrandNode: SCNNode?      // token-order spiral in the focus
+        private var vineVisible = true
+        private var vineReveal = Int.max           // leading continents the vine connects
         private var vesselContainer: SCNNode?      // selected token's vessels
         private var tokenPositions: [Int: SCNVector3] = [:]   // step → world pos
         private var selectedTokenBead: SCNNode?
@@ -260,14 +266,21 @@ private struct ThreadGlobeSceneView: UIViewRepresentable {
                 globeNode.addChildNode(label)
             }
 
-            vineNode = makeVine()
-            if let vineNode { globeNode.addChildNode(vineNode) }
+            vineNode = makeVine(upTo: vineReveal)
+            if let vineNode {
+                vineNode.isHidden = !vineVisible
+                globeNode.addChildNode(vineNode)
+            }
         }
 
         /// Even-ish pole-to-pole spiral of unit vectors (one per continent).
         private func continentCenters(count: Int) -> [SCNVector3] {
             guard count > 0 else { return [] }
-            let turns = min(7, max(1.0, sqrt(Double(count)) * 0.9))
+            // Bound the longitude advance per exchange (~45°) and cap total
+            // winding so the thread descends as one legible north→south ribbon
+            // instead of scattering consecutive exchanges across (and behind) the
+            // globe. Chronology lives in latitude; this keeps it readable.
+            let turns = min(2.2, Double(max(count - 1, 1)) / 8.0)
             var result: [SCNVector3] = []
             for i in 0..<count {
                 let t = count > 1 ? Double(i) / Double(count - 1) : 0.5
@@ -385,9 +398,10 @@ private struct ThreadGlobeSceneView: UIViewRepresentable {
 
 
         /// A faint strand threading the continent seats in conversation order.
-        private func makeVine() -> SCNNode? {
-            guard centers.count > 1 else { return nil }
-            let verts = centers.map { v_scale($0, shellRadius + 0.012) }
+        private func makeVine(upTo count: Int) -> SCNNode? {
+            let limit = min(max(count, 0), centers.count)
+            guard limit > 1 else { return nil }
+            let verts = centers.prefix(limit).map { v_scale($0, shellRadius + 0.012) }
             let source = SCNGeometrySource(vertices: verts)
             var indices: [Int32] = []
             for i in 0..<(verts.count - 1) {
@@ -403,8 +417,20 @@ private struct ThreadGlobeSceneView: UIViewRepresentable {
             return SCNNode(geometry: geo)
         }
 
-        func setVine(visible: Bool) {
-            vineNode?.isHidden = !visible
+        /// Applies vine visibility and how far it's drawn. During replay the reveal
+        /// count tracks the focused exchange, so the conversation thread grows one
+        /// segment at a time; otherwise the whole thread is shown.
+        func configureVine(visible: Bool, reveal: Int) {
+            let changed = visible != vineVisible || reveal != vineReveal
+            vineVisible = visible
+            vineReveal = reveal
+            guard changed else { return }
+            vineNode?.removeFromParentNode()
+            vineNode = makeVine(upTo: reveal)
+            if let vineNode {
+                vineNode.isHidden = !visible
+                globeNode.addChildNode(vineNode)
+            }
             localStrandNode?.isHidden = !visible
         }
 
@@ -423,6 +449,24 @@ private struct ThreadGlobeSceneView: UIViewRepresentable {
 
             applyOrientation(animated: animated)
             rebuildDetail(for: order)
+            pulseFocusedRegion()
+        }
+
+        /// A brief scale "breath" on the focused continent so it visibly registers
+        /// as it's called up — during manual stepping and replay alike. Skipped
+        /// under Reduce Motion. Scale is independent of the depth-cue opacity logic,
+        /// so the two never fight.
+        private func pulseFocusedRegion() {
+            guard !UIAccessibility.isReduceMotionEnabled,
+                  glowNodes.indices.contains(currentOrder) else { return }
+            let node = glowNodes[currentOrder]
+            node.removeAllActions()
+            node.scale = SCNVector3(1, 1, 1)
+            let swell = SCNAction.scale(to: 1.14, duration: 0.16)
+            swell.timingMode = .easeOut
+            let settle = SCNAction.scale(to: 1.0, duration: 0.44)
+            settle.timingMode = .easeInEaseOut
+            node.runAction(.sequence([swell, settle]))
         }
 
         private func applyOrientation(animated: Bool) {
@@ -733,6 +777,9 @@ struct ThreadGlobeView: View {
     @State private var selectedTokenStep: Int?
     @State private var exploreTarget: GlobeContinent?
     @State private var isReadingGuideExpanded = false
+    @State private var isPlaying = false
+    @State private var playSpeed: Double = 1
+    @State private var isExploreMode = false
 
     init(messages: [ChatMessage], histories: [UUID: [TokenSnapshot]], contextSize: Int) {
         continents = GlobeContinent.build(messages: messages, histories: histories, contextSize: contextSize)
@@ -745,6 +792,16 @@ struct ThreadGlobeView: View {
     private var selectedToken: TokenSnapshot? {
         guard let step = selectedTokenStep else { return nil }
         return focused?.tokens.first { $0.step == step }
+    }
+
+    /// Full thread normally; during replay only up to the focused exchange so the
+    /// vine draws itself one segment at a time.
+    private var vineRevealCount: Int {
+        isPlaying ? min(focusedOrder + 1, continents.count) : continents.count
+    }
+
+    private var speedLabel: String {
+        playSpeed == 1 ? "1×" : (playSpeed == 1.5 ? "1.5×" : "2×")
     }
 
     var body: some View {
@@ -762,7 +819,9 @@ struct ThreadGlobeView: View {
                 if continents.isEmpty {
                     emptyState.frame(maxHeight: .infinity)
                 } else {
+                    if !isExploreMode {
                     readingGuide
+                }
 
                     ZStack {
                         GlobeObservatoryBackdrop()
@@ -770,15 +829,19 @@ struct ThreadGlobeView: View {
                             continents: continents,
                             focusedOrder: $focusedOrder,
                             selectedTokenStep: $selectedTokenStep,
-                            vineOn: vineOn
+                            vineOn: vineOn,
+                            vineRevealCount: vineRevealCount
                         )
                         .accessibilityHidden(true)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(.horizontal, 12)
                     .overlay(alignment: .topLeading) { chronologyKey.padding(18) }
+                    .overlay(alignment: .bottomLeading) { exploreToggle.padding(20) }
                     .overlay(alignment: .bottomTrailing) { vineToggle.padding(20) }
 
+                if !isExploreMode {
+                    replayBar
                     scrubber
                     if let token = selectedToken {
                         tokenCard(token)
@@ -786,10 +849,13 @@ struct ThreadGlobeView: View {
                         focusedCard
                     }
                 }
+                }
             }
         }
         .statusBarHidden()
         .onChange(of: focusedOrder) { selectedTokenStep = nil }
+        .onDisappear { isPlaying = false }
+        .task(id: isPlaying) { await runPlayback() }
         .fullScreenCover(item: $exploreTarget) { continent in
             GlobeView(messageText: continent.responsePreview, history: continent.tokens)
         }
@@ -916,6 +982,23 @@ struct ThreadGlobeView: View {
         }
     }
 
+    private var exploreToggle: some View {
+        Button {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.28)) {
+                isExploreMode.toggle()
+                if isExploreMode { isPlaying = false }
+            }
+            Haptics.lightTap()
+        } label: {
+            Image(systemName: isExploreMode ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(isExploreMode ? ChatPalette.accentBlue : .white.opacity(0.7))
+                .frame(width: 40, height: 40)
+                .background(.white.opacity(0.1), in: Circle())
+        }
+        .accessibilityLabel(isExploreMode ? "Exit full-sphere view" : "Full-sphere view")
+    }
+
     private var vineToggle: some View {
         Button {
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { vineOn.toggle() }
@@ -945,13 +1028,99 @@ struct ThreadGlobeView: View {
         .accessibilityHidden(true)
     }
 
+    /// Transport for walking the conversation in order: play/pause auto-advance
+    /// plus a speed cycle. Advancing the focused exchange is what makes the scene
+    /// spin to each continent, pulse it, and grow the vine — so this row drives
+    /// the visuals you already have rather than adding a parallel animation path.
+    private var replayBar: some View {
+        HStack(spacing: 12) {
+            Button {
+                togglePlay()
+            } label: {
+                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    .font(.body.weight(.bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 40, height: 40)
+                    .background(ChatPalette.accentBlue.opacity(isPlaying ? 0.75 : 0.45), in: Circle())
+            }
+            .disabled(continents.count < 2)
+            .accessibilityLabel(isPlaying ? "Pause replay" : "Play thread replay")
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(isPlaying ? "Replaying" : "Replay thread")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.9))
+                Text(isPlaying
+                     ? "Exchange \(focusedOrder + 1) of \(continents.count)"
+                     : "Walk the conversation in order")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+
+            Spacer()
+
+            Button {
+                cycleSpeed()
+                Haptics.lightTap()
+            } label: {
+                Text(speedLabel)
+                    .font(.caption.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .frame(width: 44, height: 32)
+                    .background(.white.opacity(0.1), in: Capsule())
+            }
+            .accessibilityLabel("Replay speed \(speedLabel)")
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 4)
+    }
+
+    private func togglePlay() {
+        Haptics.lightTap()
+        if isPlaying {
+            isPlaying = false
+            return
+        }
+        if focusedOrder >= continents.count - 1 { focusedOrder = 0 }
+        selectedTokenStep = nil
+        isPlaying = true
+    }
+
+    private func cycleSpeed() {
+        switch playSpeed {
+        case 1: playSpeed = 1.5
+        case 1.5: playSpeed = 2
+        default: playSpeed = 1
+        }
+    }
+
+    /// Advances the focused exchange on a clock while playing. Cancelled and
+    /// restarted by `.task(id: isPlaying)`; reads `playSpeed` each tick so a speed
+    /// change applies without restarting. Stops itself at the final exchange.
+    private func runPlayback() async {
+        guard isPlaying, continents.count > 1 else { return }
+        let base: Double = 1.8
+        while !Task.isCancelled && isPlaying {
+            guard focusedOrder < continents.count - 1 else { break }
+            try? await Task.sleep(for: .seconds(base / max(playSpeed, 0.5)))
+            if Task.isCancelled || !isPlaying { break }
+            guard focusedOrder < continents.count - 1 else { break }
+            focusedOrder += 1
+            Haptics.lightTap()
+        }
+        if isPlaying { isPlaying = false }
+    }
+
     private var scrubber: some View {
         HStack(spacing: 10) {
             stepButton(systemImage: "chevron.left", delta: -1, label: "Previous exchange")
             Slider(
                 value: Binding(
                     get: { Double(focusedOrder) },
-                    set: { focusedOrder = min(max(0, Int($0.rounded())), continents.count - 1) }
+                    set: {
+                        isPlaying = false
+                        focusedOrder = min(max(0, Int($0.rounded())), continents.count - 1)
+                    }
                 ),
                 in: 0...Double(max(continents.count - 1, 1)),
                 step: 1
@@ -971,6 +1140,7 @@ struct ThreadGlobeView: View {
 
     private func stepButton(systemImage: String, delta: Int, label: String) -> some View {
         Button {
+            isPlaying = false
             focusedOrder = min(max(0, focusedOrder + delta), continents.count - 1)
             Haptics.lightTap()
         } label: {
@@ -1015,6 +1185,7 @@ struct ThreadGlobeView: View {
                 .padding(.top, 2)
 
                 Button {
+                    isPlaying = false
                     exploreTarget = continent
                     Haptics.lightTap()
                 } label: {
