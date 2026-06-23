@@ -1,35 +1,28 @@
-//
-//  LocalModelRuntime.swift
-//  kodAI_chatbot_dev
-//
-//  Created by OpenAI Codex on 6/6/26.
-//
-
 import Foundation
 import KodaiKernel
 
-actor LocalModelRuntime {
+public actor LocalModelRuntime {
     private let configuration: LocalModelConfiguration
     private let llamaRuntime: LlamaRuntime
     private let modelDownloader: ModelDownloader
-    private let log = AppLog(category: "LocalModelRuntime")
+    private let log = KodaiLog(category: "LocalModelRuntime")
 
     private var context: LlamaContextWrapper?
     private var generationTask: Task<Void, Never>?
 
-    init(
+    public init(
         configuration: LocalModelConfiguration = .lfm2_5_1_2B_Instruct_Q4_K_M,
-        llamaRuntime: LlamaRuntime = LlamaRuntime(),
+        modelFileResolver: any ModelFileResolver,
         modelDownloader: ModelDownloader = ModelDownloader()
     ) {
         self.configuration = configuration
-        self.llamaRuntime = llamaRuntime
+        self.llamaRuntime = LlamaRuntime(modelFileResolver: modelFileResolver)
         self.modelDownloader = modelDownloader
     }
 
-    func generate(
-        messages: [ChatMessage],
-        promptStack: ModelPromptStack,
+    public func generate(
+        messages: [KodaiRuntimeMessage],
+        systemPrompt: String,
         samplerKnobs: SamplerKnobs
     ) -> AsyncThrowingStream<InferenceEvent, Error> {
         AsyncThrowingStream { continuation in
@@ -40,7 +33,7 @@ actor LocalModelRuntime {
                 }
 
                 do {
-                    try await self.run(messages: messages, promptStack: promptStack, samplerKnobs: samplerKnobs, continuation: continuation)
+                    try await self.run(messages: messages, systemPrompt: systemPrompt, samplerKnobs: samplerKnobs, continuation: continuation)
                 } catch is CancellationError {
                     await self.logCancellation()
                     continuation.yield(.cancelled)
@@ -63,8 +56,8 @@ actor LocalModelRuntime {
     }
 
     private func run(
-        messages: [ChatMessage],
-        promptStack: ModelPromptStack,
+        messages: [KodaiRuntimeMessage],
+        systemPrompt: String,
         samplerKnobs: SamplerKnobs,
         continuation: AsyncThrowingStream<InferenceEvent, Error>.Continuation
     ) async throws {
@@ -75,7 +68,7 @@ actor LocalModelRuntime {
 
         let finishReason = try await llamaRuntime.generate(
             messages: messages,
-            promptStack: promptStack,
+            systemPrompt: systemPrompt,
             context: context,
             configuration: configuration,
             samplerKnobs: samplerKnobs,
@@ -111,7 +104,7 @@ actor LocalModelRuntime {
         return loadedContext
     }
 
-    func prewarm(onStatus: @Sendable (WarmupStatus) -> Void) async {
+    public func prewarm(onStatus: @Sendable (WarmupStatus) -> Void) async {
         do {
             _ = try await loadContextWithStatus(onStatus: onStatus)
         } catch {
@@ -119,7 +112,7 @@ actor LocalModelRuntime {
         }
     }
 
-    func cancel() {
+    public func cancel() {
         context?.requestCancellation()
         generationTask?.cancel()
         generationTask = nil
@@ -133,83 +126,5 @@ actor LocalModelRuntime {
     private func logFailure(_ error: Error) {
         log.event("generation failed error=\(error.localizedDescription)")
         generationTask = nil
-    }
-}
-
-nonisolated struct LocalModelConfiguration: Sendable {
-    let modelResourceName: String
-    let modelResourceExtension: String
-    let shortDisplayName: String
-    let contextSize: Int32
-    let maxGeneratedTokens: Int32
-    let temperature: Float
-    let topP: Float
-    let topK: Int32
-    let batchSize: Int32
-    let repeatPenalty: Float
-
-    var expectedModelFileName: String {
-        "\(modelResourceName).\(modelResourceExtension)"
-    }
-
-    /// The sampler tuning a fresh chat starts from. Bridges the loose config
-    /// fields into the `SamplerKnobs` value the playground edits and the sampler
-    /// chain is rebuilt from, so defaults have a single source of truth.
-    var defaultSamplerKnobs: SamplerKnobs {
-        SamplerKnobs(
-            temperature: temperature,
-            topP: topP,
-            topK: Int(topK),
-            repeatPenalty: repeatPenalty,
-            maxOutputTokens: Int(maxGeneratedTokens)
-        )
-    }
-
-    nonisolated static let lfm2_5_1_2B_Instruct_Q4_K_M = LocalModelConfiguration(
-        modelResourceName: "LFM2.5-1.2B-Instruct-Q4_K_M",
-        modelResourceExtension: "gguf",
-        shortDisplayName: "LFM2.5 1.2B",
-        contextSize: 2_048,
-        maxGeneratedTokens: 384,
-        temperature: 0.45,
-        topP: 0.92,
-        topK: 40,
-        batchSize: 64,
-        repeatPenalty: 1.05
-    )
-}
-
-nonisolated enum LocalModelRuntimeError: Error, LocalizedError, Sendable {
-    case modelFileMissing(expectedFileName: String)
-    case invalidGGUFHeader(URL)
-    case llamaBackendUnavailable(modelFileName: String)
-    case modelLoadFailed(modelFileName: String)
-    case contextCreateFailed(modelFileName: String)
-    case samplerCreateFailed
-    case tokenizationFailed
-    case promptTooLong(tokenCount: Int, contextSize: Int32)
-    case decodeFailed(Int32)
-
-    var errorDescription: String? {
-        switch self {
-        case .modelFileMissing(let expectedFileName):
-            return "Missing model file: \(expectedFileName)"
-        case .invalidGGUFHeader(let url):
-            return "Model file is not a valid GGUF: \(url.lastPathComponent)"
-        case .llamaBackendUnavailable(let modelFileName):
-            return "llama.cpp backend is not wired yet for \(modelFileName)"
-        case .modelLoadFailed(let modelFileName):
-            return "Failed to load model: \(modelFileName)"
-        case .contextCreateFailed(let modelFileName):
-            return "Failed to create llama context for \(modelFileName)"
-        case .samplerCreateFailed:
-            return "Failed to create llama sampler"
-        case .tokenizationFailed:
-            return "Failed to tokenize prompt"
-        case .promptTooLong(let tokenCount, let contextSize):
-            return "Prompt has \(tokenCount) tokens, which exceeds context size \(contextSize)"
-        case .decodeFailed(let code):
-            return "llama_decode returned \(code)"
-        }
     }
 }

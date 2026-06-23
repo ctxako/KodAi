@@ -499,6 +499,41 @@ private struct GlobeSceneView: UIViewRepresentable {
 
 // MARK: - Decision Globe screen
 
+private struct ShareURLWrapper: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct AtlasExportAlternative: Encodable {
+    let tokenID: Int32
+    let text: String
+    let probability: Float
+    let isSelected: Bool
+}
+
+private struct AtlasExportToken: Encodable {
+    let step: Int
+    let text: String
+    let selectedProbability: Float
+    let entropy: Float
+    let margin: Float
+    let alternatives: [AtlasExportAlternative]
+}
+
+private struct TokenAtlasExport: Encodable {
+    let prompt: String
+    let response: String
+    let tokens: [AtlasExportToken]
+}
+
+private struct GlobeShareSheet: UIViewControllerRepresentable {
+    let url: URL
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: [url], applicationActivities: nil)
+    }
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
 struct GlobeView: View {
     let messageText: String
     let history: [TokenSnapshot]
@@ -509,6 +544,7 @@ struct GlobeView: View {
     @State private var activeStep: Int?
     @State private var isInspectorExpanded = false
     @State private var isReadingGuideExpanded = false
+    @State private var shareURL: URL?
 
     /// Only tokens carrying a distribution map to beads; end-of-stream flush
     /// chunks (no alternatives) are dropped so the globe reflects real decisions.
@@ -579,6 +615,17 @@ struct GlobeView: View {
             }
             Spacer()
 
+            if !tokens.isEmpty {
+                Button { exportTrace() } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .frame(width: 44, height: 44)
+                        .background(.white.opacity(0.1), in: Circle())
+                }
+                .accessibilityLabel("Export token trace")
+            }
+
             Button { dismiss() } label: {
                 Image(systemName: "xmark")
                     .font(.body.weight(.semibold))
@@ -591,6 +638,38 @@ struct GlobeView: View {
         .padding(.horizontal, 18)
         .padding(.top, 10)
         .padding(.bottom, 6)
+        .sheet(item: Binding(
+            get: { shareURL.map { ShareURLWrapper(url: $0) } },
+            set: { if $0 == nil { shareURL = nil } }
+        )) { wrapper in
+            GlobeShareSheet(url: wrapper.url)
+                .ignoresSafeArea()
+        }
+    }
+
+    private func exportTrace() {
+        let records = history.filter(\.isAnalyzed).map { snapshot in
+            AtlasExportToken(
+                step: snapshot.step,
+                text: snapshot.text,
+                selectedProbability: snapshot.selectedProbability,
+                entropy: snapshot.entropy,
+                margin: snapshot.margin,
+                alternatives: snapshot.alternatives.map {
+                    AtlasExportAlternative(
+                        tokenID: $0.tokenID, text: $0.text,
+                        probability: $0.probability, isSelected: $0.isSelected
+                    )
+                }
+            )
+        }
+        let response = history.map(\.visibleText).joined()
+        let export = TokenAtlasExport(prompt: messageText, response: response, tokens: records)
+        guard let data = try? JSONEncoder().encode(export) else { return }
+        let filename = "token-atlas-\(tokens.count)tok.json"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        guard (try? data.write(to: url)) != nil else { return }
+        shareURL = url
     }
 
     private var readingGuide: some View {

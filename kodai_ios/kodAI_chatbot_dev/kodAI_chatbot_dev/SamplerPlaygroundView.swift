@@ -9,6 +9,7 @@
 //  plain-language helper card (see `KnobInfo`). iOS 26 native throughout.
 //
 
+import KodaiKernel
 import SwiftUI
 
 // MARK: - Tuning card (primary)

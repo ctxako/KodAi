@@ -162,6 +162,8 @@ private extension ChatRole {
             return "User"
         case .assistant:
             return "Assistant"
+        case .system:
+            return "System"
         }
     }
 }

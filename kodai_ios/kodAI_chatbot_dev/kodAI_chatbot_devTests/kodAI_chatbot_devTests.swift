@@ -111,35 +111,4 @@ struct kodAI_chatbot_devTests {
         #expect(continents[0].rawArgmaxDifferenceCount == 1)
     }
 
-    @Test func generationDiagnostics() async throws {
-        let runtime = LocalModelRuntime()
-        let prompts = [
-            "Hi",
-            "Write one sentence about dogs",
-            "What is 2+2",
-            "What's 6x8"
-        ]
-
-        let promptStack = ModelPromptStack(settings: .default)
-        for prompt in prompts {
-            var assistantText = ""
-            print("[PromptTest] prompt=\(prompt.debugDescription)")
-            let stream = await runtime.generate(
-                messages: [ChatMessage(role: .user, text: prompt)],
-                promptStack: promptStack,
-                samplerKnobs: .default
-            )
-            for try await event in stream {
-                switch event {
-                case .token(let chunk, generatedTokenCount: let generatedTokenCount):
-                    _ = generatedTokenCount
-                    assistantText += chunk
-                default:
-                    break
-                }
-            }
-            print("[PromptTest] final prompt=\(prompt.debugDescription) length=\(assistantText.count) text=\(assistantText.debugDescription)")
-        }
-    }
-
 }

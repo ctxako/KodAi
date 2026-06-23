@@ -1,21 +1,15 @@
-//
-//  LlamaRuntime.swift
-//  kodAI_chatbot_dev
-//
-//  Created by OpenAI Codex on 6/6/26.
-//
-
 import Foundation
 import KodaiKernel
 
-actor LlamaRuntime {
-    private let modelFileResolver: BundledModelFileResolver
-    private let log = AppLog(category: "LlamaRuntime")
-    init(modelFileResolver: BundledModelFileResolver = BundledModelFileResolver()) {
+public actor LlamaRuntime {
+    private let modelFileResolver: any ModelFileResolver
+    private let log = KodaiLog(category: "LlamaRuntime")
+
+    public init(modelFileResolver: any ModelFileResolver) {
         self.modelFileResolver = modelFileResolver
     }
 
-    func initialize(
+    public func initialize(
         configuration: LocalModelConfiguration,
         onWarmupStatus: @Sendable (WarmupStatus) -> Void = { _ in }
     ) async throws -> LlamaContextWrapper {
@@ -36,9 +30,9 @@ actor LlamaRuntime {
         return context
     }
 
-    func generate(
-        messages: [ChatMessage],
-        promptStack: ModelPromptStack,
+    public func generate(
+        messages: [KodaiRuntimeMessage],
+        systemPrompt: String,
         context: LlamaContextWrapper,
         configuration: LocalModelConfiguration,
         samplerKnobs: SamplerKnobs,
@@ -51,7 +45,7 @@ actor LlamaRuntime {
 
         continuation.yield(.phase(.formattingPrompt))
         log.event("prompt formatting started")
-        let promptBuildResult = context.formatChatPrompt(messages: messages, promptStack: promptStack)
+        let promptBuildResult = context.formatChatPrompt(messages: messages, systemPrompt: systemPrompt)
         let formattedPrompt = promptBuildResult.prompt
         #if DEBUG
         log.event("raw formatted prompt sent to llama.cpp=\(formattedPrompt.debugDescription)")

@@ -100,12 +100,42 @@ private struct TokenCenterPreference: PreferenceKey {
     }
 }
 
+// MARK: - Share helpers
+
+private struct ShareURLWrapper: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct RiverShareSheet: UIViewControllerRepresentable {
+    let url: URL
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: [url], applicationActivities: nil)
+    }
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+private struct RiverTraceExportToken: Encodable {
+    let step: Int
+    let text: String
+    let selectedProbability: Float
+    let entropy: Float
+    let margin: Float
+}
+
+private struct RiverTraceExport: Encodable {
+    let prompt: String
+    let response: String
+    let tokens: [RiverTraceExportToken]
+}
+
 // MARK: - River
 
 struct RiverView: View {
     let messageText: String
     let history: [TokenSnapshot]
 
+    @Environment(ChatViewModel.self) private var viewModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var activeStep: Int?
@@ -113,6 +143,7 @@ struct RiverView: View {
     @State private var areAlternativesExpanded = false
     @State private var zoomScale: CGFloat = 1.0
     @GestureState private var liveScale: CGFloat = 1.0
+    @State private var shareURL: URL?
 
     /// Only tokens carrying a distribution can be mapped; end-of-stream flush
     /// chunks are dropped so the river reflects real decisions.
@@ -473,6 +504,16 @@ struct RiverView: View {
                     .foregroundStyle(.white.opacity(0.42))
             }
             Spacer()
+            if !tokens.isEmpty {
+                Button { exportTrace() } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .frame(width: 36, height: 36)
+                        .background(Color.white.opacity(0.06), in: Circle())
+                }
+                .accessibilityLabel("Export river trace")
+            }
             Button {
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
                     isLegendExpanded.toggle()
@@ -505,6 +546,32 @@ struct RiverView: View {
                 .fill(RiverPalette.current.opacity(0.12))
                 .frame(height: 1)
         }
+        .sheet(item: Binding(
+            get: { shareURL.map { ShareURLWrapper(url: $0) } },
+            set: { if $0 == nil { shareURL = nil } }
+        )) { wrapper in
+            RiverShareSheet(url: wrapper.url)
+                .ignoresSafeArea()
+        }
+    }
+
+    private func exportTrace() {
+        let response = history.map(\.visibleText).joined()
+        let exportTokens = history.map { snap in
+            RiverTraceExportToken(
+                step: snap.step,
+                text: snap.text,
+                selectedProbability: snap.selectedProbability,
+                entropy: snap.entropy,
+                margin: snap.margin
+            )
+        }
+        let export = RiverTraceExport(prompt: messageText, response: response, tokens: exportTokens)
+        guard let data = try? JSONEncoder().encode(export) else { return }
+        let filename = "river-trace-\(history.count)tok.json"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        guard (try? data.write(to: url)) != nil else { return }
+        shareURL = url
     }
 
     private var riverLegend: some View {

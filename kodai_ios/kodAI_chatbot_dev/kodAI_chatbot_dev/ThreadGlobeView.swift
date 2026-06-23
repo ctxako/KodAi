@@ -933,7 +933,7 @@ struct ThreadGlobeView: View {
                     Text("Regions follow conversation order, not meaning. A focused region reveals its response tokens; the vine links exchanges from first to latest.")
                         .foregroundStyle(.white.opacity(0.58))
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("The \(TokenTraceStore.maxResponsesPerSession) most recent response traces persist after relaunch.")
+                    Text("Token traces are available for the current session.")
                         .foregroundStyle(.white.opacity(0.42))
                         .fixedSize(horizontal: false, vertical: true)
                 }

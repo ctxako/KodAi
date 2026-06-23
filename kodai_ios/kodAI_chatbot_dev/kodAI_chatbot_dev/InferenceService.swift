@@ -7,10 +7,15 @@
 
 import Foundation
 import KodaiKernel
+import KodaiRuntime
 
 actor InferenceService {
-    private let runtime = LocalModelRuntime()
+    private let runtime: LocalModelRuntime
     private let ambientContextProvider = AmbientContextProvider()
+
+    init() {
+        runtime = LocalModelRuntime(modelFileResolver: BundledModelFileResolver())
+    }
 
     func generate(
         messages: [ChatMessage],
@@ -44,10 +49,15 @@ actor InferenceService {
                     localContextPromptBlock: promptStack.localContextPromptBlock,
                     ambientContext: promptStack.ambientContext
                 )
+                let finalStack = constrainedPromptStack.withAmbientContext(ambientResult.context)
+
+                let runtimeMessages = messages.map {
+                    KodaiRuntimeMessage(role: $0.role, text: $0.text)
+                }
 
                 let stream = await runtime.generate(
-                    messages: messages,
-                    promptStack: constrainedPromptStack.withAmbientContext(ambientResult.context),
+                    messages: runtimeMessages,
+                    systemPrompt: finalStack.runtimeSystemPrompt,
                     samplerKnobs: samplerKnobs
                 )
 

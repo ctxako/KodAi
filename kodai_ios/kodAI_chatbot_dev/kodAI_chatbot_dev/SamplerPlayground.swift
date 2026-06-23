@@ -2,59 +2,14 @@
 //  SamplerPlayground.swift
 //  kodAI_chatbot_dev
 //
-//  The sampler is the set of rules that turn the model's raw next-token scores
-//  into one chosen token. This file holds the live, working settings (`SamplerKnobs`)
-//  that drive real generation, plus the plain-language helper notes (`KnobInfo`)
-//  shown behind each ⓘ button in the tuning card. There is no visualization or
-//  mock math here anymore — every value in `SamplerKnobs` feeds the real sampler
-//  chain in `LlamaContextWrapper.makeSamplerChain`.
+//  Plain-language helper notes (`KnobInfo`) shown behind each ⓘ button in the
+//  tuning card. The `SamplerKnobs` value type lives in KodaiKernel.
 //
 
 import Foundation
+import KodaiKernel
 
-/// The live tuning that steers generation. Defaults come from the active model
-/// config (`LocalModelConfiguration.defaultSamplerKnobs`) so a fresh chat always
-/// starts on the shipped tuning, and the tuning card edits this same value.
-///
-/// Fields split into three groups:
-///   • Core — temperature, top-K, top-P, repeat penalty (the everyday knobs).
-///   • Advanced — min-P, frequency/presence penalties, deterministic, seed.
-///   • Generation — maxOutputTokens (a length cap, not a sampler transform, but
-///     it travels with the tuning so the card can expose it).
-struct SamplerKnobs: Equatable {
-    // Core
-    var temperature: Float = 1.0
-    var topP: Float = 1.0
-    var topK: Int = 40
-    var repeatPenalty: Float = 1.0
-
-    // Advanced
-    /// Min-P: drop any token below this fraction of the top token's probability.
-    /// 0 = disabled.
-    var minP: Float = 0.0
-    /// OpenAI-style frequency penalty (scales with how often a token appeared).
-    /// 0 = disabled.
-    var frequencyPenalty: Float = 0.0
-    /// OpenAI-style presence penalty (flat penalty once a token has appeared).
-    /// 0 = disabled.
-    var presencePenalty: Float = 0.0
-    /// Greedy decoding: always take the single highest-scoring token. When true,
-    /// temperature / top-K / top-P / min-P no longer matter.
-    var deterministic: Bool = false
-    /// Fixed random seed for reproducible runs. `nil` = a fresh random seed every
-    /// generation (the normal, varied behavior).
-    var seed: UInt32? = nil
-
-    // Generation
-    /// Hard cap on how many tokens the model may generate in one reply.
-    var maxOutputTokens: Int = 384
-
-    /// Temperatures below this collapse toward argmax; floors the slider so the
-    /// math never divides by ~0.
-    static let minTemperature: Float = 0.05
-
-    /// The tuning a fresh chat starts from, sourced from the active model config
-    /// so the card sliders and the live sampler chain never drift apart.
+extension SamplerKnobs {
     static let `default` = LocalModelConfiguration.lfm2_5_1_2B_Instruct_Q4_K_M.defaultSamplerKnobs
 }
 

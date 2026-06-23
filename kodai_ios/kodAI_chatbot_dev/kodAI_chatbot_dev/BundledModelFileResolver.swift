@@ -6,8 +6,10 @@
 //
 
 import Foundation
+import KodaiKernel
+import KodaiRuntime
 
-nonisolated struct BundledModelFileResolver: Sendable {
+nonisolated struct BundledModelFileResolver: ModelFileResolver, Sendable {
     private let log = AppLog(category: "ModelResolver")
     private let modelDownloader: ModelDownloader
 

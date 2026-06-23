@@ -1,0 +1,27 @@
+[
+  {
+    "id": "greeting",
+    "text": "Hello, how are you today?",
+    "system": "You are a helpful assistant. Keep your response under 50 words."
+  },
+  {
+    "id": "explain-gravity",
+    "text": "Explain gravity to a five-year-old in simple terms.",
+    "system": "You are a science teacher for young children. Keep your response under 100 words."
+  },
+  {
+    "id": "code-fizzbuzz",
+    "text": "Write a FizzBuzz implementation in Python.",
+    "system": "You are a coding assistant. Provide only the code with brief comments."
+  },
+  {
+    "id": "summarize-short",
+    "text": "Summarize the key differences between TCP and UDP protocols.",
+    "system": "You are a networking expert. Be concise."
+  },
+  {
+    "id": "creative-haiku",
+    "text": "Write three haiku about the ocean.",
+    "system": "You are a poet. Respond only with the haiku."
+  }
+]
