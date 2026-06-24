@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>kodAI — Token Atlas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{ --bg:#05070e; --ink:#EAF2F5; --blue:#4FD8E8; --grid:#12304a;
+         --amber:#F2C45A; --violet:#b388ff; --dim:#7C93A6; --mag:#ff6fae;
+         --gold:#FFD233; --rose:#F561B0;
+         --chrome-cyan:#38E0FF; --chrome-violet:#8C6EFF; --chrome-rose:#F561B0; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg); color:var(--ink); font-family:"Space Grotesk",system-ui,sans-serif; overflow:hidden}
+
+  #grid{position:fixed; inset:0; z-index:0; pointer-events:none;
+    background-image:
+      linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px),
+      linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+    background-size:100px 100px,100px 100px,25px 25px,25px 25px; background-position:center;
+    opacity:.5; transition:opacity .4s ease;
+    -webkit-mask-image:radial-gradient(ellipse 78% 72% at 50% 48%,#000 32%,transparent 100%);
+            mask-image:radial-gradient(ellipse 78% 72% at 50% 48%,#000 32%,transparent 100%);}
+  #glow{position:fixed; inset:0; z-index:0; pointer-events:none; opacity:.4; transition:opacity .5s;
+    background:radial-gradient(circle 42vmin at 50% 48%, rgba(79,216,232,.16), rgba(179,136,255,.07) 45%, transparent 72%);}
+  canvas{position:fixed; inset:0; z-index:1; display:block; touch-action:none; cursor:grab}
+  canvas:active{cursor:grabbing}
+
+  .hud{position:fixed; z-index:3; pointer-events:none}
+  .topleft{top:26px; left:30px}
+  .wordmark{font-weight:700; font-size:26px; letter-spacing:-.02em}
+  .wordmark b{color:var(--blue)}
+  .tag{font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.2em;
+       text-transform:uppercase; color:var(--dim); margin-top:7px}
+  .topright{top:28px; right:30px; text-align:right; font-family:"IBM Plex Mono",monospace;
+            font-size:10px; letter-spacing:.14em; color:var(--dim)}
+  .topright .phase{color:var(--blue); font-weight:500; font-size:11px}
+
+  /* playhead crosshair */
+  #playhead{position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    z-index:2; pointer-events:none}
+  .ph-ring{width:52px;height:52px;border-radius:50%;
+    border:1px dashed rgba(255,255,255,.5); position:absolute;
+    top:50%;left:50%;transform:translate(-50%,-50%)}
+  .ph-dot{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.85);
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
+  .ph-h{width:70px;height:1px;background:rgba(255,255,255,.3);
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
+  .ph-v{width:1px;height:70px;background:rgba(255,255,255,.3);
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
+
+  /* focused token label above playhead */
+  #focused-label{position:fixed; top:calc(50% - 56px); left:50%; transform:translateX(-50%);
+    z-index:3; pointer-events:none; font-family:"IBM Plex Mono",monospace;
+    font-size:14px; font-weight:700; color:var(--ink); padding:3px 10px;
+    background:rgba(0,0,0,.4); border-radius:20px; white-space:nowrap;
+    opacity:0; transition:opacity .15s}
+
+  /* vessel tip labels */
+  #vessel-labels{position:fixed; inset:0; z-index:2; pointer-events:none}
+  .vlabel{position:absolute; transform:translate(-50%,-50%);
+    font-family:"IBM Plex Mono",monospace; font-size:11px; white-space:nowrap;
+    padding:2px 6px; background:rgba(8,14,24,.6); border-radius:5px;
+    backdrop-filter:blur(3px); transition:opacity .12s}
+  .vlabel.gold{color:var(--gold); border:1px solid rgba(255,210,51,.35)}
+  .vlabel.rose-l{color:var(--rose); border:1px solid rgba(245,97,176,.3)}
+  .vlabel .vp{opacity:.6; font-size:9px; margin-left:4px}
+
+  /* tooltip */
+  #tip{position:fixed; z-index:4; pointer-events:none; opacity:0; transform:translate(12px,-50%);
+       font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--ink);
+       background:rgba(8,14,24,.82); border:1px solid rgba(79,216,232,.35); border-radius:7px;
+       padding:7px 10px; transition:opacity .12s; line-height:1.5; max-width:220px}
+  #tip .tk{color:var(--blue); font-weight:500} #tip .pv{color:var(--amber)}
+  #tip .dv{color:var(--gold); font-size:10px}
+
+  /* reading guide */
+  #info{position:fixed; top:82px; left:30px; z-index:3; max-width:340px;
+    font-family:"IBM Plex Mono",monospace; font-size:11px}
+  #infoToggle{background:none; border:none; color:var(--ink); cursor:pointer;
+    font-family:inherit; font-size:11px; padding:0; display:flex; align-items:center; gap:6px}
+  #infoToggle:hover{color:var(--blue)}
+  .info-sub{font-size:9px; color:var(--dim); letter-spacing:.12em; margin-top:4px}
+  .info-body{margin-top:8px; display:flex; flex-direction:column; gap:5px}
+  .info-row{display:flex; align-items:center; gap:8px; color:rgba(255,255,255,.58); font-size:10px}
+  .info-swatch{display:inline-block; width:20px; height:6px; border-radius:3px;
+    background:linear-gradient(90deg,#4A3380,#355BBD,#24E5FF)}
+  .info-dots{display:flex; align-items:center; gap:2px}
+  .info-note{color:rgba(255,255,255,.45); font-size:10px; margin-top:3px; line-height:1.5}
+  .info-chev{font-size:9px; transition:transform .2s}
+  .info-chev.open{transform:rotate(180deg)}
+
+  /* focused card */
+  #card{position:fixed; bottom:84px; left:12px; right:12px; z-index:4;
+    background:rgba(9,15,25,.72); backdrop-filter:blur(18px);
+    border:1px solid rgba(79,216,232,.18); border-radius:22px;
+    padding:16px; max-width:560px; margin:0 auto; opacity:0; transition:opacity .18s}
+  .card-head{display:flex; align-items:baseline; gap:10px}
+  .card-tok{font-family:"IBM Plex Mono",monospace; font-size:20px; font-weight:700; color:var(--ink)}
+  .card-p{font-family:"IBM Plex Mono",monospace; font-size:16px; font-weight:600; margin-left:auto}
+  .card-p-lbl{font-family:"IBM Plex Mono",monospace; font-size:10px; color:var(--dim)}
+  .card-expand{background:none; border:none; color:rgba(255,255,255,.45); cursor:pointer;
+    font-size:12px; padding:4px; transition:transform .2s}
+  .card-expand.open{transform:rotate(180deg)}
+  .card-sub{font-size:10px; color:rgba(255,255,255,.43); margin-top:4px;
+    font-family:"IBM Plex Mono",monospace}
+  .card-ctx{font-family:"IBM Plex Mono",monospace; font-size:13px; margin-top:8px;
+    line-height:1.6; color:rgba(255,255,255,.62)}
+  .card-ctx b{color:var(--ink); font-weight:600}
+  .card-take{font-size:12px; color:rgba(255,255,255,.7); margin-top:6px; line-height:1.5}
+  .card-detail{margin-top:10px; display:none}
+  .card-detail.open{display:block}
+  .card-note{font-size:10px; color:rgba(255,255,255,.45); line-height:1.5; margin-bottom:6px}
+  .card-argmax{font-size:11px; color:var(--gold); margin-bottom:6px}
+  .card-argmax .diamond{font-size:8px; margin-right:4px}
+  .card-metrics{display:flex; gap:18px; margin-bottom:8px}
+  .card-metric{display:flex; flex-direction:column; gap:1px}
+  .card-metric-val{font-family:"IBM Plex Mono",monospace; font-size:12px; color:rgba(255,255,255,.9)}
+  .card-metric-lbl{font-size:10px; color:var(--dim)}
+  .card-alts-head{font-size:10px; font-weight:600; color:rgba(255,255,255,.52);
+    margin-top:6px; margin-bottom:4px; text-transform:uppercase; letter-spacing:.12em}
+  .card-sep{border:none; border-top:1px solid rgba(255,255,255,.12); margin:8px 0}
+  .card-alt{display:flex; align-items:center; gap:6px; padding:2px 0}
+  .card-alt-text{font-family:"IBM Plex Mono",monospace; font-size:11px; min-width:50px;
+    color:rgba(255,255,255,.5)}
+  .card-alt-text.sel{color:rgba(255,255,255,.9)}
+  .card-alt-bar{flex:1; height:5px; background:rgba(255,255,255,.06); border-radius:2px; overflow:hidden}
+  .card-alt-fill{height:100%; border-radius:2px; background:rgba(255,255,255,.18)}
+  .card-alt-fill.sel{background:rgba(255,255,255,.5)}
+  .card-alt-p{font-family:"IBM Plex Mono",monospace; font-size:10px; color:rgba(255,255,255,.42);
+    min-width:32px; text-align:right}
+
+  /* dock */
+  .dock{position:fixed; z-index:5; left:50%; bottom:16px; transform:translateX(-50%);
+        display:flex; align-items:center; gap:14px; flex-wrap:wrap; justify-content:center;
+        background:rgba(9,15,25,.62); backdrop-filter:blur(14px);
+        border:1px solid rgba(79,216,232,.18); border-radius:14px; padding:10px 14px; max-width:96vw}
+  .dock label{font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.16em;
+              text-transform:uppercase; color:var(--dim); white-space:nowrap}
+  .dock-sep{width:1px; height:24px; background:rgba(79,216,232,.15)}
+  .scrub{display:flex; flex-direction:column; gap:4px}
+  .scrubtrack{display:flex; justify-content:space-between; width:160px}
+  input[type=range]{-webkit-appearance:none; appearance:none; height:3px; border-radius:3px; outline:none}
+  input[type=range].morph-r{width:160px;
+    background:linear-gradient(90deg,var(--blue),var(--violet),var(--amber))}
+  input[type=range].step-r{width:200px;
+    background:linear-gradient(90deg,rgba(79,216,232,.4),rgba(79,216,232,.7))}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; width:14px; height:14px; border-radius:50%;
+    background:var(--ink); border:2px solid var(--blue); cursor:pointer; box-shadow:0 0 8px rgba(79,216,232,.5)}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--ink);border:2px solid var(--blue)}
+  .btn{pointer-events:auto; cursor:pointer; font-family:"IBM Plex Mono",monospace; font-size:10px;
+       letter-spacing:.1em; text-transform:uppercase; color:var(--ink); background:rgba(79,216,232,.12);
+       border:1px solid rgba(79,216,232,.35); border-radius:9px; padding:8px 11px; transition:.2s;
+       white-space:nowrap; user-select:none}
+  .btn:hover{background:rgba(79,216,232,.22); border-color:var(--blue)}
+  .btn.sm{padding:7px 9px; font-size:9px; min-width:28px; text-align:center}
+  .step-nav{display:flex; align-items:center; gap:6px}
+  .step-count{font-family:"IBM Plex Mono",monospace; font-size:10px; color:var(--dim);
+    min-width:42px; text-align:right}
+  .trace-info{font-family:"IBM Plex Mono",monospace; font-size:10px; color:var(--dim)}
+
+  @media(max-width:680px){
+    #info{display:none} .topright{display:none}
+    input[type=range].morph-r,.scrubtrack{width:120px}
+    input[type=range].step-r{width:140px}
+    #card{bottom:74px; left:6px; right:6px; padding:12px}
+  }
+</style>
+</head>
+<body>
+  <div id="grid"></div><div id="glow"></div>
+
+  <div id="playhead">
+    <div class="ph-ring"></div><div class="ph-dot"></div>
+    <div class="ph-h"></div><div class="ph-v"></div>
+  </div>
+  <div id="focused-label"></div>
+  <div id="vessel-labels"></div>
+  <div id="tip"></div>
+
+  <div class="hud topleft"><div class="wordmark">kod<b>AI</b></div>
+    <div class="tag">// token atlas — see the model think</div></div>
+  <div class="hud topright"><div>render&nbsp;state</div>
+    <div class="phase" id="phaseLabel">BLUEPRINT</div></div>
+
+  <div id="info">
+    <button id="infoToggle">
+      <span style="color:rgba(79,216,232,.9)">&#9432;</span>
+      How to read this globe
+      <span class="info-chev" id="infoChev">&#9662;</span>
+    </button>
+    <div class="info-sub">before-sampling telemetry &middot; probability is not correctness</div>
+    <div class="info-body" id="infoBody" style="display:none">
+      <div class="info-row"><span class="info-swatch"></span> color = chosen-token probability</div>
+      <div class="info-row">
+        <span class="info-dots"><span style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.55);display:inline-block"></span>
+        <span style="width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.55);display:inline-block"></span></span>
+        size = uncertainty (entropy)
+      </div>
+      <div class="info-row"><span style="color:var(--gold);font-size:8px">&#9670;</span> gold = not the top raw choice</div>
+      <div class="info-row"><span style="color:var(--rose)">&#9095;</span> rose branches = other candidates</div>
+      <div class="info-note">The spiral shows generation order, not meaning or hidden reasoning. Scrubbing reveals the completed path up to the selected token.</div>
+    </div>
+  </div>
+
+  <div id="card">
+    <div class="card-head">
+      <span class="card-tok" id="cardTok"></span>
+      <span class="card-p" id="cardP"></span>
+      <span class="card-p-lbl">chosen p</span>
+      <button class="card-expand" id="cardExpand">&#9662;</button>
+    </div>
+    <div class="card-sub" id="cardSub"></div>
+    <div class="card-ctx" id="cardCtx"></div>
+    <div class="card-take" id="cardTake"></div>
+    <div class="card-detail" id="cardDetail">
+      <hr class="card-sep">
+      <div class="card-note">Chosen-token probability is measured before repetition penalties, truncation, temperature, and sampling. It does not measure answer correctness.</div>
+      <div class="card-argmax" id="cardArgmax"></div>
+      <div class="card-metrics" id="cardMetrics"></div>
+      <div class="card-note">Entropy measures how spread out the raw candidates were: near 0 is concentrated; near 4 resembles about 55 equally weighted options. Surprise is &minus;log(probability) for the chosen token.</div>
+      <hr class="card-sep">
+      <div class="card-alts-head">top candidates before sampling</div>
+      <div id="cardAlts"></div>
+    </div>
+  </div>
+
+  <div class="dock">
+    <span class="trace-info" id="traceInfo">35 tokens</span>
+    <div class="btn" id="loadBtn">&uarr; load</div>
+    <div class="dock-sep"></div>
+    <div class="scrub">
+      <input type="range" class="morph-r" id="morph" min="0" max="1000" value="0" />
+      <div class="scrubtrack"><label>blueprint</label><label>glass</label></div>
+    </div>
+    <div class="dock-sep"></div>
+    <div class="step-nav">
+      <div class="btn sm" id="prevBtn">&#9664;</div>
+      <input type="range" class="step-r" id="stepSlider" min="0" max="34" value="0" />
+      <div class="btn sm" id="nextBtn">&#9654;</div>
+      <span class="step-count" id="stepCount">1/35</span>
+    </div>
+    <div class="btn" id="autoBtn">&#9654; auto</div>
+  </div>
+
+  <input type="file" id="fileInput" accept=".json" style="display:none">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════
+// 1. SAMPLE DATA
+// ═══════════════════════════════════════════════════════════════
+
+const A = (id,t,p,sel) => ({tokenID:id,text:t,probability:p,isSelected:sel});
+const T = (step,text,p,e,m,alts) => ({step,text,selectedProbability:p,entropy:e,margin:m,alternatives:alts});
+
+const SAMPLE = {
+  prompt: "What is the capital of France?",
+  response: "The capital of France is Paris, a city known for its history, art, and the iconic Eiffel Tower. It is home to the Louvre and Notre-Dame.",
+  tokens: [
+    T(0,"The",.84,.92,.58,[A(450,"The",.84,true),A(319,"A",.06,false),A(1276,"Paris",.04,false),A(791,"As",.02,false)]),
+    T(1," capital",.76,1.35,.38,[A(5765," capital",.76,true),A(2196," largest",.08,false),A(982," city",.06,false),A(1044," most",.04,false)]),
+    T(2," of",.96,.18,.88,[A(315," of",.96,true),A(290," in",.03,false),A(315," and",.005,false)]),
+    T(3," France",.91,.45,.72,[A(6747," France",.91,true),A(3418," the",.04,false),A(7219," Japan",.02,false)]),
+    T(4," is",.97,.12,.92,[A(338," is",.97,true),A(13," was",.015,false),A(11,"'s",.008,false)]),
+    T(5," Paris",.94,.32,.80,[A(6342," Paris",.94,true),A(9441," Lyon",.03,false),A(8891," Marseille",.01,false)]),
+    T(6,",",.68,1.28,.24,[A(11,",",.68,true),A(13,".",.42,false),A(0,"!",.01,false)]),
+    // diverges: argmax was " the", sampler chose " a"
+    T(7," a",.42,2.10,.06,[A(314," the",.48,false),A(257," a",.42,true),A(526," one",.04,false),A(853," which",.02,false)]),
+    T(8," city",.61,1.52,.18,[A(3736," city",.61,true),A(8275," vibrant",.12,false),A(3407," beautiful",.08,false),A(9122," major",.05,false)]),
+    T(9," known",.55,1.68,.16,[A(3967," known",.55,true),A(4786," renowned",.15,false),A(8134," famous",.09,false),A(2060," celebrated",.06,false)]),
+    T(10," for",.82,.88,.48,[A(363," for",.82,true),A(355," as",.12,false),A(515," world",.02,false)]),
+    T(11," its",.78,.95,.42,[A(967," its",.78,true),A(262," the",.10,false),A(449," being",.04,false)]),
+    // diverges: argmax was " rich", sampler chose " history"
+    T(12," history",.35,2.50,.03,[A(5765," rich",.38,false),A(2106," history",.35,true),A(4419," beauty",.09,false),A(6131," deep",.07,false),A(3912," long",.04,false)]),
+    T(13,",",.58,1.62,.15,[A(11,",",.58,true),A(290," and",.22,false),A(13,".",.08,false)]),
+    T(14," art",.36,2.45,.05,[A(3396," art",.36,true),A(6891," culture",.31,false),A(8723," architecture",.12,false),A(4055," food",.07,false)]),
+    T(15,",",.72,1.12,.30,[A(11,",",.72,true),A(290," and",.18,false),A(13,".",.04,false)]),
+    T(16," and",.85,.72,.55,[A(290," and",.85,true),A(11,",",.06,false),A(267," or",.03,false)]),
+    T(17," the",.88,.58,.64,[A(262," the",.88,true),A(967," its",.08,false),A(257," a",.02,false)]),
+    // diverges: argmax was " famous", sampler chose " iconic"
+    T(18," iconic",.32,2.60,.04,[A(8723," famous",.36,false),A(17834," iconic",.32,true),A(5112," renowned",.10,false),A(3396," legendary",.07,false),A(2060," celebrated",.05,false)]),
+    T(19," Eiff",.82,.85,.50,[A(28417," Eiff",.82,true),A(19283," Eiffel",.10,false),A(5765," Arc",.03,false)]),
+    T(20,"el",.98,.06,.96,[A(301,"el",.98,true),A(295,"le",.01,false)]),
+    T(21," Tower",.95,.22,.85,[A(14229," Tower",.95,true),A(11," tower",.02,false),A(13,",",.01,false)]),
+    T(22,".",.72,1.20,.28,[A(13,".",.72,true),A(11,",",.15,false),A(290," and",.06,false)]),
+    T(23," It",.45,2.05,.10,[A(198,"\n",.52,false),A(632," It",.45,true),A(383," The",.08,false),A(450,"The",.04,false)]),
+    T(24," is",.72,1.08,.32,[A(338," is",.72,true),A(468," has",.18,false),A(338," was",.05,false)]),
+    // diverges: argmax was " also", sampler chose " home"
+    T(25," home",.38,2.30,.04,[A(1126," also",.42,false),A(1544," home",.38,true),A(314," the",.08,false),A(853," known",.04,false)]),
+    T(26," to",.93,.35,.78,[A(271," to",.93,true),A(315," of",.03,false),A(290," for",.01,false)]),
+    T(27," the",.86,.65,.56,[A(262," the",.86,true),A(4528," many",.05,false),A(6218," numerous",.03,false)]),
+    T(28," Lo",.62,1.48,.20,[A(8122," Lo",.62,true),A(28417," Mus",.12,false),A(5765," Arc",.08,false),A(14229," Not",.06,false)]),
+    T(29,"uvre",.97,.10,.92,[A(19283,"uvre",.97,true),A(301,"u",.01,false)]),
+    T(30," and",.68,1.25,.22,[A(290," and",.68,true),A(11,",",.14,false),A(13,".",.10,false)]),
+    T(31," Notre",.55,1.72,.15,[A(32891," Notre",.55,true),A(262," the",.15,false),A(14229," Sacr",.08,false),A(28417," Ver",.06,false)]),
+    T(32,"-",.92,.38,.78,[A(12,"-",.92,true),A(18," ",.04,false)]),
+    T(33,"Dame",.96,.16,.88,[A(41028,"Dame",.96,true),A(301,"dame",.02,false)]),
+    T(34,".",.85,.72,.52,[A(13,".",.85,true),A(11,",",.06,false),A(290," and",.03,false)]),
+  ]
+};
+
+let trace = SAMPLE;
+
+// ═══════════════════════════════════════════════════════════════
+// 2. UTILITIES
+// ═══════════════════════════════════════════════════════════════
+
+function hsbToRgb(h,s,b){
+  const i=Math.floor(h*6),f=h*6-i,p=b*(1-s),q=b*(1-f*s),t=b*(1-(1-f)*s);
+  switch(i%6){
+    case 0:return[b,t,p]; case 1:return[q,b,p]; case 2:return[p,b,t];
+    case 3:return[p,q,b]; case 4:return[t,p,b]; case 5:return[b,p,q];
+  }
+}
+
+function confidenceColor(prob){
+  const p=Math.max(0,Math.min(1,prob));
+  const [r,g,b]=hsbToRgb(0.72-p*0.20, 0.58+p*0.28, 0.48+p*0.52);
+  return new THREE.Color(r,g,b);
+}
+
+function confidenceCSS(prob){
+  const p=Math.max(0,Math.min(1,prob));
+  const [r,g,b]=hsbToRgb(0.72-p*0.20, 0.58+p*0.28, 0.48+p*0.52);
+  return `rgb(${Math.round(r*255)},${Math.round(g*255)},${Math.round(b*255)})`;
+}
+
+const DIVERGE_COLOR = new THREE.Color(...hsbToRgb(0.13,0.8,1.0));
+const ALT_COLOR = new THREE.Color(0.96,0.38,0.69);
+const CHROME_CYAN = new THREE.Color(0.22,0.88,1.0);
+const CHROME_VIOLET = new THREE.Color(0.55,0.43,1.0);
+const CHROME_ROSE = new THREE.Color(0.96,0.38,0.69);
+
+function globePositions(count,R){
+  if(!count) return [];
+  const turns=Math.min(18,Math.max(2,Math.sqrt(count)*0.8));
+  const out=[];
+  for(let i=0;i<count;i++){
+    const t=count>1?i/(count-1):0.5;
+    const polar=(0.12+0.76*t)*Math.PI;
+    const y=Math.cos(polar)*R;
+    const ring=Math.sin(polar)*R;
+    const lon=t*turns*2*Math.PI;
+    out.push(new THREE.Vector3(ring*Math.cos(lon), y, ring*Math.sin(lon)));
+  }
+  return out;
+}
+
+function readableText(t){
+  if(t==="\n") return "newline";
+  const s=t.trim();
+  return s||"space";
+}
+
+function pct(v){ return Math.round(Math.max(0,v)*100); }
+
+function tokenDiverges(tok){
+  return tok.alternatives.length>0 && !tok.alternatives[0].isSelected;
+}
+
+function rawArgmax(tok){
+  return tok.alternatives.length>0 ? tok.alternatives[0] : null;
+}
+
+function takeaway(tok){
+  const sel=readableText(tok.text);
+  if(tokenDiverges(tok)){
+    const ra=rawArgmax(tok);
+    return `“${sel}” was chosen with ${pct(tok.selectedProbability)}% probability before sampling. The top raw choice was “${readableText(ra.text)}” at ${pct(ra.probability)}%; sampler controls determined the emitted token.`;
+  }
+  if(tok.selectedProbability>=0.75)
+    return `Before sampling, the model strongly favored “${sel}” at ${pct(tok.selectedProbability)}%.`;
+  if(tok.margin<0.08)
+    return `“${sel}” was the top raw choice, but the two leading candidates were close.`;
+  return `“${sel}” was the top raw choice, with other candidates still carrying probability.`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 3. THREE.JS SCENE
+// ═══════════════════════════════════════════════════════════════
+
+const THREE_=window.THREE;
+const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+const R=2.0;
+
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+renderer.setClearColor(0x000000,0);
+renderer.outputEncoding=THREE.sRGBEncoding;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.1;
+document.body.appendChild(renderer.domElement);
+
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(40,innerWidth/innerHeight,0.1,100);
+camera.position.set(0,0,7);
+
+function makeEnv(){
+  const c=document.createElement('canvas');c.width=512;c.height=256;const x=c.getContext('2d');
+  const g=x.createLinearGradient(0,0,0,256);g.addColorStop(0,'#0a1733');g.addColorStop(.5,'#0d2940');g.addColorStop(1,'#04060c');
+  x.fillStyle=g;x.fillRect(0,0,512,256);
+  [['#4FD8E8',120,70,95],['#b388ff',370,150,115],['#F2C45A',250,210,85],['#ff6fae',60,200,70]]
+   .forEach(([col,cx,cy,r])=>{const rg=x.createRadialGradient(cx,cy,0,cx,cy,r);
+     rg.addColorStop(0,col);rg.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=rg;x.fillRect(0,0,512,256);});
+  const t=new THREE.CanvasTexture(c);t.mapping=THREE.EquirectangularReflectionMapping;t.encoding=THREE.sRGBEncoding;
+  const p=new THREE.PMREMGenerator(renderer);p.compileEquirectangularShader();
+  const rt=p.fromEquirectangular(t);t.dispose();return rt.texture;
+}
+scene.environment=makeEnv();
+scene.add(new THREE.HemisphereLight(0x8fd6ff,0x0a0d14,0.6));
+const keyLight=new THREE.DirectionalLight(0xffffff,1.2);keyLight.position.set(4,6,5);scene.add(keyLight);
+
+// ═══════════════════════════════════════════════════════════════
+// 4. GLOBE STATE
+// ═══════════════════════════════════════════════════════════════
+
+const globeNode=new THREE.Group(); scene.add(globeNode);
+let positions=[];
+let beadMeshes=[];
+let diamondMeshes=[];
+let tracerLines=[];
+let wireShellNode=null;
+let glassShellMesh=null;
+let silhouetteNode=null;
+let vesselGroup=null;
+let vesselLabelData=[];
+let activeBead=null;
+let activeIdx=0;
+
+let spinYaw=0,spinPitch=0,dragYaw=0,dragPitch=0;
+let curYaw=0.4,curPitch=-0.15;
+let targetYaw=0.4,targetPitch=-0.15;
+
+// ═══════════════════════════════════════════════════════════════
+// 5. GLOBE CHROME (port of GlobeChrome.swift)
+// ═══════════════════════════════════════════════════════════════
+
+function makeLineNode(points,color,alpha){
+  const geo=new THREE.BufferGeometry().setFromPoints(points);
+  const mat=new THREE.LineBasicMaterial({color,transparent:true,opacity:alpha,depthWrite:false});
+  return new THREE.Line(geo,mat);
+}
+
+function circlePoints3D(radius,y,segments){
+  const pts=[];
+  for(let i=0;i<=segments;i++){
+    const a=i/segments*Math.PI*2;
+    pts.push(new THREE.Vector3(radius*Math.cos(a),y,radius*Math.sin(a)));
+  }
+  return pts;
+}
+
+function buildWireShell(radius){
+  const container=new THREE.Group();
+  const latCount=7, lonCount=12;
+  for(let lat=1;lat<latCount;lat++){
+    const polar=lat/latCount*Math.PI;
+    const y=radius*Math.cos(polar);
+    const ringR=radius*Math.sin(polar);
+    const alpha=lat===Math.floor(latCount/2)?0.22:0.10;
+    container.add(makeLineNode(circlePoints3D(ringR,y,96),CHROME_CYAN,alpha));
+  }
+  for(let lon=0;lon<lonCount;lon++){
+    const angle=lon/lonCount*Math.PI;
+    const pts=[];
+    for(let s=0;s<=96;s++){
+      const polar=s/96*Math.PI*2;
+      pts.push(new THREE.Vector3(
+        radius*Math.sin(polar)*Math.cos(angle),
+        radius*Math.cos(polar),
+        radius*Math.sin(polar)*Math.sin(angle)
+      ));
+    }
+    const color=lon%3===0?CHROME_ROSE:CHROME_VIOLET;
+    const alpha=lon%3===0?0.10:0.075;
+    container.add(makeLineNode(pts,color,alpha));
+  }
+  container.renderOrder=-20;
+  return container;
+}
+
+function buildSilhouetteRing(radius){
+  const node=new THREE.Group();
+  const pts=[],pts2=[];
+  for(let i=0;i<=96;i++){
+    const a=i/96*Math.PI*2;
+    pts.push(new THREE.Vector3(radius*Math.cos(a),radius*Math.sin(a),0));
+    pts2.push(new THREE.Vector3((radius+0.024)*Math.cos(a),(radius+0.024)*Math.sin(a),0));
+  }
+  node.add(makeLineNode(pts,CHROME_CYAN,0.72));
+  node.add(makeLineNode(pts2,CHROME_VIOLET,0.22));
+  node.renderOrder=30;
+  return node;
+}
+
+function buildGlassShell(radius){
+  const geo=new THREE.SphereGeometry(radius,64,48);
+  const mat=new THREE.MeshPhysicalMaterial({
+    color:0xcfeaff, metalness:0, roughness:0.05, transmission:1, thickness:1.4,
+    ior:1.7, clearcoat:1, clearcoatRoughness:.1,
+    attenuationColor:new THREE.Color(0x6fb6ff), attenuationDistance:3.0,
+    envMapIntensity:1.3, transparent:true, opacity:0
+  });
+  const mesh=new THREE.Mesh(geo,mat);
+  mesh.renderOrder=-1;
+  return mesh;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 6. GLOBE CONSTRUCTION
+// ═══════════════════════════════════════════════════════════════
+
+function buildGlobe(tokens){
+  while(globeNode.children.length) globeNode.remove(globeNode.children[0]);
+  if(silhouetteNode) scene.remove(silhouetteNode);
+  beadMeshes=[]; diamondMeshes=[]; tracerLines=[]; vesselGroup=null; vesselLabelData=[];
+  activeBead=null;
+
+  positions=globePositions(tokens.length,R);
+
+  wireShellNode=buildWireShell(R*0.97);
+  globeNode.add(wireShellNode);
+
+  glassShellMesh=buildGlassShell(R*1.06);
+  globeNode.add(glassShellMesh);
+
+  silhouetteNode=buildSilhouetteRing(R*0.99);
+  scene.add(silhouetteNode);
+
+  const densityScale=Math.max(0.58,Math.min(1,Math.sqrt(140/Math.max(tokens.length,1))));
+
+  for(let i=0;i<tokens.length;i++){
+    const tok=tokens[i], pos=positions[i];
+    const entropyNorm=Math.min(1,tok.entropy/4.0);
+    const radius=densityScale*(0.036+0.028*entropyNorm);
+
+    const geo=new THREE.SphereGeometry(radius,12,8);
+    const mat=new THREE.MeshBasicMaterial({
+      color:confidenceColor(tok.selectedProbability),
+      transparent:true, opacity:1, depthWrite:false
+    });
+    const mesh=new THREE.Mesh(geo,mat);
+    mesh.position.copy(pos);
+    mesh.userData={step:tok.step,index:i,baseRadius:radius};
+    globeNode.add(mesh);
+    beadMeshes.push(mesh);
+
+    if(tokenDiverges(tok)){
+      const dGeo=new THREE.OctahedronGeometry(0.032*densityScale);
+      const dMat=new THREE.MeshBasicMaterial({color:DIVERGE_COLOR,transparent:true,opacity:1,depthWrite:false});
+      const dMesh=new THREE.Mesh(dGeo,dMat);
+      const n=pos.clone().normalize();
+      dMesh.position.copy(pos.clone().add(n.multiplyScalar(0.08)));
+      dMesh.userData={step:tok.step,index:i};
+      globeNode.add(dMesh);
+      diamondMeshes.push(dMesh);
+    }
+  }
+
+  if(positions.length>1){
+    for(let i=0;i<positions.length-1;i++){
+      const color=confidenceColor(tokens[i+1].selectedProbability);
+      const geo=new THREE.BufferGeometry().setFromPoints([positions[i],positions[i+1]]);
+      const mat=new THREE.LineBasicMaterial({color,transparent:true,opacity:1,depthWrite:false});
+      const line=new THREE.Line(geo,mat);
+      globeNode.add(line);
+      tracerLines.push(line);
+    }
+  }
+
+  const stepSlider=document.getElementById('stepSlider');
+  stepSlider.max=Math.max(0,tokens.length-1);
+  stepSlider.value=0;
+  document.getElementById('traceInfo').textContent=tokens.length+' tokens';
+  activeIdx=0;
+  focusStep(0,false);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 7. FOCUS + VESSELS
+// ═══════════════════════════════════════════════════════════════
+
+function focusStep(idx,animated){
+  idx=Math.max(0,Math.min(idx,trace.tokens.length-1));
+  activeIdx=idx;
+  const pos=positions[idx];
+  if(!pos) return;
+
+  const ring=Math.sqrt(pos.x*pos.x+pos.z*pos.z);
+  spinYaw=-Math.atan2(pos.x,pos.z);
+  spinPitch=Math.atan2(pos.y,ring);
+  dragYaw=0; dragPitch=0;
+
+  if(!animated){
+    curYaw=spinYaw; curPitch=spinPitch;
+    globeNode.rotation.set(
+      Math.max(-1.45,Math.min(1.45,curPitch)),curYaw,0,'XYZ');
+  }
+
+  if(activeBead) activeBead.scale.set(1,1,1);
+  if(beadMeshes[idx]){
+    beadMeshes[idx].scale.set(1.8,1.8,1.8);
+    activeBead=beadMeshes[idx];
+  }
+
+  rebuildVessels(trace.tokens[idx],pos);
+  updateDepthCues();
+  updateCard(trace.tokens[idx]);
+  updateFocusedLabel(trace.tokens[idx]);
+
+  document.getElementById('stepSlider').value=idx;
+  document.getElementById('stepCount').textContent=(idx+1)+'/'+trace.tokens.length;
+}
+
+function rebuildVessels(tok,pos){
+  if(vesselGroup){globeNode.remove(vesselGroup);}
+  vesselLabelData=[];
+  document.getElementById('vessel-labels').innerHTML='';
+  if(!tok) return;
+
+  vesselGroup=new THREE.Group();
+  const considered=tok.alternatives.filter(a=>!a.isSelected).slice(0,5);
+  if(!considered.length){globeNode.add(vesselGroup);return;}
+
+  const n=pos.clone().normalize();
+  let u=new THREE.Vector3().crossVectors(n,new THREE.Vector3(0,1,0));
+  if(u.length()<1e-3) u.crossVectors(n,new THREE.Vector3(1,0,0));
+  u.normalize();
+  const w=new THREE.Vector3().crossVectors(n,u).normalize();
+
+  const origin=pos.clone().add(n.clone().multiplyScalar(0.04));
+  const raID=tokenDiverges(tok)&&tok.alternatives[0]?tok.alternatives[0].tokenID:null;
+
+  for(let j=0;j<considered.length;j++){
+    const alt=considered[j];
+    const angle=j/considered.length*Math.PI*2;
+    const dir=u.clone().multiplyScalar(Math.cos(angle)).add(w.clone().multiplyScalar(Math.sin(angle)));
+    const reach=(0.24+0.20*alt.probability);
+    const tip=pos.clone().add(n.clone().multiplyScalar(0.10)).add(dir.multiplyScalar(reach));
+
+    const isRA=tokenDiverges(tok)&&alt.tokenID===raID;
+    const color=isRA?DIVERGE_COLOR.clone():ALT_COLOR.clone();
+    const opacity=isRA?0.82:0.46;
+    const thickness=isRA?0.007:0.005;
+
+    vesselGroup.add(makeCylinder(origin,tip,thickness,color,opacity));
+
+    const tipGeo=new THREE.SphereGeometry(0.012+0.036*alt.probability,8,6);
+    const tipMat=new THREE.MeshBasicMaterial({color,transparent:true,opacity,depthWrite:false});
+    const tipMesh=new THREE.Mesh(tipGeo,tipMat);
+    tipMesh.position.copy(tip);
+    vesselGroup.add(tipMesh);
+
+    const labelPos=tip.clone().add(n.clone().multiplyScalar(0.06));
+    const el=document.createElement('div');
+    el.className='vlabel '+(isRA?'gold':'rose-l');
+    const trimmed=alt.text.trim();
+    const display=trimmed||(alt.text==="\n"?"↵":"␣");
+    el.innerHTML=(display.length>10?display.slice(0,10)+'…':display)+
+      '<span class="vp">'+pct(alt.probability)+'%</span>';
+    document.getElementById('vessel-labels').appendChild(el);
+    vesselLabelData.push({el,pos:labelPos});
+  }
+  globeNode.add(vesselGroup);
+}
+
+function makeCylinder(a,b,radius,color,opacity){
+  const diff=b.clone().sub(a);
+  const len=diff.length();
+  const geo=new THREE.CylinderGeometry(radius,radius,Math.max(len,1e-4),6);
+  const mat=new THREE.MeshBasicMaterial({color,transparent:true,opacity,depthWrite:false});
+  const mesh=new THREE.Mesh(geo,mat);
+  mesh.position.copy(a.clone().add(b).multiplyScalar(0.5));
+  const d=diff.clone().normalize();
+  const up=new THREE.Vector3(0,1,0);
+  const axis=new THREE.Vector3().crossVectors(up,d);
+  const axisLen=axis.length();
+  if(axisLen>1e-5){
+    const dot=Math.max(-1,Math.min(1,up.dot(d)));
+    mesh.setRotationFromAxisAngle(axis.normalize(),Math.acos(dot));
+  } else if(d.y<0){
+    mesh.rotation.set(Math.PI,0,0);
+  }
+  return mesh;
+}
+
+function updateDepthCues(){
+  const tokens=trace.tokens;
+  const v=new THREE.Vector3();
+  for(let i=0;i<tokens.length;i++){
+    const mesh=beadMeshes[i];
+    if(!mesh) continue;
+    mesh.getWorldPosition(v);
+    const z=v.z;
+    const depthOp=z<-0.08?0.22:(z<0.18?0.58:1);
+    let tempOp;
+    if(i===activeIdx) tempOp=1;
+    else if(i<activeIdx) tempOp=i>=activeIdx-12?0.56:0.18;
+    else tempOp=0.055;
+    mesh.material.opacity=depthOp*tempOp;
+  }
+  for(let i=0;i<diamondMeshes.length;i++){
+    const dm=diamondMeshes[i];
+    const bi=dm.userData.index;
+    const mesh=beadMeshes[bi];
+    if(mesh) dm.material.opacity=mesh.material.opacity*0.9;
+  }
+  for(let i=0;i<tracerLines.length;i++){
+    if(i===activeIdx-1) tracerLines[i].material.opacity=0.95;
+    else if(i<activeIdx) tracerLines[i].material.opacity=i>=activeIdx-12?0.42:0.12;
+    else tracerLines[i].material.opacity=0.035;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 8. MORPH (BLUEPRINT → GLASS)
+// ═══════════════════════════════════════════════════════════════
+
+let morphVal=0, autoMorph=!reduce, morphT=reduce?1:0;
+const morphSlider=document.getElementById('morph');
+const phaseLabel=document.getElementById('phaseLabel');
+const gridEl=document.getElementById('grid');
+const glowEl=document.getElementById('glow');
+const ease=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+
+function applyMorph(m){
+  const e=ease(Math.max(0,Math.min(1,m)));
+  if(wireShellNode){
+    wireShellNode.traverse(c=>{if(c.material) c.material.opacity=c.material.userData?.baseAlpha*(1-e)||0;});
+  }
+  if(glassShellMesh){
+    glassShellMesh.material.opacity=e*0.92;
+    glassShellMesh.material.transmission=e;
+  }
+  gridEl.style.opacity=0.5-e*0.34;
+  glowEl.style.opacity=0.4+e*0.45;
+  phaseLabel.textContent=e<0.05?'BLUEPRINT':e<0.92?'EMBEDDING':'GLASS ATLAS';
+  phaseLabel.style.color=e<0.92?'#4FD8E8':'#F2C45A';
+}
+
+// store base alpha on wire shell materials
+function tagWireAlphas(){
+  if(!wireShellNode) return;
+  wireShellNode.traverse(c=>{
+    if(c.material){
+      if(!c.material.userData) c.material.userData={};
+      c.material.userData.baseAlpha=c.material.opacity;
+    }
+  });
+}
+
+morphSlider.addEventListener('input',()=>{
+  autoMorph=false;
+  morphVal=morphSlider.value/1000;
+  applyMorph(morphVal);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// 9. INTERACTION
+// ═══════════════════════════════════════════════════════════════
+
+// --- drag ---
+let drag=false,px=0,py=0,idle=0;
+const dom=renderer.domElement;
+function dn(ev){drag=true;idle=0;const p=ev.touches?ev.touches[0]:ev;px=p.clientX;py=p.clientY;}
+function mv(ev){if(!drag)return;const p=ev.touches?ev.touches[0]:ev;
+  dragYaw+=(p.clientX-px)*0.005; dragPitch+=(p.clientY-py)*0.005;
+  px=p.clientX;py=p.clientY;}
+function up(){drag=false;}
+dom.addEventListener('mousedown',dn);addEventListener('mousemove',mv);addEventListener('mouseup',up);
+dom.addEventListener('touchstart',dn,{passive:true});addEventListener('touchmove',mv,{passive:true});addEventListener('touchend',up);
+
+// --- hover ---
+const raycaster=new THREE.Raycaster();
+const mouse=new THREE.Vector2();
+let mx=0,my=0,hovering=false;
+const tipEl=document.getElementById('tip');
+dom.addEventListener('mousemove',ev=>{
+  mx=ev.clientX;my=ev.clientY;
+  mouse.x=(ev.clientX/innerWidth)*2-1;
+  mouse.y=-(ev.clientY/innerHeight)*2+1;
+  hovering=true;
+});
+dom.addEventListener('mouseleave',()=>{hovering=false;tipEl.style.opacity=0;});
+
+function pickHover(){
+  if(!hovering||!beadMeshes.length) return;
+  raycaster.setFromCamera(mouse,camera);
+  const hits=raycaster.intersectObjects(beadMeshes,false);
+  if(hits.length){
+    const i=hits[0].object.userData.index;
+    const tok=trace.tokens[i];
+    const div=tokenDiverges(tok)?'<br><span class="dv">&#9670; diverged from argmax</span>':'';
+    tipEl.innerHTML=`<span class="tk">${readableText(tok.text)}</span> step ${tok.step}<br>`+
+      `p=<span class="pv">${pct(tok.selectedProbability)}%</span> &nbsp;H=${tok.entropy.toFixed(2)}${div}`;
+    tipEl.style.left=mx+'px';tipEl.style.top=my+'px';tipEl.style.opacity=1;
+  } else {
+    tipEl.style.opacity=0;
+  }
+}
+
+// --- click ---
+dom.addEventListener('click',ev=>{
+  mouse.x=(ev.clientX/innerWidth)*2-1;
+  mouse.y=-(ev.clientY/innerHeight)*2+1;
+  raycaster.setFromCamera(mouse,camera);
+  const hits=raycaster.intersectObjects(beadMeshes,false);
+  if(hits.length){
+    focusStep(hits[0].object.userData.index,true);
+  }
+});
+
+// --- step controls ---
+document.getElementById('stepSlider').addEventListener('input',ev=>{
+  autoStep=false;
+  focusStep(parseInt(ev.target.value),true);
+});
+document.getElementById('prevBtn').addEventListener('click',()=>{
+  autoStep=false;
+  focusStep(activeIdx-1,true);
+});
+document.getElementById('nextBtn').addEventListener('click',()=>{
+  autoStep=false;
+  focusStep(activeIdx+1,true);
+});
+
+let autoStep=false,stepTimer=0;
+document.getElementById('autoBtn').addEventListener('click',()=>{
+  autoStep=true; stepTimer=0;
+  focusStep(0,true);
+});
+
+// --- info toggle ---
+document.getElementById('infoToggle').addEventListener('click',()=>{
+  const body=document.getElementById('infoBody');
+  const chev=document.getElementById('infoChev');
+  const open=body.style.display==='none';
+  body.style.display=open?'flex':'none';
+  chev.classList.toggle('open',open);
+});
+
+// --- card expand ---
+document.getElementById('cardExpand').addEventListener('click',()=>{
+  const det=document.getElementById('cardDetail');
+  const btn=document.getElementById('cardExpand');
+  const open=!det.classList.contains('open');
+  det.classList.toggle('open',open);
+  btn.classList.toggle('open',open);
+});
+
+// --- file load ---
+document.getElementById('loadBtn').addEventListener('click',()=>{
+  document.getElementById('fileInput').click();
+});
+document.getElementById('fileInput').addEventListener('change',ev=>{
+  const file=ev.target.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const json=JSON.parse(e.target.result);
+      let tokens;
+      if(json.traces){
+        const keys=Object.keys(json.traces);
+        tokens=json.traces[keys[0]];
+      } else if(Array.isArray(json.tokens)){
+        tokens=json.tokens;
+      } else if(Array.isArray(json)){
+        tokens=json;
+      }
+      if(tokens&&tokens.length){
+        trace={tokens};
+        buildGlobe(tokens);
+        tagWireAlphas();
+        applyMorph(morphVal);
+      }
+    }catch(err){console.error('Failed to parse trace JSON:',err);}
+  };
+  reader.readAsText(file);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// 10. UI UPDATES
+// ═══════════════════════════════════════════════════════════════
+
+const focusedLabelEl=document.getElementById('focused-label');
+function updateFocusedLabel(tok){
+  if(!tok){focusedLabelEl.style.opacity=0;return;}
+  focusedLabelEl.textContent=readableText(tok.text);
+  focusedLabelEl.style.opacity=0.92;
+}
+
+function updateCard(tok){
+  const card=document.getElementById('card');
+  if(!tok){card.style.opacity=0;return;}
+  card.style.opacity=1;
+
+  document.getElementById('cardTok').textContent=readableText(tok.text);
+  const pEl=document.getElementById('cardP');
+  pEl.textContent=pct(tok.selectedProbability)+'%';
+  pEl.style.color=confidenceCSS(tok.selectedProbability);
+
+  document.getElementById('cardSub').textContent=
+    'Token '+(activeIdx+1)+' of '+trace.tokens.length+' · tap bead for detail';
+
+  // context: ±2 tokens
+  const tokens=trace.tokens;
+  const start=Math.max(0,activeIdx-2), end=Math.min(tokens.length-1,activeIdx+2);
+  let ctx='';
+  for(let i=start;i<=end;i++){
+    const raw=tokens[i].text.replace(/\n/g,' ↵ ');
+    if(i===activeIdx){
+      const lead=raw.startsWith(' ')?' ':'';
+      ctx+=lead+'<b>['+readableText(raw)+']</b>';
+    } else {
+      ctx+=raw;
+    }
+  }
+  document.getElementById('cardCtx').innerHTML=ctx;
+  document.getElementById('cardTake').textContent=takeaway(tok);
+
+  // argmax divergence
+  const argmaxEl=document.getElementById('cardArgmax');
+  if(tokenDiverges(tok)){
+    const ra=rawArgmax(tok);
+    argmaxEl.innerHTML='<span class="diamond">&#9670;</span> Top raw choice: '+
+      readableText(ra.text)+' ('+pct(ra.probability)+'%)';
+    argmaxEl.style.display='block';
+  } else {
+    argmaxEl.style.display='none';
+  }
+
+  // metrics
+  const surprise=-Math.log(Math.max(tok.selectedProbability,1e-6));
+  document.getElementById('cardMetrics').innerHTML=
+    '<div class="card-metric"><span class="card-metric-val">'+tok.entropy.toFixed(2)+' nats</span><span class="card-metric-lbl">Uncertainty</span></div>'+
+    '<div class="card-metric"><span class="card-metric-val">'+pct(tok.margin)+' pp</span><span class="card-metric-lbl">Top-two gap</span></div>'+
+    '<div class="card-metric"><span class="card-metric-val">'+surprise.toFixed(2)+' nats</span><span class="card-metric-lbl">Surprise</span></div>';
+
+  // alternatives
+  const altsEl=document.getElementById('cardAlts');
+  if(tok.alternatives.length>1){
+    altsEl.innerHTML=tok.alternatives.map(a=>{
+      const sel=a.isSelected?'sel':'';
+      const display=a.text.trim()||(a.text==='\n'?'↵':'␣');
+      return '<div class="card-alt">'+
+        '<span class="card-alt-text '+sel+'">'+display+'</span>'+
+        '<div class="card-alt-bar"><div class="card-alt-fill '+sel+'" style="width:'+
+        Math.max(2,a.probability*100)+'%"></div></div>'+
+        '<span class="card-alt-p">'+pct(a.probability)+'%</span></div>';
+    }).join('');
+  } else {
+    altsEl.innerHTML='';
+  }
+}
+
+function projectVesselLabels(){
+  const v=new THREE.Vector3();
+  vesselLabelData.forEach(vl=>{
+    v.copy(vl.pos);
+    globeNode.localToWorld(v);
+    const front=camera.position.clone().sub(v).dot(v.clone().normalize())>(-R*0.2);
+    v.project(camera);
+    if(v.z>1||!front){vl.el.style.opacity='0';return;}
+    vl.el.style.opacity='0.88';
+    vl.el.style.left=((v.x*0.5+0.5)*innerWidth)+'px';
+    vl.el.style.top=((-v.y*0.5+0.5)*innerHeight)+'px';
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 11. ANIMATION LOOP + INIT
+// ═══════════════════════════════════════════════════════════════
+
+const clock=new THREE.Clock();
+
+function tick(){
+  const dt=Math.min(clock.getDelta(),0.05);
+
+  // morph auto-play
+  if(autoMorph&&morphT<1){
+    morphT=Math.min(1,morphT+dt/2.4);
+    morphVal=morphT;
+    morphSlider.value=morphVal*1000;
+    applyMorph(morphVal);
+  }
+
+  // step auto-play
+  if(autoStep){
+    stepTimer+=dt;
+    if(stepTimer>0.35){
+      stepTimer=0;
+      if(activeIdx<trace.tokens.length-1) focusStep(activeIdx+1,true);
+      else autoStep=false;
+    }
+  }
+
+  // orientation lerp
+  targetYaw=spinYaw+dragYaw;
+  targetPitch=Math.max(-1.45,Math.min(1.45,spinPitch+dragPitch));
+  curYaw+=(targetYaw-curYaw)*0.08;
+  curPitch+=(targetPitch-curPitch)*0.08;
+  globeNode.rotation.set(curPitch,curYaw,0,'XYZ');
+
+  // idle auto-rotate
+  if(!drag){idle+=dt; if(idle>1.5) dragYaw+=dt*0.06;}
+
+  // silhouette ring faces camera
+  if(silhouetteNode) silhouetteNode.quaternion.copy(camera.quaternion);
+
+  // depth cues (every frame because rotation changes depth)
+  updateDepthCues();
+
+  // hover
+  pickHover();
+
+  // vessel labels
+  projectVesselLabels();
+
+  renderer.render(scene,camera);
+  requestAnimationFrame(tick);
+}
+
+function resize(){
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setSize(innerWidth,innerHeight);
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize',resize);
+resize();
+
+buildGlobe(trace.tokens);
+tagWireAlphas();
+applyMorph(0);
+tick();
+</script>
+</body>
+</html>

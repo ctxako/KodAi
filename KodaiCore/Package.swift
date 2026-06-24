@@ -12,7 +12,10 @@ let package = Package(
         .library(name: "KodaiKernel", targets: ["KodaiKernel"]),
         .library(name: "KodaiPersistence", targets: ["KodaiPersistence"]),
         .library(name: "KodaiRuntime", targets: ["KodaiRuntime"]),
-        .executable(name: "kodai-bench", targets: ["KodAiBench"])
+        .library(name: "KodaiBenchKit", targets: ["KodaiBenchKit"]),
+        .executable(name: "kodai-bench", targets: ["KodAiBench"]),
+        .executable(name: "kodai-bench-mac", targets: ["KodaiBenchMac"]),
+        .executable(name: "kodai-bench-server", targets: ["KodaiBenchServer"])
     ],
     dependencies: [
         .package(path: "../kodai_ios/LlamaCPP")
@@ -29,9 +32,22 @@ let package = Package(
         .target(name: "KodaiPersistence", dependencies: ["KodaiKernel"]),
         // Compatibility umbrella re-exporting all targets.
         .target(name: "KodaiCore", dependencies: ["KodaiKernel", "KodaiPersistence", "KodaiRuntime"]),
+        // Shared benchmark logic (runner, measurement, upload) used by both the
+        // CLI and the on-device iOS test.
+        .target(name: "KodaiBenchKit", dependencies: ["KodaiKernel", "KodaiRuntime"]),
         .executableTarget(
             name: "KodAiBench",
-            dependencies: ["KodaiKernel", "KodaiRuntime"]
+            dependencies: ["KodaiKernel", "KodaiRuntime", "KodaiBenchKit"]
+        ),
+        // macOS-only bench using Apple Foundation Models (no llama.cpp needed).
+        .executableTarget(
+            name: "KodaiBenchMac",
+            dependencies: ["KodaiBenchKit"]
+        ),
+        // Live bench server — streams Apple FM inference over SSE for the dashboard.
+        .executableTarget(
+            name: "KodaiBenchServer",
+            dependencies: ["KodaiBenchKit"]
         ),
         .testTarget(
             name: "KodaiCoreTests",

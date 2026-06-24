@@ -1,7 +1,8 @@
 import Darwin
 
-struct MemoryMeasurement {
-    static func physicalFootprintMB() -> Double {
+/// Current physical memory footprint via `task_vm_info`. Works on iOS and macOS.
+public enum MemoryMeasurement {
+    public static func physicalFootprintMB() -> Double {
         var info = task_vm_info_data_t()
         var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
         let result = withUnsafeMutablePointer(to: &info) {

@@ -11,6 +11,7 @@
 		3C2CBAFA2FDCB28800FCC924 /* KodaiKernel in Frameworks */ = {isa = PBXBuildFile; productRef = 3C1A89672FD4A001003E89DE /* KodaiKernel */; };
 		3C2CBAFB2FDCB28800FCC924 /* KodaiPersistence in Frameworks */ = {isa = PBXBuildFile; productRef = 3C1A89682FD4A002003E89DE /* KodaiPersistence */; };
 		3CBENCH012FE0000000000001 /* KodaiRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = 3CBENCH022FE0000000000001 /* KodaiRuntime */; };
+		3CBENCH032FE0000000000001 /* KodaiBenchKit in Frameworks */ = {isa = PBXBuildFile; productRef = 3CBENCH042FE0000000000001 /* KodaiBenchKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -75,6 +76,7 @@
 				3C2CBAFB2FDCB28800FCC924 /* KodaiPersistence in Frameworks */,
 				3C2CBAFA2FDCB28800FCC924 /* KodaiKernel in Frameworks */,
 				3CBENCH012FE0000000000001 /* KodaiRuntime in Frameworks */,
+				3CBENCH032FE0000000000001 /* KodaiBenchKit in Frameworks */,
 				3C1A89632FD4A001003E89DE /* llama in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -140,6 +142,7 @@
 				3C1A89672FD4A001003E89DE /* KodaiKernel */,
 				3C1A89682FD4A002003E89DE /* KodaiPersistence */,
 				3CBENCH022FE0000000000001 /* KodaiRuntime */,
+				3CBENCH042FE0000000000001 /* KodaiBenchKit */,
 			);
 			productName = "KodAi iOS";
 			productReference = 3C1A891A2FD48C3C003E89DE /* KodAi.app */;
@@ -648,6 +651,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 3C1A89662FD4A001003E89DE /* XCLocalSwiftPackageReference "../../KodaiCore" */;
 			productName = KodaiRuntime;
+		};
+		3CBENCH042FE0000000000001 /* KodaiBenchKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 3C1A89662FD4A001003E89DE /* XCLocalSwiftPackageReference "../../KodaiCore" */;
+			productName = KodaiBenchKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

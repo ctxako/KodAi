@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import KodaiKernel
 import Testing
 
 @testable import KodAi

@@ -1,10 +1,16 @@
 import Foundation
 
-struct ResultUploader {
-    let endpoint: URL
-    let token: String
+/// POSTs a batch of runs to the bench Worker with Bearer auth.
+public struct ResultUploader: Sendable {
+    public let endpoint: URL
+    public let token: String
 
-    func upload(_ runs: [BenchmarkRun]) async throws {
+    public init(endpoint: URL, token: String) {
+        self.endpoint = endpoint
+        self.token = token
+    }
+
+    public func upload(_ runs: [BenchmarkRun]) async throws {
         var request = URLRequest(url: endpoint.appendingPathComponent("runs"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -18,9 +24,9 @@ struct ResultUploader {
         }
     }
 
-    enum UploadError: Error, CustomStringConvertible {
+    public enum UploadError: Error, CustomStringConvertible {
         case serverError(String)
-        var description: String {
+        public var description: String {
             switch self {
             case .serverError(let msg): return "Upload failed: \(msg)"
             }
