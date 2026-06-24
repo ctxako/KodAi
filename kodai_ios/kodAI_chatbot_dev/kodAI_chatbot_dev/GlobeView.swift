@@ -543,7 +543,7 @@ struct GlobeView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var activeStep: Int?
     @State private var isInspectorExpanded = false
-    @State private var isReadingGuideExpanded = false
+    @State private var isReadingGuidePresented = false
     @State private var shareURL: URL?
 
     /// Only tokens carrying a distribution map to beads; end-of-stream flush
@@ -577,8 +577,6 @@ struct GlobeView: View {
                     emptyState
                         .frame(maxHeight: .infinity)
                 } else {
-                    readingGuide
-
                     ZStack {
                         GlobeObservatoryBackdrop()
                         GlobeSceneView(tokens: tokens, activeStep: $activeStep)
@@ -626,6 +624,15 @@ struct GlobeView: View {
                 .accessibilityLabel("Export token trace")
             }
 
+            Button { isReadingGuidePresented = true } label: {
+                Image(systemName: "info.circle")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .frame(width: 44, height: 44)
+                    .background(.white.opacity(0.1), in: Circle())
+            }
+            .accessibilityLabel("How to read this globe")
+
             Button { dismiss() } label: {
                 Image(systemName: "xmark")
                     .font(.body.weight(.semibold))
@@ -638,6 +645,11 @@ struct GlobeView: View {
         .padding(.horizontal, 18)
         .padding(.top, 10)
         .padding(.bottom, 6)
+        .sheet(isPresented: $isReadingGuidePresented) {
+            readingGuideSheet
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
         .sheet(item: Binding(
             get: { shareURL.map { ShareURLWrapper(url: $0) } },
             set: { if $0 == nil { shareURL = nil } }
@@ -672,67 +684,31 @@ struct GlobeView: View {
         shareURL = url
     }
 
-    private var readingGuide: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Button {
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
-                    isReadingGuideExpanded.toggle()
+    private var readingGuideSheet: some View {
+        ZStack {
+            Color(red: 0.06, green: 0.08, blue: 0.12).ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 14) {
+                Text("How to read the Token Globe")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.white)
+                Text("Before-sampling telemetry · probability is not correctness")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.5))
+                VStack(alignment: .leading, spacing: 10) {
+                    rawProbabilityLegend
+                    entropyLegend
+                    rawArgmaxLegend
+                    alternativesLegend
                 }
-            } label: {
-                HStack(spacing: 7) {
-                    Image(systemName: "info.circle")
-                        .foregroundStyle(Color.cyan.opacity(0.9))
-                    Text("How to read this globe")
-                        .font(.caption.weight(.semibold))
-                    Spacer()
-                    Image(systemName: "chevron.down")
-                        .font(.caption2.weight(.semibold))
-                        .rotationEffect(.degrees(isReadingGuideExpanded ? 180 : 0))
-                }
-                .contentShape(Rectangle())
+                .font(.caption)
+                Text("The spiral shows generation order, not meaning or hidden reasoning. Scrubbing reveals the completed path up to the selected token.")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.58))
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer()
             }
-            .buttonStyle(.plain)
-
-            Text("Before-sampling telemetry · probability is not correctness")
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.5))
-
-            if isReadingGuideExpanded {
-                VStack(alignment: .leading, spacing: 5) {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 14) {
-                            rawProbabilityLegend
-                            entropyLegend
-                        }
-                        VStack(alignment: .leading, spacing: 5) {
-                            rawProbabilityLegend
-                            entropyLegend
-                        }
-                    }
-
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 14) {
-                            rawArgmaxLegend
-                            alternativesLegend
-                        }
-                        VStack(alignment: .leading, spacing: 5) {
-                            rawArgmaxLegend
-                            alternativesLegend
-                        }
-                    }
-
-                    Text("The spiral shows generation order, not meaning or hidden reasoning. Scrubbing reveals the completed path up to the selected token.")
-                        .foregroundStyle(.white.opacity(0.58))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.56))
-                .padding(.top, 2)
-            }
+            .padding(24)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 7)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var rawProbabilityLegend: some View {
@@ -900,14 +876,9 @@ struct GlobeView: View {
                 }
                 .buttonStyle(.plain)
 
-                Text("Token \(activeIndex + 1) of \(tokens.count) · tap for the data")
+                Text("Token \(activeIndex + 1) of \(tokens.count)")
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.43))
-
-                Text(contextText(for: token))
-                    .font(.caption.monospaced())
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 Text(takeaway(for: token))
                     .font(.caption)
@@ -915,6 +886,11 @@ struct GlobeView: View {
 
                 if isInspectorExpanded {
                     Divider().overlay(.white.opacity(0.12))
+
+                    Text(contextText(for: token))
+                        .font(.caption.monospaced())
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                     Text("Chosen-token probability is measured before repetition penalties, truncation, temperature, and sampling. It does not measure answer correctness.")
                         .font(.caption2)

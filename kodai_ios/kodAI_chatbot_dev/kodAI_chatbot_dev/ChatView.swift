@@ -20,6 +20,8 @@ struct ChatView: View {
     @AppStorage(PrefKey.reduceMotion) private var reduceMotion = false
     @AppStorage(PrefKey.compactMessageSpacing) private var compactMessageSpacing = false
     @AppStorage(PrefKey.surpriseHighlighting) private var surpriseHighlighting = false
+    @AppStorage(PrefKey.chatLens) private var lens: ChatLens = .tracer
+    @State private var tracerTarget: TracerTarget?
     @State private var isMessageListNearBottom = true
     @FocusState private var isInputFocused: Bool
     var body: some View {
@@ -83,8 +85,23 @@ struct ChatView: View {
                     contextSize: Int(LocalModelConfiguration.lfm2_5_1_2B_Instruct_Q4_K_M.contextSize)
                 )
             }
+            .fullScreenCover(item: $tracerTarget) { target in
+                RiverView(messageText: target.messageText, history: target.history)
+            }
         }
     }
+
+    /// The most recent assistant reply that carries an analyzed token trace, if any.
+    private var latestAssistantTrace: TracerTarget? {
+        for message in viewModel.messages.reversed() where message.role == .assistant {
+            let history = viewModel.tokenHistories[message.id] ?? []
+            if history.contains(where: \.isAnalyzed) {
+                return TracerTarget(id: message.id, messageText: message.text, history: history)
+            }
+        }
+        return nil
+    }
+
 
     /// True once at least one assistant reply in this chat carries a token trace.
     private var hasThreadTrace: Bool {
@@ -286,19 +303,18 @@ struct ChatView: View {
                     .foregroundStyle(.secondary)
 
                 if hasThreadTrace {
-                    Button {
-                        showsThreadGlobe = true
+                    ChatLensToggle(lens: $lens) { selected in
                         Haptics.lightTap()
-                    } label: {
-                        Image(systemName: "globe.americas")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                            .frame(width: 38, height: 36)
+                        switch selected {
+                        case .tracer:
+                            if let target = latestAssistantTrace {
+                                tracerTarget = target
+                            }
+                        case .atlas:
+                            showsThreadGlobe = true
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Capsule())
-                    .accessibilityLabel("Thread atlas")
-                    .accessibilityHint("See the whole conversation as a globe of token continents")
+                    .accessibilityHint("Tracer watches one response; Atlas shows the whole conversation as a globe")
                 }
 
                 Button {
@@ -444,7 +460,7 @@ struct ChatView: View {
                     onSelect: viewModel.assignCurrentChatToStream
                 )
             } else {
-                Text("Ask anything — runs fully on-device.")
+                Text("Give it something to think about.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

@@ -776,7 +776,7 @@ struct ThreadGlobeView: View {
     @State private var vineOn = true
     @State private var selectedTokenStep: Int?
     @State private var exploreTarget: GlobeContinent?
-    @State private var isReadingGuideExpanded = false
+    @State private var isReadingGuidePresented = false
     @State private var isPlaying = false
     @State private var playSpeed: Double = 1
     @State private var isExploreMode = false
@@ -819,10 +819,6 @@ struct ThreadGlobeView: View {
                 if continents.isEmpty {
                     emptyState.frame(maxHeight: .infinity)
                 } else {
-                    if !isExploreMode {
-                    readingGuide
-                }
-
                     ZStack {
                         GlobeObservatoryBackdrop()
                         ThreadGlobeSceneView(
@@ -876,6 +872,15 @@ struct ThreadGlobeView: View {
                 }
             }
             Spacer()
+            Button { isReadingGuidePresented = true } label: {
+                Image(systemName: "info.circle")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .frame(width: 44, height: 44)
+                    .background(.white.opacity(0.1), in: Circle())
+            }
+            .accessibilityLabel("How to read this atlas")
+
             Button { dismiss() } label: {
                 Image(systemName: "xmark")
                     .font(.body.weight(.semibold))
@@ -888,63 +893,41 @@ struct ThreadGlobeView: View {
         .padding(.horizontal, 18)
         .padding(.top, 10)
         .padding(.bottom, 6)
+        .sheet(isPresented: $isReadingGuidePresented) {
+            readingGuideSheet
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
     }
 
-    private var readingGuide: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Button {
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
-                    isReadingGuideExpanded.toggle()
+    private var readingGuideSheet: some View {
+        ZStack {
+            Color(red: 0.06, green: 0.08, blue: 0.12).ignoresSafeArea()
+            VStack(alignment: .leading, spacing: 14) {
+                Text("How to read the Thread Atlas")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.white)
+                Text("Chronological map · before-sampling probability is not correctness")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.5))
+                VStack(alignment: .leading, spacing: 10) {
+                    rawProbabilityLegend
+                    footprintLegend
+                    rawArgmaxLegend
                 }
-            } label: {
-                HStack(spacing: 7) {
-                    Image(systemName: "info.circle")
-                        .foregroundStyle(Color.cyan.opacity(0.9))
-                    Text("How to read this atlas")
-                        .font(.caption.weight(.semibold))
-                    Spacer()
-                    Image(systemName: "chevron.down")
-                        .font(.caption2.weight(.semibold))
-                        .rotationEffect(.degrees(isReadingGuideExpanded ? 180 : 0))
-                }
-                .contentShape(Rectangle())
+                .font(.caption)
+                Text("Regions follow conversation order, not meaning. A focused region reveals its response tokens; the vine links exchanges from first to latest.")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.58))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Token traces are available for the current session.")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.42))
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer()
             }
-            .buttonStyle(.plain)
-
-            Text("Chronological map · before-sampling probability is not correctness")
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.5))
-
-            if isReadingGuideExpanded {
-                VStack(alignment: .leading, spacing: 5) {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 14) {
-                            rawProbabilityLegend
-                            footprintLegend
-                            rawArgmaxLegend
-                        }
-                        VStack(alignment: .leading, spacing: 5) {
-                            rawProbabilityLegend
-                            footprintLegend
-                            rawArgmaxLegend
-                        }
-                    }
-
-                    Text("Regions follow conversation order, not meaning. A focused region reveals its response tokens; the vine links exchanges from first to latest.")
-                        .foregroundStyle(.white.opacity(0.58))
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("Token traces are available for the current session.")
-                        .foregroundStyle(.white.opacity(0.42))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.56))
-                .padding(.top, 2)
-            }
+            .padding(24)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 7)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var rawProbabilityLegend: some View {
@@ -1046,16 +1029,9 @@ struct ThreadGlobeView: View {
             .disabled(continents.count < 2)
             .accessibilityLabel(isPlaying ? "Pause replay" : "Play thread replay")
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text(isPlaying ? "Replaying" : "Replay thread")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.9))
-                Text(isPlaying
-                     ? "Exchange \(focusedOrder + 1) of \(continents.count)"
-                     : "Walk the conversation in order")
-                    .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.5))
-            }
+            Text(isPlaying ? "Exchange \(focusedOrder + 1) of \(continents.count)" : "Replay thread")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.9))
 
             Spacer()
 

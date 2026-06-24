@@ -135,12 +135,12 @@ struct RiverView: View {
     let messageText: String
     let history: [TokenSnapshot]
 
-    @Environment(ChatViewModel.self) private var viewModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var activeStep: Int?
-    @State private var isLegendExpanded = true
+    @State private var isLegendExpanded = false
     @State private var areAlternativesExpanded = false
+    @State private var areMetricsExpanded = false
     @State private var zoomScale: CGFloat = 1.0
     @GestureState private var liveScale: CGFloat = 1.0
     @State private var shareURL: URL?
@@ -351,33 +351,46 @@ struct RiverView: View {
                     }
                 }
 
-                Text(responseContext)
-                    .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.42))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-
                 Label(insight(for: token), systemImage: token.divergedFromGreedy ? "arrow.triangle.branch" : "water.waves")
                     .font(.caption)
                     .foregroundStyle(token.divergedFromGreedy ? RiverPalette.fork : .white.opacity(0.76))
                     .fixedSize(horizontal: false, vertical: true)
 
-                HStack(spacing: 7) {
-                    metric(
-                        "entropy",
-                        String(format: "%.2f nats", token.entropy),
-                        hint: "Uncertainty across the full vocabulary. Higher means more continuations were plausible."
-                    )
-                    metric(
-                        "top margin",
-                        "\(percent(token.margin)) pts",
-                        hint: "The probability gap between the two strongest predictions."
-                    )
-                    metric(
-                        "surprisal",
-                        String(format: "%.2f nats", -log(max(token.selectedProbability, 1e-6))),
-                        hint: "How unexpected the chosen token was, calculated as negative log probability."
-                    )
+                Button {
+                    withAnimation(.easeInOut(duration: 0.16)) { areMetricsExpanded.toggle() }
+                } label: {
+                    HStack(spacing: 5) {
+                        Text("metrics")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.5))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.35))
+                            .rotationEffect(.degrees(areMetricsExpanded ? 180 : 0))
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if areMetricsExpanded {
+                    HStack(spacing: 7) {
+                        metric(
+                            "entropy",
+                            String(format: "%.2f nats", token.entropy),
+                            hint: "Uncertainty across the full vocabulary. Higher means more continuations were plausible."
+                        )
+                        metric(
+                            "top margin",
+                            "\(percent(token.margin)) pts",
+                            hint: "The probability gap between the two strongest predictions."
+                        )
+                        metric(
+                            "surprisal",
+                            String(format: "%.2f nats", -log(max(token.selectedProbability, 1e-6))),
+                            hint: "How unexpected the chosen token was, calculated as negative log probability."
+                        )
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
                 if token.alternatives.count > 1 {
