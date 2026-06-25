@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>kodAI adds events you confirm to your calendar. It never reads your existing events.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>kodAI creates reminders and list items you confirm. Everything stays on your device.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>ctxa.kodai-consumer</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>kodai</string>
+			</array>
+		</dict>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
+</dict>
+</plist>

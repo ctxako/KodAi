@@ -12,6 +12,11 @@ public nonisolated final class LlamaContextWrapper: @unchecked Sendable {
     private var sampler: UnsafeMutablePointer<llama_sampler>
     private let batchSize: Int
     private let chatTemplate: String?
+    /// `<|tool_call_end|>` as a single vocab token, when the model has one.
+    /// LFM2 emits this control token to close a tool call but doesn't mark it
+    /// EOG, so we stop on it explicitly — otherwise the model runs on into
+    /// trailing prose we'd only throw away. `nil` for models without the token.
+    private let toolCallEndTokenID: llama_token?
     private let log = KodaiLog(category: "LlamaContext")
     private let cancellationLock = NSLock()
     private var cancellationRequested = false
@@ -76,7 +81,7 @@ public nonisolated final class LlamaContextWrapper: @unchecked Sendable {
         self.context = loadedContext
         self.sampler = samplerChain
         self.chatTemplate = Self.chatTemplate(from: loadedModel)
-        _ = llama_model_get_vocab(loadedModel)
+        self.toolCallEndTokenID = Self.singleSpecialTokenID("<|tool_call_end|>", model: loadedModel)
         onWarmupStatus(.ready)
 
         if chatTemplate != nil {
@@ -151,8 +156,12 @@ public nonisolated final class LlamaContextWrapper: @unchecked Sendable {
             Int32(prompt.utf8.count),
             &tokens,
             Int32(tokens.count),
-            true,
-            false
+            true,   // add_special: prepend BOS
+            true    // parse_special: the prompt we build contains real control
+                    // tokens (<|im_start|>, <|im_end|>, …). They MUST be parsed
+                    // as those tokens, not as literal "<", "|", "im_start" text —
+                    // otherwise the model never sees turn boundaries and its
+                    // trained tool-call behavior collapses into plain prose.
         )
 
         guard tokenCount > 0 else {
@@ -261,7 +270,11 @@ public nonisolated final class LlamaContextWrapper: @unchecked Sendable {
             #endif
 
             let vocabulary = llama_model_get_vocab(model)
+            // Stop on a real EOG token, or on `<|tool_call_end|>` — LFM2 closes a
+            // tool call with the latter but doesn't mark it EOG, and everything
+            // after it is throwaway prose for our one-call-per-turn flow.
             let isNativeEOG = llama_vocab_is_eog(vocabulary, token)
+                || (toolCallEndTokenID.map { token == $0 } ?? false)
             let tokenIndex = Int(generatedTokenCount) + 1
 
             if isNativeEOG {
@@ -561,6 +574,23 @@ public nonisolated final class LlamaContextWrapper: @unchecked Sendable {
         #endif
     }
 
+    /// Resolves `text` to its single vocab token id, or nil if the model
+    /// tokenizes it into anything other than exactly one token (i.e. it isn't a
+    /// known special token). `parse_special` so the marker maps to its control
+    /// token; `add_special: false` so no BOS is prepended.
+    private static func singleSpecialTokenID(_ text: String, model: OpaquePointer) -> llama_token? {
+        let vocabulary = llama_model_get_vocab(model)
+        var tokens = [llama_token](repeating: 0, count: 8)
+        let count = llama_tokenize(
+            vocabulary, text, Int32(text.utf8.count),
+            &tokens, Int32(tokens.count),
+            false,  // add_special
+            true    // parse_special
+        )
+        guard count == 1 else { return nil }
+        return tokens[0]
+    }
+
     private static func chatTemplate(from model: OpaquePointer) -> String? {
         if let templatePointer = llama_model_chat_template(model, nil) {
             let template = String(cString: templatePointer)
@@ -596,24 +626,19 @@ public nonisolated final class LlamaContextWrapper: @unchecked Sendable {
             .suffix(6))
     }
 
+    // Mirrors LFM2's own chat template exactly (`<|im_start|>{role}\n{content}<|im_end|>\n`,
+    // then `<|im_start|>assistant\n` to open the turn). BOS is added by the
+    // tokenizer (add_special). The trailing newline after `assistant` and the
+    // absence of a newline before `<|im_end|>` are part of the trained format —
+    // a 1.2B's tool-call reliability depends on getting this whitespace right.
     private static func formatChatMLPrompt(messages: [KodaiRuntimeMessage], systemMessage: String) -> String {
-        var prompt = """
-        <|im_start|>system
-        \(systemMessage)
-        <|im_end|>
-
-        """
+        var prompt = "<|im_start|>system\n\(systemMessage)<|im_end|>\n"
 
         for message in messages {
-            prompt += """
-            <|im_start|>\(message.role.rawValue)
-            \(message.text)
-            <|im_end|>
-
-            """
+            prompt += "<|im_start|>\(message.role.rawValue)\n\(message.text)<|im_end|>\n"
         }
 
-        prompt += "<|im_start|>assistant"
+        prompt += "<|im_start|>assistant\n"
         return prompt
     }
 }
@@ -641,7 +666,10 @@ nonisolated private struct TextualStopFilter {
         "User:",
         "Assistant:",
         "<|im_start|>user",
-        "<|im_start|>assistant"
+        "<|im_start|>assistant",
+        // LFM2 renders this special token as literal text; stopping here cuts
+        // generation cleanly right after a tool call (one call per turn).
+        "<|tool_call_end|>"
     ]
 
     private let pendingCharacterCount = TextualStopFilter.stopStrings.map(\.count).max() ?? 0

@@ -84,21 +84,40 @@ public actor LocalModelRuntime {
     private func loadContext(
         continuation: AsyncThrowingStream<InferenceEvent, Error>.Continuation
     ) async throws -> LlamaContextWrapper {
-        try await loadContextWithStatus { status in
-            continuation.yield(.warmup(status))
-        }
+        try await loadContextWithStatus(
+            onStatus: { status in continuation.yield(.warmup(status)) },
+            onPhase: { phase in continuation.yield(.phase(phase)) }
+        )
     }
 
     private func loadContextWithStatus(
-        onStatus: @Sendable (WarmupStatus) -> Void
+        onStatus: @Sendable (WarmupStatus) -> Void,
+        onPhase: @Sendable (InferencePhase) -> Void = { _ in }
     ) async throws -> LlamaContextWrapper {
         if let context {
             return context
         }
 
-        _ = try await modelDownloader.ensureDownloaded(configuration: configuration)
-        try Task.checkCancellation()
+        // Skip the download entirely when the model is already on disk — either
+        // a previously-downloaded copy in Application Support, or a copy bundled
+        // inside the app. Only download (and surface .downloadingModel) when the
+        // file is absent from both. Bundling makes first launch instant + offline;
+        // this guard also benefits the educational app, which bundles too.
+        let downloadedExists = (try? modelDownloader.localModelURL(
+            fileName: configuration.expectedModelFileName
+        )).map { FileManager.default.fileExists(atPath: $0.path) } ?? false
+        let bundledExists = Bundle.main.url(
+            forResource: configuration.modelResourceName,
+            withExtension: configuration.modelResourceExtension
+        ) != nil
 
+        if !downloadedExists && !bundledExists {
+            onPhase(.downloadingModel)
+            _ = try await modelDownloader.ensureDownloaded(configuration: configuration)
+            try Task.checkCancellation()
+        }
+
+        onPhase(.loadingModel)
         let loadedContext = try await llamaRuntime.initialize(configuration: configuration, onWarmupStatus: onStatus)
         context = loadedContext
         return loadedContext

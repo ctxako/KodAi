@@ -11,6 +11,8 @@ public nonisolated struct LocalModelConfiguration: Sendable {
     public let topK: Int32
     public let batchSize: Int32
     public let repeatPenalty: Float
+    /// Remote source for download-on-first-run. nil → ModelDownloader's legacy default.
+    public let downloadURL: URL?
 
     public var expectedModelFileName: String {
         "\(modelResourceName).\(modelResourceExtension)"
@@ -36,7 +38,8 @@ public nonisolated struct LocalModelConfiguration: Sendable {
         topP: Float,
         topK: Int32,
         batchSize: Int32,
-        repeatPenalty: Float
+        repeatPenalty: Float,
+        downloadURL: URL? = nil
     ) {
         self.modelResourceName = modelResourceName
         self.modelResourceExtension = modelResourceExtension
@@ -48,6 +51,7 @@ public nonisolated struct LocalModelConfiguration: Sendable {
         self.topK = topK
         self.batchSize = batchSize
         self.repeatPenalty = repeatPenalty
+        self.downloadURL = downloadURL
     }
 
     public nonisolated static let lfm2_5_1_2B_Instruct_Q4_K_M = LocalModelConfiguration(
@@ -60,7 +64,10 @@ public nonisolated struct LocalModelConfiguration: Sendable {
         topP: 0.92,
         topK: 40,
         batchSize: 64,
-        repeatPenalty: 1.05
+        repeatPenalty: 1.05,
+        downloadURL: URL(
+            string: "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF/resolve/main/LFM2.5-1.2B-Instruct-Q4_K_M.gguf"
+        )
     )
 }
 

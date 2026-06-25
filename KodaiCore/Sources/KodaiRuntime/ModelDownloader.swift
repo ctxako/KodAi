@@ -15,8 +15,9 @@ public nonisolated struct ModelDownloader: @unchecked Sendable {
 
     public func ensureDownloaded(configuration: LocalModelConfiguration) async throws -> URL {
         let destinationURL = try localModelURL(fileName: configuration.expectedModelFileName)
+        let source = configuration.downloadURL ?? Self.qwenDownloadURL
 
-        log.event("model download URL=\(Self.qwenDownloadURL.absoluteString)")
+        log.event("model download URL=\(source.absoluteString)")
         log.event("local model path=\(destinationURL.path)")
 
         if fileManager.fileExists(atPath: destinationURL.path) {
@@ -30,7 +31,7 @@ public nonisolated struct ModelDownloader: @unchecked Sendable {
         )
 
         log.event("download started")
-        let (temporaryURL, response) = try await URLSession.shared.download(from: Self.qwenDownloadURL)
+        let (temporaryURL, response) = try await URLSession.shared.download(from: source)
         try Task.checkCancellation()
 
         if let httpResponse = response as? HTTPURLResponse, !(200..<300).contains(httpResponse.statusCode) {

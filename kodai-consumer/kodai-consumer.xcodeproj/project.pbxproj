@@ -1,0 +1,811 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		3CA7E5BE2FEDF109002782EF /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3CA7E5A12FEDF060002782EF /* WidgetKit.framework */; };
+		3CA7E5BF2FEDF109002782EF /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3CA7E5A32FEDF060002782EF /* SwiftUI.framework */; };
+		3CA7E5D02FEDF10A002782EF /* kodai-consumer-widgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3CA7E5BD2FEDF109002782EF /* kodai-consumer-widgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A1A1A1A1A1A1A1A1A1A10004 /* KodaiKernel in Frameworks */ = {isa = PBXBuildFile; productRef = A1A1A1A1A1A1A1A1A1A10002 /* KodaiKernel */; };
+		A1A1A1A1A1A1A1A1A1A10005 /* KodaiRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = A1A1A1A1A1A1A1A1A1A10003 /* KodaiRuntime */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		3CA7E4DF2FED91AA002782EF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3CA7E4C52FED91A9002782EF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3CA7E4CC2FED91A9002782EF;
+			remoteInfo = "kodai-consumer";
+		};
+		3CA7E4E92FED91AA002782EF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3CA7E4C52FED91A9002782EF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3CA7E4CC2FED91A9002782EF;
+			remoteInfo = "kodai-consumer";
+		};
+		3CA7E5CE2FEDF10A002782EF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3CA7E4C52FED91A9002782EF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3CA7E5BC2FEDF109002782EF;
+			remoteInfo = "kodai-consumer-widgetExtension";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		3CA7E5D52FEDF10A002782EF /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				3CA7E5D02FEDF10A002782EF /* kodai-consumer-widgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		3CA7E4CD2FED91A9002782EF /* kodai-consumer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "kodai-consumer.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3CA7E4DE2FED91AA002782EF /* kodai-consumerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "kodai-consumerTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3CA7E4E82FED91AA002782EF /* kodai-consumerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "kodai-consumerUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		3CA7E5A12FEDF060002782EF /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		3CA7E5A32FEDF060002782EF /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		3CA7E5BD2FEDF109002782EF /* kodai-consumer-widgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "kodai-consumer-widgetExtension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		3CA7E4F02FED91AA002782EF /* Exceptions for "kodai-consumer" folder in "kodai-consumer" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 3CA7E4CC2FED91A9002782EF /* kodai-consumer */;
+		};
+		3CA7E5D42FEDF10A002782EF /* Exceptions for "kodai-consumer-widget" folder in "kodai-consumer-widgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 3CA7E5BC2FEDF109002782EF /* kodai-consumer-widgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		3CA7E4CF2FED91A9002782EF /* kodai-consumer */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				3CA7E4F02FED91AA002782EF /* Exceptions for "kodai-consumer" folder in "kodai-consumer" target */,
+			);
+			path = "kodai-consumer";
+			sourceTree = "<group>";
+		};
+		3CA7E4E12FED91AA002782EF /* kodai-consumerTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "kodai-consumerTests";
+			sourceTree = "<group>";
+		};
+		3CA7E4EB2FED91AA002782EF /* kodai-consumerUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "kodai-consumerUITests";
+			sourceTree = "<group>";
+		};
+		3CA7E5C02FEDF109002782EF /* kodai-consumer-widget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				3CA7E5D42FEDF10A002782EF /* Exceptions for "kodai-consumer-widget" folder in "kodai-consumer-widgetExtension" target */,
+			);
+			path = "kodai-consumer-widget";
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		3CA7E4CA2FED91A9002782EF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1A1A1A1A1A1A1A1A1A10004 /* KodaiKernel in Frameworks */,
+				A1A1A1A1A1A1A1A1A1A10005 /* KodaiRuntime in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3CA7E4DB2FED91AA002782EF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3CA7E4E52FED91AA002782EF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3CA7E5BA2FEDF109002782EF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3CA7E5BF2FEDF109002782EF /* SwiftUI.framework in Frameworks */,
+				3CA7E5BE2FEDF109002782EF /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		3CA7E4C42FED91A9002782EF = {
+			isa = PBXGroup;
+			children = (
+				3CA7E4CF2FED91A9002782EF /* kodai-consumer */,
+				3CA7E4E12FED91AA002782EF /* kodai-consumerTests */,
+				3CA7E4EB2FED91AA002782EF /* kodai-consumerUITests */,
+				3CA7E5C02FEDF109002782EF /* kodai-consumer-widget */,
+				3CA7E5A02FEDF060002782EF /* Frameworks */,
+				3CA7E4CE2FED91A9002782EF /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		3CA7E4CE2FED91A9002782EF /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				3CA7E4CD2FED91A9002782EF /* kodai-consumer.app */,
+				3CA7E4DE2FED91AA002782EF /* kodai-consumerTests.xctest */,
+				3CA7E4E82FED91AA002782EF /* kodai-consumerUITests.xctest */,
+				3CA7E5BD2FEDF109002782EF /* kodai-consumer-widgetExtension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		3CA7E5A02FEDF060002782EF /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				3CA7E5A12FEDF060002782EF /* WidgetKit.framework */,
+				3CA7E5A32FEDF060002782EF /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		3CA7E4CC2FED91A9002782EF /* kodai-consumer */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3CA7E4F12FED91AA002782EF /* Build configuration list for PBXNativeTarget "kodai-consumer" */;
+			buildPhases = (
+				3CA7E4C92FED91A9002782EF /* Sources */,
+				3CA7E4CA2FED91A9002782EF /* Frameworks */,
+				3CA7E4CB2FED91A9002782EF /* Resources */,
+				3CA7E5D52FEDF10A002782EF /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				3CA7E5CF2FEDF10A002782EF /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				3CA7E4CF2FED91A9002782EF /* kodai-consumer */,
+			);
+			name = "kodai-consumer";
+			packageProductDependencies = (
+				A1A1A1A1A1A1A1A1A1A10002 /* KodaiKernel */,
+				A1A1A1A1A1A1A1A1A1A10003 /* KodaiRuntime */,
+			);
+			productName = "kodai-consumer";
+			productReference = 3CA7E4CD2FED91A9002782EF /* kodai-consumer.app */;
+			productType = "com.apple.product-type.application";
+		};
+		3CA7E4DD2FED91AA002782EF /* kodai-consumerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3CA7E4F62FED91AA002782EF /* Build configuration list for PBXNativeTarget "kodai-consumerTests" */;
+			buildPhases = (
+				3CA7E4DA2FED91AA002782EF /* Sources */,
+				3CA7E4DB2FED91AA002782EF /* Frameworks */,
+				3CA7E4DC2FED91AA002782EF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				3CA7E4E02FED91AA002782EF /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				3CA7E4E12FED91AA002782EF /* kodai-consumerTests */,
+			);
+			name = "kodai-consumerTests";
+			packageProductDependencies = (
+			);
+			productName = "kodai-consumerTests";
+			productReference = 3CA7E4DE2FED91AA002782EF /* kodai-consumerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		3CA7E4E72FED91AA002782EF /* kodai-consumerUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3CA7E4F92FED91AA002782EF /* Build configuration list for PBXNativeTarget "kodai-consumerUITests" */;
+			buildPhases = (
+				3CA7E4E42FED91AA002782EF /* Sources */,
+				3CA7E4E52FED91AA002782EF /* Frameworks */,
+				3CA7E4E62FED91AA002782EF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				3CA7E4EA2FED91AA002782EF /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				3CA7E4EB2FED91AA002782EF /* kodai-consumerUITests */,
+			);
+			name = "kodai-consumerUITests";
+			packageProductDependencies = (
+			);
+			productName = "kodai-consumerUITests";
+			productReference = 3CA7E4E82FED91AA002782EF /* kodai-consumerUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		3CA7E5BC2FEDF109002782EF /* kodai-consumer-widgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3CA7E5D12FEDF10A002782EF /* Build configuration list for PBXNativeTarget "kodai-consumer-widgetExtension" */;
+			buildPhases = (
+				3CA7E5B92FEDF109002782EF /* Sources */,
+				3CA7E5BA2FEDF109002782EF /* Frameworks */,
+				3CA7E5BB2FEDF109002782EF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				3CA7E5C02FEDF109002782EF /* kodai-consumer-widget */,
+			);
+			name = "kodai-consumer-widgetExtension";
+			packageProductDependencies = (
+			);
+			productName = "kodai-consumer-widgetExtension";
+			productReference = 3CA7E5BD2FEDF109002782EF /* kodai-consumer-widgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		3CA7E4C52FED91A9002782EF /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2640;
+				LastUpgradeCheck = 2640;
+				TargetAttributes = {
+					3CA7E4CC2FED91A9002782EF = {
+						CreatedOnToolsVersion = 26.4.1;
+					};
+					3CA7E4DD2FED91AA002782EF = {
+						CreatedOnToolsVersion = 26.4.1;
+						TestTargetID = 3CA7E4CC2FED91A9002782EF;
+					};
+					3CA7E4E72FED91AA002782EF = {
+						CreatedOnToolsVersion = 26.4.1;
+						TestTargetID = 3CA7E4CC2FED91A9002782EF;
+					};
+					3CA7E5BC2FEDF109002782EF = {
+						CreatedOnToolsVersion = 26.4.1;
+					};
+				};
+			};
+			buildConfigurationList = 3CA7E4C82FED91A9002782EF /* Build configuration list for PBXProject "kodai-consumer" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 3CA7E4C42FED91A9002782EF;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A1A1A1A1A1A1A1A1A1A10001 /* XCLocalSwiftPackageReference "../KodaiCore" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 3CA7E4CE2FED91A9002782EF /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				3CA7E4CC2FED91A9002782EF /* kodai-consumer */,
+				3CA7E4DD2FED91AA002782EF /* kodai-consumerTests */,
+				3CA7E4E72FED91AA002782EF /* kodai-consumerUITests */,
+				3CA7E5BC2FEDF109002782EF /* kodai-consumer-widgetExtension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		3CA7E4CB2FED91A9002782EF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3CA7E4DC2FED91AA002782EF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3CA7E4E62FED91AA002782EF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3CA7E5BB2FEDF109002782EF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		3CA7E4C92FED91A9002782EF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3CA7E4DA2FED91AA002782EF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3CA7E4E42FED91AA002782EF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3CA7E5B92FEDF109002782EF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		3CA7E4E02FED91AA002782EF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3CA7E4CC2FED91A9002782EF /* kodai-consumer */;
+			targetProxy = 3CA7E4DF2FED91AA002782EF /* PBXContainerItemProxy */;
+		};
+		3CA7E4EA2FED91AA002782EF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3CA7E4CC2FED91A9002782EF /* kodai-consumer */;
+			targetProxy = 3CA7E4E92FED91AA002782EF /* PBXContainerItemProxy */;
+		};
+		3CA7E5CF2FEDF10A002782EF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3CA7E5BC2FEDF109002782EF /* kodai-consumer-widgetExtension */;
+			targetProxy = 3CA7E5CE2FEDF10A002782EF /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		3CA7E4F22FED91AA002782EF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "kodai-consumer/kodai_consumer.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8DYF4R2M73;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "kodai-consumer/Info.plist";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "ctxa.kodai-consumer";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		3CA7E4F32FED91AA002782EF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "kodai-consumer/kodai_consumer.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8DYF4R2M73;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "kodai-consumer/Info.plist";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "ctxa.kodai-consumer";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		3CA7E4F42FED91AA002782EF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 8DYF4R2M73;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		3CA7E4F52FED91AA002782EF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 8DYF4R2M73;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		3CA7E4F72FED91AA002782EF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8DYF4R2M73;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "ctxa.kodai-consumerTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/kodai-consumer.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/kodai-consumer";
+			};
+			name = Debug;
+		};
+		3CA7E4F82FED91AA002782EF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8DYF4R2M73;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "ctxa.kodai-consumerTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/kodai-consumer.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/kodai-consumer";
+			};
+			name = Release;
+		};
+		3CA7E4FA2FED91AA002782EF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8DYF4R2M73;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "ctxa.kodai-consumerUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = "kodai-consumer";
+			};
+			name = Debug;
+		};
+		3CA7E4FB2FED91AA002782EF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8DYF4R2M73;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "ctxa.kodai-consumerUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = "kodai-consumer";
+			};
+			name = Release;
+		};
+		3CA7E5D22FEDF10A002782EF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8DYF4R2M73;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "kodai-consumer-widget/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "kodai-consumer-widget";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "ctxa.kodai-consumer.kodai-consumer-widget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		3CA7E5D32FEDF10A002782EF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8DYF4R2M73;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "kodai-consumer-widget/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "kodai-consumer-widget";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "ctxa.kodai-consumer.kodai-consumer-widget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		3CA7E4C82FED91A9002782EF /* Build configuration list for PBXProject "kodai-consumer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3CA7E4F42FED91AA002782EF /* Debug */,
+				3CA7E4F52FED91AA002782EF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		3CA7E4F12FED91AA002782EF /* Build configuration list for PBXNativeTarget "kodai-consumer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3CA7E4F22FED91AA002782EF /* Debug */,
+				3CA7E4F32FED91AA002782EF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		3CA7E4F62FED91AA002782EF /* Build configuration list for PBXNativeTarget "kodai-consumerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3CA7E4F72FED91AA002782EF /* Debug */,
+				3CA7E4F82FED91AA002782EF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		3CA7E4F92FED91AA002782EF /* Build configuration list for PBXNativeTarget "kodai-consumerUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3CA7E4FA2FED91AA002782EF /* Debug */,
+				3CA7E4FB2FED91AA002782EF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		3CA7E5D12FEDF10A002782EF /* Build configuration list for PBXNativeTarget "kodai-consumer-widgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3CA7E5D22FEDF10A002782EF /* Debug */,
+				3CA7E5D32FEDF10A002782EF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		A1A1A1A1A1A1A1A1A1A10001 /* XCLocalSwiftPackageReference "../KodaiCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../KodaiCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A1A1A1A1A1A1A1A1A1A10002 /* KodaiKernel */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1A1A1A1A1A1A1A1A1A10001 /* XCLocalSwiftPackageReference "../KodaiCore" */;
+			productName = KodaiKernel;
+		};
+		A1A1A1A1A1A1A1A1A1A10003 /* KodaiRuntime */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1A1A1A1A1A1A1A1A1A10001 /* XCLocalSwiftPackageReference "../KodaiCore" */;
+			productName = KodaiRuntime;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 3CA7E4C52FED91A9002782EF /* Project object */;
+}

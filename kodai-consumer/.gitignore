@@ -1,0 +1,10 @@
+# Bundled on-device model — ~700 MB, never committed. Copied in locally and
+# auto-bundled by the Xcode synchronized group as an app resource.
+*.gguf
+
+# Xcode user state
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+.DS_Store
