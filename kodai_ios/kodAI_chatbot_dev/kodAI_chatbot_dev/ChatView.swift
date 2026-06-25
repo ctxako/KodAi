@@ -259,6 +259,10 @@ struct ChatView: View {
             },
             recentActivityEvents: viewModel.recentActivityEvents,
             latestContextSnapshot: viewModel.latestContextSnapshot,
+            onOpenModelTuning: {
+                closeMenu()
+                isTuningPresented = true
+            },
             onClose: closeMenu
         )
         .transition(.move(edge: .leading).combined(with: .opacity))
@@ -280,21 +284,14 @@ struct ChatView: View {
                 .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Capsule())
                 .accessibilityLabel("Menu")
 
-                Button {
-                    isTuningPresented = true
-                    Haptics.lightTap()
-                } label: {
-                    Text("kodAI")
-                        .font(.headline)
-                        .foregroundStyle(.white)
+                Text("kodAI")
+                    .font(.headline)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 7)
-                    .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Capsule())
-                .accessibilityLabel("Model tuning")
-                .accessibilityHint("Adjust how the model writes replies")
+                    .glassEffect(.regular.tint(ChatPalette.elevatedSurface), in: Capsule())
+                    .accessibilityLabel("kodAI")
+                    .accessibilityAddTraits(.isHeader)
 
                 Spacer(minLength: 0)
 
@@ -367,7 +364,7 @@ struct ChatView: View {
 
         return ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: compactMessageSpacing ? 6 : 12) {
+                LazyVStack(alignment: .leading, spacing: compactMessageSpacing ? 6 : 12) {
                     if viewModel.messages.isEmpty {
                         emptyState
                     } else {
@@ -420,8 +417,11 @@ struct ChatView: View {
 
                 scrollToBottom(with: proxy)
             }
-            .onChange(of: viewModel.generatedTokenCount) { _, _ in
+            .onChange(of: viewModel.generatedTokenCount) { _, newCount in
                 guard viewModel.isGenerating, isMessageListNearBottom else { return }
+                // Coalesce: follow the stream every few tokens instead of on every
+                // single append, so a long generation doesn't fire a scroll per token.
+                guard newCount % 4 == 0 else { return }
 
                 scrollToBottom(with: proxy, animated: false)
             }
@@ -452,19 +452,43 @@ struct ChatView: View {
         }
     }
 
+    private static let starterPrompts = [
+        "Write a haiku about the ocean",
+        "Explain gravity simply"
+    ]
+
     private var emptyState: some View {
-        VStack(spacing: 18) {
-            if shouldShowFavoriteStreamsPanel {
-                FavoriteStreamsPanel(
-                    streams: Array(viewModel.favoriteStreams.prefix(5)),
-                    onSelect: viewModel.assignCurrentChatToStream
-                )
-            } else {
-                Text("Give it something to think about.")
+        VStack(spacing: 22) {
+            VStack(spacing: 10) {
+                Image(systemName: "water.waves")
+                    .font(.system(size: 34, weight: .light))
+                    .foregroundStyle(ChatPalette.accentBlue)
+                Text("Give it a prompt.\nWatch it choose each word.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
+
+            VStack(spacing: 8) {
+                ForEach(Self.starterPrompts, id: \.self) { prompt in
+                    Button {
+                        guard !viewModel.isGenerating else { return }
+                        Haptics.lightTap()
+                        viewModel.inputText = prompt
+                        viewModel.send()
+                    } label: {
+                        Text("Try: \(prompt)")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 9)
+                            .frame(maxWidth: .infinity)
+                            .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .frame(maxWidth: 320)
         }
         .frame(maxWidth: .infinity, minHeight: 280, alignment: .center)
         .padding(20)
@@ -475,13 +499,6 @@ struct ChatView: View {
             get: { viewModel.activeAssistantMode },
             set: { viewModel.setActiveAssistantMode($0) }
         )
-    }
-
-    private var shouldShowFavoriteStreamsPanel: Bool {
-        guard let activeSession = viewModel.activeSession else { return !viewModel.favoriteStreams.isEmpty }
-        return activeSession.messages.isEmpty
-            && activeSession.streamID == nil
-            && !viewModel.favoriteStreams.isEmpty
     }
 }
 

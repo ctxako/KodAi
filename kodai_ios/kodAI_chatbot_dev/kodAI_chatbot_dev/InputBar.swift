@@ -2,9 +2,9 @@ import KodaiKernel
 import SwiftUI
 
 private let quickChips: [(label: String, prompt: String)] = [
-    ("Creative Essay", "Write an essay comparing the leadership styles of Darth Vader and SpongeBob SquarePants."),
-    ("Subtle Spice", "Is it ever justified to lie to someone for their own good? Defend your answer."),
-    ("Light Stress", "List 5 ways dreams and reality differ, then pick the most important one and argue why.")
+    ("Haiku", "Write a haiku about the ocean."),
+    ("Explain", "Explain gravity in two sentences."),
+    ("Continue", "Finish this story: The old house at the end of the street had been empty for years, until—")
 ]
 
 struct InputBar: View {
@@ -74,7 +74,7 @@ struct InputBar: View {
                         }
                         .accessibilityLabel("Quick actions")
 
-                        TextField("Ask KodAi", text: $text, axis: .vertical)
+                        TextField("Give it a prompt to watch", text: $text, axis: .vertical)
                             .textFieldStyle(.plain)
                             .foregroundStyle(.white)
                             .lineLimit(1...6)

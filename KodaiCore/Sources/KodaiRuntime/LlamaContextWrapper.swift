@@ -239,6 +239,19 @@ public nonisolated final class LlamaContextWrapper: @unchecked Sendable {
                 return .cancelled
             }
 
+            // Thermal pacing: when the device is hot, sleep briefly between tokens
+            // to lower the sustained duty cycle. This actually slows generation on
+            // .serious/.critical (on the background decode thread, never the main
+            // thread) rather than only hinting at it in the prompt. The first token
+            // is never paced so time-to-first-token stays responsive.
+            if generatedTokenCount > 0 {
+                switch ProcessInfo.processInfo.thermalState {
+                case .serious: Thread.sleep(forTimeInterval: 0.012)
+                case .critical: Thread.sleep(forTimeInterval: 0.030)
+                default: break
+                }
+            }
+
             let token = llama_sampler_sample(sampler, context, -1)
             llama_sampler_accept(sampler, token)
             let distribution = readTopAlternatives(sampledToken: token)

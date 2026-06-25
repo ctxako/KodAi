@@ -1092,6 +1092,7 @@ final class ChatViewModel {
         snapshot.internetAccessEnabled = false
         snapshot.lowPowerModeEnabled = ProcessInfo.processInfo.isLowPowerModeEnabled
         snapshot.thermalState = ProcessInfo.processInfo.thermalState
+        snapshot.lowMemoryWarningActive = MemoryPressureMonitor.shared.isUnderPressure
         snapshot.contextPressurePercent = contextPressurePercent
         snapshot.modelName = LocalModelConfiguration.lfm2_5_1_2B_Instruct_Q4_K_M.expectedModelFileName
 

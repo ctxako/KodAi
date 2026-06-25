@@ -9,10 +9,25 @@ import SwiftUI
 
 @main
 struct kodAI_chatbot_devApp: App {
+    @State private var showSplash = true   // branded intro: states what the instrument is before first use
+
+    init() {
+        MemoryPressureMonitor.shared.start()
+    }
+
     var body: some Scene {
         WindowGroup {
-            ChatView()
-                .preferredColorScheme(.dark)
+            ZStack {
+                ChatView()
+                if showSplash {
+                    SplashView(onDone: {
+                        withAnimation(.easeOut(duration: 0.6)) { showSplash = false }
+                    })
+                    .transition(.opacity)
+                    .zIndex(1)
+                }
+            }
+            .preferredColorScheme(.dark)
         }
     }
 }

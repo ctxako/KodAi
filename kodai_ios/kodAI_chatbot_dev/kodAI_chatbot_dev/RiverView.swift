@@ -144,6 +144,8 @@ struct RiverView: View {
     @State private var zoomScale: CGFloat = 1.0
     @GestureState private var liveScale: CGFloat = 1.0
     @State private var shareURL: URL?
+    @AppStorage("pref.riverColorScaleSeen") private var riverColorScaleSeen = false
+    @State private var showsColorScaleTooltip = false
 
     /// Only tokens carrying a distribution can be mapped; end-of-stream flush
     /// chunks are dropped so the river reflects real decisions.
@@ -196,7 +198,46 @@ struct RiverView: View {
                 }
             }
         }
+        .overlay(alignment: .top) {
+            if showsColorScaleTooltip {
+                colorScaleTooltip
+                    .padding(.top, 72)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
         .statusBarHidden()
+        .onAppear {
+            guard !riverColorScaleSeen, !tokens.isEmpty else { return }
+            riverColorScaleSeen = true
+            withAnimation(.easeOut(duration: 0.35)) { showsColorScaleTooltip = true }
+            Task {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                withAnimation(.easeIn(duration: 0.4)) { showsColorScaleTooltip = false }
+            }
+        }
+    }
+
+    /// One-time legend shown the first time the River opens: teaches the color
+    /// scale (blue = confident, orange = surprised) then fades after a few seconds.
+    private var colorScaleTooltip: some View {
+        HStack(spacing: 10) {
+            LinearGradient(
+                colors: [RiverPalette.confidence(0), RiverPalette.confidence(0.5), RiverPalette.confidence(1)],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: 40, height: 6)
+            .clipShape(Capsule())
+
+            Text("Blue = confident · Orange = surprised")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.white.opacity(0.92))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay(Capsule().stroke(ChatPalette.glassStroke, lineWidth: 0.6))
+        .accessibilityLabel("Color scale: blue means confident, orange means surprised")
     }
 
     private var riverBackground: some View {

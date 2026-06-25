@@ -12,6 +12,9 @@ struct SideMenuSettingsContent: View {
     @Binding var reduceMotion: Bool
     @Binding var haptics: Bool
     @Binding var compactMessageSpacing: Bool
+    var onOpenModelTuning: () -> Void = {}
+
+    @AppStorage("pref.showAdvanced") private var showAdvanced = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -40,30 +43,24 @@ struct SideMenuSettingsContent: View {
                 SettingsValueRow(title: "Last duration", value: optionalDuration(settings.lastGenerationDuration), systemImage: "timer")
             }
 
-            SettingsSection(title: "Developer") {
-                SettingsValueRow(title: "Show phase timeline", value: "Coming soon", systemImage: "timeline.selection")
-                SettingsValueRow(title: "Show token counters", value: "Coming soon", systemImage: "number")
-                SettingsValueRow(title: "Show generation speed", value: "Coming soon", systemImage: "speedometer")
-                SettingsValueRow(title: "Show model/runtime details", value: "Coming soon", systemImage: "info.circle")
-                SettingsValueRow(title: "Verbose logs", value: "Coming soon", systemImage: "terminal")
-                SettingsValueRow(title: "Export current chat", value: "Use /export", systemImage: "square.and.arrow.up")
-                SettingsValueRow(title: "Runtime diagnostics", value: settings.backendName ?? "Unavailable", systemImage: "stethoscope")
-            }
-
             SettingsSection(title: "Accessibility") {
                 SettingsToggleRow(title: "Reduce motion", isOn: $reduceMotion, systemImage: "figure.walk.motion")
                 SettingsPickerRow(title: "Chat text size", selection: $messageTextSize, systemImage: "textformat.size")
-                SettingsValueRow(title: "High contrast bubbles", value: "Coming soon", systemImage: "circle.lefthalf.filled")
                 SettingsToggleRow(title: "Haptics", isOn: $haptics, systemImage: "iphone.radiowaves.left.and.right")
-                SettingsValueRow(title: "Keep input controls reachable", value: "Coming soon", systemImage: "keyboard")
                 SettingsToggleRow(title: "Compact message spacing", isOn: $compactMessageSpacing, systemImage: "rectangle.compress.vertical")
             }
 
             SettingsSection(title: "Appearance") {
                 AppIconPickerRow()
-                SettingsValueRow(title: "Theme", value: "System · Coming soon", systemImage: "circle.lefthalf.filled")
-                SettingsValueRow(title: "Glass intensity", value: "Default · Coming soon", systemImage: "sparkles")
-                SettingsValueRow(title: "Message density", value: "Default · Coming soon", systemImage: "text.line.first.and.arrowtriangle.forward")
+            }
+
+            SettingsSection(title: "Advanced") {
+                SettingsToggleRow(title: "Show advanced controls", isOn: $showAdvanced, systemImage: "slider.horizontal.3")
+                if showAdvanced {
+                    SettingsButtonRow(title: "Model tuning", systemImage: "dial.medium", action: onOpenModelTuning)
+                    SettingsValueRow(title: "Export current chat", value: "Use /export", systemImage: "square.and.arrow.up")
+                    SettingsValueRow(title: "Runtime diagnostics", value: settings.backendName ?? "Unavailable", systemImage: "stethoscope")
+                }
             }
 
             SettingsSection(title: "About") {
@@ -239,6 +236,37 @@ private struct SettingsValueRow: View {
                 .lineLimit(2)
         }
         .padding(.vertical, 6)
+    }
+}
+
+private struct SettingsButtonRow: View {
+    let title: String
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22)
+
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+
+                Spacer(minLength: 10)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 

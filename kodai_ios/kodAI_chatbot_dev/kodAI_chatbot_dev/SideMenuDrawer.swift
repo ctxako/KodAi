@@ -60,6 +60,7 @@ struct SideMenuDrawer: View {
     let onSetProjectDeadline: (UUID, Date?) -> Void
     let recentActivityEvents: [ActivityEventLite]
     let latestContextSnapshot: ContextSnapshotLite?
+    var onOpenModelTuning: () -> Void = {}
     let onClose: () -> Void
 
     private let log = AppLog(category: "StreamUI")
@@ -331,10 +332,13 @@ struct SideMenuDrawer: View {
     private var chatsContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text("kodAI")
                         .font(.title3.weight(.bold))
                         .foregroundStyle(.white)
+                    Text("Watch a mind decide")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
 
                 Spacer()
@@ -342,151 +346,6 @@ struct SideMenuDrawer: View {
 
             VStack(spacing: 6) {
                 List {
-                    Section {
-                        if dueItems.isEmpty {
-                            DrawerEmptyRow(text: "Nothing due today")
-                                .listRowInsets(.init(top: 4, leading: 0, bottom: 8, trailing: 0))
-                                .listRowSeparator(.hidden)
-                                .listRowBackground(Color.clear)
-                        } else {
-                            ForEach(dueItems) { item in
-                                TodayTaskRow(item: item) {
-                                    log.event("today task selected taskID=\(item.task.id) projectID=\(item.projectID)")
-                                    onSelectProject(item.projectID)
-                                    withAnimation(.smooth(duration: 0.22)) {
-                                        drawerMode = .projectDetail(item.projectID)
-                                    }
-                                }
-                                .listRowInsets(.init(top: 3, leading: 0, bottom: 3, trailing: 0))
-                                .listRowSeparator(.hidden)
-                                .listRowBackground(Color.clear)
-                            }
-                        }
-                    } header: {
-                        Text("Today")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.secondary.opacity(0.72))
-                    }
-
-                    Section {
-                        if streams.isEmpty {
-                            DrawerEmptyRow(text: "No Streams")
-                                .listRowInsets(.init(top: 4, leading: 0, bottom: 8, trailing: 0))
-                                .listRowSeparator(.hidden)
-                                .listRowBackground(Color.clear)
-                        } else {
-                            ForEach(streams) { stream in
-                                StreamRow(
-                                    stream: stream,
-                                    chatCount: chatsForStream(stream.id).count,
-                                    isSelected: isShowingStream(stream.id),
-                                    onSelect: {
-                                        log.event("stream selected id=\(stream.id)")
-                                        withAnimation(.smooth(duration: 0.22)) {
-                                            drawerMode = .streamDetail(stream.id)
-                                        }
-                                    },
-                                    onToggleFavorite: {
-                                        onToggleStreamFavorite(stream.id)
-                                    }
-                                )
-                                .contextMenu {
-                                    Button {
-                                        openStreamSummary(stream)
-                                    } label: {
-                                        Label("Summary", systemImage: "doc.text")
-                                    }
-
-                                    Button {
-                                        onRebuildStreamSummary(stream.id)
-                                    } label: {
-                                        Label("Update Summary", systemImage: "arrow.triangle.2.circlepath")
-                                    }
-                                    .disabled(isGenerating)
-
-                                    Button {
-                                        streamToRename = stream
-                                        renameStreamTitle = stream.title
-                                    } label: {
-                                        Label("Rename", systemImage: "pencil")
-                                    }
-
-                                    Button(role: .destructive) {
-                                        streamToDelete = stream
-                                    } label: {
-                                        Label("Delete Stream", systemImage: "trash")
-                                    }
-                                }
-                                .listRowInsets(.init(top: 3, leading: 0, bottom: 3, trailing: 0))
-                                .listRowSeparator(.hidden)
-                                .listRowBackground(Color.clear)
-                            }
-                        }
-                    } header: {
-                        DrawerSectionHeader(title: "Streams") {
-                            log.event("stream create tapped")
-                            newStreamTitle = ""
-                            isCreatingStream = true
-                        }
-                    }
-
-                    Section {
-                        if projects.isEmpty {
-                            DrawerEmptyRow(text: "No projects yet")
-                                .listRowInsets(.init(top: 4, leading: 0, bottom: 8, trailing: 0))
-                                .listRowSeparator(.hidden)
-                                .listRowBackground(Color.clear)
-                        } else {
-                            ForEach(projects) { project in
-                                ProjectRow(
-                                    project: project,
-                                    isSelected: project.id == selectedProjectID,
-                                    onSelect: {
-                                        log.event("project selected id=\(project.id)")
-                                        onSelectProject(project.id)
-                                        withAnimation(.smooth(duration: 0.22)) {
-                                            drawerMode = .projectDetail(project.id)
-                                        }
-                                    }
-                                )
-                                .contextMenu {
-                                    Button {
-                                        onSelectProject(project.id)
-                                        withAnimation(.smooth(duration: 0.22)) {
-                                            drawerMode = .projectDetail(project.id)
-                                        }
-                                        newTaskTitle = ""
-                                        isCreatingTask = true
-                                    } label: {
-                                        Label("Add Task", systemImage: "plus.circle")
-                                    }
-
-                                    Button {
-                                        projectToRename = project
-                                        renameProjectTitle = project.title
-                                    } label: {
-                                        Label("Rename", systemImage: "pencil")
-                                    }
-
-                                    Button(role: .destructive) {
-                                        projectToDelete = project
-                                    } label: {
-                                        Label("Delete Project", systemImage: "trash")
-                                    }
-                                }
-                                .listRowInsets(.init(top: 3, leading: 0, bottom: 3, trailing: 0))
-                                .listRowSeparator(.hidden)
-                                .listRowBackground(Color.clear)
-                            }
-                        }
-                    } header: {
-                        DrawerSectionHeader(title: "Projects") {
-                            log.event("project create tapped")
-                            newProjectTitle = ""
-                            isCreatingProject = true
-                        }
-                    }
-
                     Section {
                         if looseSessions.isEmpty {
                             DrawerEmptyRow(text: "No loose chats")
@@ -572,7 +431,7 @@ struct SideMenuDrawer: View {
                     drawerMode = .glassBox
                 }
             } label: {
-                Label("Glass Box", systemImage: "cube.transparent")
+                Label("Observatory", systemImage: "binoculars")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.white.opacity(0.88))
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -944,7 +803,8 @@ struct SideMenuDrawer: View {
                     messageTextSize: $messageTextSize,
                     reduceMotion: $reduceMotion,
                     haptics: $haptics,
-                    compactMessageSpacing: $compactMessageSpacing
+                    compactMessageSpacing: $compactMessageSpacing,
+                    onOpenModelTuning: onOpenModelTuning
                 )
             }
             .scrollIndicators(.hidden)
@@ -969,7 +829,7 @@ struct SideMenuDrawer: View {
                 .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Circle())
                 .accessibilityLabel("Back")
 
-                Text("Glass Box")
+                Text("Observatory")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.white)
 
