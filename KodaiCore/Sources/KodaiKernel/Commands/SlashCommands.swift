@@ -216,8 +216,79 @@ public enum KodaiSlashCommandParser {
             dueDate = parseDueValue(String(dueToken!.dropFirst(4)), now: now, calendar: calendar)
         }
 
+        // Fallback: scan remaining title tokens for natural date phrases
+        // when no explicit due: token was found.
+        if dueDate == nil, dueToken == nil {
+            if let match = parseFallbackDueDateFromTokens(tokens, now: now, calendar: calendar) {
+                dueDate = match.date
+                for index in match.indicesToRemove.sorted(by: >) {
+                    tokens.remove(at: index)
+                }
+            }
+        }
+
         let title = tokens.joined(separator: " ").trimmingCharacters(in: .whitespaces)
         return (title, priority, dueDate, dueToken)
+    }
+
+    // Scans the end of the token array for: [prep] [month] [day], [prep] [date],
+    // [month] [day], or a bare today/tomorrow. Returns matched indices and parsed date.
+    private static func parseFallbackDueDateFromTokens(
+        _ tokens: [String],
+        now: Date,
+        calendar: Calendar
+    ) -> (indicesToRemove: [Int], date: Date)? {
+        let count = tokens.count
+        guard count > 0 else { return nil }
+
+        let prepositions: Set<String> = ["on", "due", "by"]
+
+        // [prep] [month] [day] — three tokens from end
+        if count >= 3 {
+            let i0 = count - 3, i1 = count - 2, i2 = count - 1
+            if prepositions.contains(tokens[i0].lowercased()) {
+                let combined = tokens[i1].lowercased() + stripOrdinalSuffix(tokens[i2].lowercased())
+                if let date = parseDueValue(combined, now: now, calendar: calendar) {
+                    return ([i0, i1, i2], date)
+                }
+            }
+        }
+
+        // Two tokens from end
+        if count >= 2 {
+            let i0 = count - 2, i1 = count - 1
+            let tok0 = tokens[i0].lowercased()
+            let tok1 = tokens[i1].lowercased()
+
+            // [prep] [date-word] — e.g. "due today", "on tomorrow"
+            if prepositions.contains(tok0) {
+                if let date = parseDueValue(stripOrdinalSuffix(tok1), now: now, calendar: calendar) {
+                    return ([i0, i1], date)
+                }
+            }
+
+            // [month] [day] with no preposition — e.g. "june 13"
+            let combined = tok0 + stripOrdinalSuffix(tok1)
+            if let date = parseDueValue(combined, now: now, calendar: calendar) {
+                return ([i0, i1], date)
+            }
+        }
+
+        // Single bare token — today, tomorrow
+        let last = tokens[count - 1].lowercased()
+        if let date = parseDueValue(stripOrdinalSuffix(last), now: now, calendar: calendar) {
+            return ([count - 1], date)
+        }
+
+        return nil
+    }
+
+    private static func stripOrdinalSuffix(_ s: String) -> String {
+        for suffix in ["th", "st", "nd", "rd"] where s.hasSuffix(suffix) {
+            let stripped = String(s.dropLast(suffix.count))
+            if Int(stripped) != nil { return stripped }
+        }
+        return s
     }
 
     public static func splitDueArgument(

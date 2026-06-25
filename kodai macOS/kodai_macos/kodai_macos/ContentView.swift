@@ -14,6 +14,7 @@ struct ContentView: View {
         case chat
         case glassBox
         case stream
+        case studio
     }
 
     @Environment(\.modelContext) private var modelContext
@@ -38,6 +39,7 @@ struct ContentView: View {
     private var allChatSessions: [KodaiChatSession]
 
     @State private var viewModel = ChatViewModel()
+    @State private var studioViewModel = StudioViewModel()
     @State private var sidebarOpen = true
     @State private var mainContentRoute: MainContentRoute = .chat
 
@@ -105,6 +107,15 @@ struct ContentView: View {
                     )
                 case .stream:
                     streamContent
+                case .studio:
+                    StudioView(
+                        viewModel: studioViewModel,
+                        onClose: {
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                mainContentRoute = .chat
+                            }
+                        }
+                    )
                 }
             }
             .padding(.leading, contentLeadingPadding)
@@ -287,6 +298,11 @@ struct ContentView: View {
             onOpenStream: {
                 withAnimation(.easeInOut(duration: 0.18)) {
                     mainContentRoute = .stream
+                }
+            },
+            onOpenStudio: {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    mainContentRoute = .studio
                 }
             },
             onNewSession: { project in

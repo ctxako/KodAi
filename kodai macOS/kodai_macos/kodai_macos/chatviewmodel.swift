@@ -664,7 +664,9 @@ final class ChatViewModel {
 
         for await event in backend.stream(prompt: cleanInput, instructions: assembledInstructions) {
             switch event {
-            case .phase(_), .warmup(_), .diagnostic(_), .done(_):
+            case .phase(_), .warmup(_), .diagnostic(_), .done(_), .tokenDecision(_):
+                // .tokenDecision carries pre-sampling logit telemetry from the
+                // llama.cpp runtime; Foundation Models never emits it on macOS.
                 break
 
             case .token(let text, _):
