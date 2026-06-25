@@ -10,6 +10,7 @@ struct GlassBoxView: View {
     @Environment(\.kodaiTheme) private var theme
 
     let signalState: LiveEntitySignalState
+    let latestTurn: TurnRecord?
     let onClose: () -> Void
 
     private let columns = [
@@ -21,30 +22,57 @@ struct GlassBoxView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 header
-
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .center, spacing: 34) {
-                        liveEntity
-                        signalGrid
-                    }
-
-                    VStack(spacing: 20) {
-                        liveEntity
-                        signalGrid
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .center)
-
-                Text("Six quiet life signs shape the bloom: pulse, context, heat, focus, tasks, and readiness.")
-                    .font(.system(size: 12, weight: .regular, design: .rounded))
-                    .foregroundStyle(theme.secondaryText)
-                    .frame(maxWidth: .infinity, alignment: .center)
+                contextSection
+                liveSignalsSection
             }
             .padding(34)
             .frame(maxWidth: 980)
             .frame(maxWidth: .infinity)
         }
         .accessibilityIdentifier("glassBox.detail")
+    }
+
+    // The honest macOS glass box: Foundation Models is sealed at the token
+    // level, but the context we assemble *into* it is fully inspectable.
+    private var contextSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("What shaped the last answer")
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(theme.primaryText)
+
+            if let turn = latestTurn {
+                WhyThisAnswerPanel(turn: turn)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .kodaiGlass(cornerRadius: 18)
+            } else {
+                Text("Send a message — its model, timing, and the exact context blocks that shaped it (included, truncated, or excluded, each with a token cost) appear here.")
+                    .font(.system(size: 12, design: .rounded))
+                    .foregroundStyle(theme.secondaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(20)
+                    .kodaiGlass(cornerRadius: 18)
+            }
+        }
+    }
+
+    private var liveSignalsSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Live signals")
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundStyle(theme.primaryText)
+
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 28) {
+                    liveEntity
+                    signalGrid
+                }
+                VStack(spacing: 18) {
+                    liveEntity
+                    signalGrid
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
     }
 
     private var header: some View {
@@ -54,7 +82,7 @@ struct GlassBoxView: View {
                     .font(.system(size: 28, weight: .semibold, design: .rounded))
                     .foregroundStyle(theme.primaryText)
 
-                Text("Local model visibility")
+                Text("Context inspector")
                     .font(.system(size: 13, weight: .regular, design: .rounded))
                     .foregroundStyle(theme.secondaryText)
             }
@@ -84,8 +112,8 @@ struct GlassBoxView: View {
             WorkloadBloomView(
                 signalState: signalState
             )
-            .scaleEffect(2.05)
-            .frame(width: 250, height: 250)
+            .scaleEffect(1.25)
+            .frame(width: 150, height: 150)
 
             HStack(spacing: 7) {
                 Circle()
@@ -98,8 +126,8 @@ struct GlassBoxView: View {
                     .accessibilityIdentifier("glassBox.status")
             }
         }
-        .padding(24)
-        .frame(width: 300, height: 340)
+        .padding(20)
+        .frame(width: 220, height: 230)
         .kodaiGlass(cornerRadius: 22)
     }
 

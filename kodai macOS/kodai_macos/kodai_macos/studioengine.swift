@@ -154,29 +154,8 @@ final class StudioLlamaEngine: StudioEngine {
         self.modelName = base
         self.quant = extractQuant(fromModelName: base)
         self.label = "\(base) · GGUF"
-
-        // Carry the LFM2.5 preset's context/sampler defaults; only the file name
-        // changes. (Other model families may want their own chat template — fine
-        // for a learning-lab A/B; the LFM2.5 path is exact.)
-        let preset = LocalModelConfiguration.lfm2_5_1_2B_Instruct_Q4_K_M
-        let config = LocalModelConfiguration(
-            modelResourceName: base,
-            modelResourceExtension: fileURL.pathExtension.isEmpty ? "gguf" : fileURL.pathExtension,
-            shortDisplayName: base,
-            contextSize: preset.contextSize,
-            maxGeneratedTokens: preset.maxGeneratedTokens,
-            temperature: preset.temperature,
-            topP: preset.topP,
-            topK: preset.topK,
-            batchSize: preset.batchSize,
-            repeatPenalty: preset.repeatPenalty
-        )
-        self.knobs = config.defaultSamplerKnobs
-        StudioLlamaEngine.linkIntoModelStore(fileURL: fileURL, expectedFileName: config.expectedModelFileName)
-        self.runtime = LocalModelRuntime(
-            configuration: config,
-            modelFileResolver: StudioFilePathResolver(url: fileURL)
-        )
+        self.knobs = StudioLocalModel.config(for: fileURL).defaultSamplerKnobs
+        self.runtime = StudioLocalModel.makeRuntime(for: fileURL)
     }
 
     func warmup() async throws {
@@ -227,6 +206,38 @@ final class StudioLlamaEngine: StudioEngine {
             tokenCount: tokenCount,
             divergedTokens: totalDecisions > 0 ? diverged : nil,
             totalDecisions: totalDecisions > 0 ? totalDecisions : nil
+        )
+    }
+}
+
+/// Shared construction for a file-loaded GGUF: builds the configuration (LFM2.5
+/// preset defaults, only the file name changes), short-circuits the runtime's
+/// download fallback via a symlink, and makes the runtime. Used by both the
+/// batch engine and the Scratch Bench (which supplies its own live knobs).
+enum StudioLocalModel {
+    static func config(for fileURL: URL) -> LocalModelConfiguration {
+        let base = fileURL.deletingPathExtension().lastPathComponent
+        let preset = LocalModelConfiguration.lfm2_5_1_2B_Instruct_Q4_K_M
+        return LocalModelConfiguration(
+            modelResourceName: base,
+            modelResourceExtension: fileURL.pathExtension.isEmpty ? "gguf" : fileURL.pathExtension,
+            shortDisplayName: base,
+            contextSize: preset.contextSize,
+            maxGeneratedTokens: preset.maxGeneratedTokens,
+            temperature: preset.temperature,
+            topP: preset.topP,
+            topK: preset.topK,
+            batchSize: preset.batchSize,
+            repeatPenalty: preset.repeatPenalty
+        )
+    }
+
+    static func makeRuntime(for fileURL: URL) -> LocalModelRuntime {
+        let config = config(for: fileURL)
+        linkIntoModelStore(fileURL: fileURL, expectedFileName: config.expectedModelFileName)
+        return LocalModelRuntime(
+            configuration: config,
+            modelFileResolver: StudioFilePathResolver(url: fileURL)
         )
     }
 

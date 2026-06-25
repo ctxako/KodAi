@@ -99,6 +99,7 @@ struct ContentView: View {
                 case .glassBox:
                     GlassBoxView(
                         signalState: glassBoxSignalState,
+                        latestTurn: viewModel.turnRecords.values.max(by: { $0.createdAt < $1.createdAt }),
                         onClose: {
                             withAnimation(.easeInOut(duration: 0.18)) {
                                 mainContentRoute = .chat

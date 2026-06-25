@@ -27,6 +27,15 @@ struct StudioView: View {
     @State private var showModelImporter = false
     @AppStorage("studio.model.path") private var modelPath = ""
 
+    @State private var studioMode: StudioMode = .suite
+    @State private var scratchViewModel = StudioScratchViewModel()
+
+    private enum StudioMode: String, CaseIterable, Identifiable {
+        case suite, scratch
+        var id: String { rawValue }
+        var title: String { self == .suite ? "Suite" : "Scratch" }
+    }
+
     private let cards = Array(repeating: GridItem(.flexible(), spacing: 10), count: 4)
 
     var body: some View {
@@ -34,24 +43,34 @@ struct StudioView: View {
             VStack(alignment: .leading, spacing: 22) {
                 header
                 engineBar
-                controlBar
-                if viewModel.isRunning { runProgressBar }
-                uploadBar
+                modeToggle
 
-                if viewModel.liveStats.isEmpty {
-                    emptyOrError
+                if studioMode == .scratch {
+                    StudioScratchView(
+                        viewModel: scratchViewModel,
+                        engineKind: engineKind,
+                        modelPath: modelPath
+                    )
                 } else {
-                    summaryGrid
-                    metricChart
-                    tradeoffChart
-                    resultsTable
-                }
+                    controlBar
+                    if viewModel.isRunning { runProgressBar }
+                    uploadBar
 
-                if !viewModel.runs.isEmpty {
-                    historySection
-                    if let a = viewModel.run(for: viewModel.compareA),
-                       let b = viewModel.run(for: viewModel.compareB) {
-                        compareSection(a, b)
+                    if viewModel.liveStats.isEmpty {
+                        emptyOrError
+                    } else {
+                        summaryGrid
+                        metricChart
+                        tradeoffChart
+                        resultsTable
+                    }
+
+                    if !viewModel.runs.isEmpty {
+                        historySection
+                        if let a = viewModel.run(for: viewModel.compareA),
+                           let b = viewModel.run(for: viewModel.compareB) {
+                            compareSection(a, b)
+                        }
                     }
                 }
             }
@@ -86,6 +105,23 @@ struct StudioView: View {
             .contentShape(Capsule())
             .background(theme.glassSurface, in: Capsule())
             .overlay { Capsule().stroke(theme.glassBorder, lineWidth: 1) }
+        }
+    }
+
+    // MARK: Mode toggle
+
+    private var modeToggle: some View {
+        HStack(spacing: 10) {
+            Picker("Mode", selection: $studioMode) {
+                ForEach(StudioMode.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented).labelsHidden().frame(width: 200)
+            Text(studioMode == .suite
+                 ? "Batch the fixed suite with repetitions and statistics."
+                 : "One prompt, live — turn the knobs and watch the output move.")
+                .font(.system(size: 11, design: .rounded))
+                .foregroundStyle(theme.secondaryText.opacity(0.7))
+            Spacer()
         }
     }
 
