@@ -12,14 +12,12 @@ struct MessageBubble: View {
     let isProcessExpanded: Bool
     let generationStartDate: Date?
     let tokenHistory: [TokenSnapshot]
-    let surpriseHighlighting: Bool
     let onToggleProcess: () -> Void
     let onEditComment: () -> Void
 
     @State private var isAlternativesExpanded = false
     @State private var showsInspector = false
-    @State private var showsRiver = false
-    @State private var showsGlobe = false
+    @State private var showsTrace = false
     @State private var summaryAppeared = false
     @State private var selectedHeatmapStep: Int?
     @State private var heatMetric: HeatMetric = .confidence
@@ -98,21 +96,15 @@ struct MessageBubble: View {
                 Divider()
 
                 Button {
+                    showsTrace = true
+                } label: {
+                    Label("Trace", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                }
+
+                Button {
                     showsInspector = true
                 } label: {
                     Label("Inspect Tokens", systemImage: "brain")
-                }
-
-                Button {
-                    showsRiver = true
-                } label: {
-                    Label("Follow the River", systemImage: "water.waves")
-                }
-
-                Button {
-                    showsGlobe = true
-                } label: {
-                    Label("Generation Trace", systemImage: "globe")
                 }
             }
 
@@ -129,45 +121,17 @@ struct MessageBubble: View {
         .sheet(isPresented: $showsInspector) {
             TokenInspectorView(messageText: message.text, history: tokenHistory)
         }
-        .fullScreenCover(isPresented: $showsRiver) {
-            RiverView(messageText: message.text, history: tokenHistory)
-        }
-        .fullScreenCover(isPresented: $showsGlobe) {
-            GlobeView(messageText: message.text, history: tokenHistory)
+        .fullScreenCover(isPresented: $showsTrace) {
+            TraceView(messageText: message.text, history: tokenHistory)
         }
     }
 
-    /// The assistant text rendered plainly, or — when surprise highlighting is on
-    /// and we have a token history — tinted per token by how surprised the model
-    /// was to emit it (−log p). The user's own messages are never tinted.
-    @ViewBuilder
+    /// The message text, rendered plainly.
     private var messageTextView: some View {
-        if shouldHighlightSurprise {
-            Text(surpriseAttributedText)
-                .font(messageFont)
-                .textSelection(.enabled)
-        } else {
-            Text(message.text.isEmpty ? " " : message.text)
-                .font(messageFont)
-                .foregroundStyle(.white)
-                .textSelection(.enabled)
-        }
-    }
-
-    private var shouldHighlightSurprise: Bool {
-        surpriseHighlighting && message.role == .assistant && !tokenHistory.isEmpty
-    }
-
-    private var surpriseAttributedText: AttributedString {
-        var result = AttributedString()
-        for snapshot in tokenHistory where !snapshot.visibleText.isEmpty {
-            var piece = AttributedString(snapshot.visibleText)
-            let intensity = Double(TokenVisuals.surpriseIntensity(snapshot))
-            piece.foregroundColor = .white
-            piece.backgroundColor = Color.orange.opacity(intensity * 0.6)
-            result += piece
-        }
-        return result.characters.isEmpty ? AttributedString(message.text) : result
+        Text(message.text.isEmpty ? " " : message.text)
+            .font(messageFont)
+            .foregroundStyle(.white)
+            .textSelection(.enabled)
     }
 
     private var bubbleTint: Color {
@@ -254,24 +218,16 @@ struct MessageBubble: View {
         let stats = ConfidenceStats(history: tokenHistory)
 
         VStack(alignment: .leading, spacing: 8) {
-            if let stats {
-                statChips(stats)
-                    .modifier(RevealModifier(appeared: summaryAppeared, index: 0, reduceMotion: reduceMotion))
-
-                confidenceSparkline(stats.series)
-                    .modifier(RevealModifier(appeared: summaryAppeared, index: 1, reduceMotion: reduceMotion))
-            }
-
             essentialsLine(summary, stats: stats)
-                .modifier(RevealModifier(appeared: summaryAppeared, index: stats == nil ? 0 : 2, reduceMotion: reduceMotion))
+                .modifier(RevealModifier(appeared: summaryAppeared, index: 0, reduceMotion: reduceMotion))
 
             if !tokenHistory.isEmpty {
                 confidenceHeatmap()
-                    .modifier(RevealModifier(appeared: summaryAppeared, index: 3, reduceMotion: reduceMotion))
+                    .modifier(RevealModifier(appeared: summaryAppeared, index: 1, reduceMotion: reduceMotion))
             }
 
             metadataFooter(summary)
-                .modifier(RevealModifier(appeared: summaryAppeared, index: stats == nil ? 1 : 4, reduceMotion: reduceMotion))
+                .modifier(RevealModifier(appeared: summaryAppeared, index: 2, reduceMotion: reduceMotion))
         }
         .onAppear {
             guard !reduceMotion else {
@@ -283,62 +239,6 @@ struct MessageBubble: View {
                 summaryAppeared = true
             }
         }
-    }
-
-    private func statChips(_ stats: ConfidenceStats) -> some View {
-        HStack(spacing: 6) {
-            statChip(value: "\(stats.tokenCount)", label: "scored", tint: .white.opacity(0.5))
-            statChip(
-                value: "\(Int((stats.averageConfidence * 100).rounded()))%",
-                label: "avg",
-                tint: TokenVisuals.confidenceColor(stats.averageConfidence)
-            )
-            statChip(
-                value: "\(stats.uncertainCount)",
-                label: "uncertain",
-                tint: stats.uncertainCount > 0 ? TokenVisuals.confidenceColor(0.25) : .white.opacity(0.5)
-            )
-        }
-    }
-
-    private func statChip(value: String, label: String, tint: Color) -> some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(tint)
-                .frame(width: 5, height: 5)
-            Text(value)
-                .font(.caption2.weight(.semibold).monospacedDigit())
-                .foregroundStyle(.white.opacity(0.85))
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.4))
-        }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
-        .background(Color.white.opacity(0.06), in: Capsule())
-    }
-
-    private func confidenceSparkline(_ series: [Float]) -> some View {
-        Button {
-            showsInspector = true
-        } label: {
-            HStack(alignment: .bottom, spacing: 1.5) {
-                ForEach(Array(series.enumerated()), id: \.offset) { index, value in
-                    let revealed = reduceMotion || summaryAppeared
-                    RoundedRectangle(cornerRadius: 0.5)
-                        .fill(TokenVisuals.confidenceColor(value).opacity(0.85))
-                        .frame(width: 3, height: max(2, 18 * CGFloat(revealed ? value : 0)))
-                        .animation(
-                            reduceMotion ? nil : .easeOut(duration: 0.25).delay(Double(index) * 0.012),
-                            value: revealed
-                        )
-                }
-            }
-            .frame(height: 18, alignment: .bottom)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 
     private func essentialsLine(_ summary: InferenceProcessSummary, stats: ConfidenceStats?) -> some View {
@@ -604,44 +504,19 @@ struct MessageBubble: View {
     }
 }
 
-/// Confidence rollup for one message, derived from its token history.
+/// Confidence rollup for one message, derived from its token history. Now just
+/// perplexity for the essentials line — the chips and sparkline that consumed the
+/// other rollups were retired in favor of the Trace.
 private struct ConfidenceStats {
-    let tokenCount: Int
-    let averageConfidence: Float
-    let uncertainCount: Int
-    let averageEntropy: Float
     /// exp(mean(−ln p_selected)) — 1.0 = fully confident, higher = more hesitant.
     let perplexity: Float
-    /// Downsampled per-position confidence for the sparkline.
-    let series: [Float]
-
-    private static let uncertainThreshold: Float = 0.6
-    private static let maxBars = 48
 
     init?(history: [TokenSnapshot]) {
         let analyzed = history.filter(\.isAnalyzed)
         guard !analyzed.isEmpty else { return nil }
         let count = Float(analyzed.count)
-        tokenCount = analyzed.count
-        averageConfidence = analyzed.reduce(0) { $0 + $1.selectedProbability } / count
-        uncertainCount = analyzed.filter { $0.selectedProbability < Self.uncertainThreshold }.count
-        averageEntropy = analyzed.reduce(0) { $0 + $1.entropy } / count
         let meanNegativeLogProb = analyzed.reduce(Float(0)) { $0 - log(max($1.selectedProbability, 1e-6)) } / count
         perplexity = exp(meanNegativeLogProb)
-        series = Self.downsample(analyzed.map(\.selectedProbability), to: Self.maxBars)
-    }
-
-    /// Averages the probabilities into at most `maxBars` buckets so long
-    /// responses still render as a compact left-to-right trajectory.
-    private static func downsample(_ values: [Float], to maxBars: Int) -> [Float] {
-        guard values.count > maxBars else { return values }
-        let bucket = Double(values.count) / Double(maxBars)
-        return (0..<maxBars).map { index in
-            let start = Int(Double(index) * bucket)
-            let end = max(start + 1, min(values.count, Int(Double(index + 1) * bucket)))
-            let slice = values[start..<end]
-            return slice.reduce(0, +) / Float(slice.count)
-        }
     }
 }
 

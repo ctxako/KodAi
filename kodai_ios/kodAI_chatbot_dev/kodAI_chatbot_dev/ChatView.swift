@@ -14,14 +14,11 @@ struct ChatView: View {
     @State private var expandedProcessMessageIDs: Set<ChatMessage.ID> = []
     @State private var isMenuOpen = false
     @State private var isTuningPresented = false
-    @State private var showsThreadGlobe = false
+    @State private var showsTrace = false
     @State private var commentEditor: MessageCommentEditor?
     @AppStorage(PrefKey.messageTextSize) private var messageTextSize: MessageTextSize = .small
     @AppStorage(PrefKey.reduceMotion) private var reduceMotion = false
     @AppStorage(PrefKey.compactMessageSpacing) private var compactMessageSpacing = false
-    @AppStorage(PrefKey.surpriseHighlighting) private var surpriseHighlighting = false
-    @AppStorage(PrefKey.chatLens) private var lens: ChatLens = .tracer
-    @State private var tracerTarget: TracerTarget?
     @State private var isMessageListNearBottom = true
     @FocusState private var isInputFocused: Bool
     var body: some View {
@@ -78,25 +75,21 @@ struct ChatView: View {
                     )
                 )
             }
-            .fullScreenCover(isPresented: $showsThreadGlobe) {
-                ThreadGlobeView(
-                    messages: viewModel.messages,
-                    histories: viewModel.tokenHistories,
-                    contextSize: Int(LocalModelConfiguration.lfm2_5_1_2B_Instruct_Q4_K_M.contextSize)
-                )
-            }
-            .fullScreenCover(item: $tracerTarget) { target in
-                RiverView(messageText: target.messageText, history: target.history)
+            .fullScreenCover(isPresented: $showsTrace) {
+                if let id = latestTracedMessageID,
+                   let message = viewModel.messages.first(where: { $0.id == id }) {
+                    // Reads the live history so the spine grows as generation streams.
+                    TraceView(messageText: message.text, history: viewModel.tokenHistories[id] ?? [])
+                }
             }
         }
     }
 
     /// The most recent assistant reply that carries an analyzed token trace, if any.
-    private var latestAssistantTrace: TracerTarget? {
+    private var latestTracedMessageID: ChatMessage.ID? {
         for message in viewModel.messages.reversed() where message.role == .assistant {
-            let history = viewModel.tokenHistories[message.id] ?? []
-            if history.contains(where: \.isAnalyzed) {
-                return TracerTarget(id: message.id, messageText: message.text, history: history)
+            if (viewModel.tokenHistories[message.id] ?? []).contains(where: \.isAnalyzed) {
+                return message.id
             }
         }
         return nil
@@ -300,37 +293,20 @@ struct ChatView: View {
                     .foregroundStyle(.secondary)
 
                 if hasThreadTrace {
-                    ChatLensToggle(lens: $lens) { selected in
+                    Button {
+                        showsTrace = true
                         Haptics.lightTap()
-                        switch selected {
-                        case .tracer:
-                            if let target = latestAssistantTrace {
-                                tracerTarget = target
-                            }
-                        case .atlas:
-                            showsThreadGlobe = true
-                        }
+                    } label: {
+                        Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .frame(width: 38, height: 36)
                     }
-                    .accessibilityHint("Tracer watches one response; Atlas shows the whole conversation as a globe")
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.tint(ChatPalette.elevatedSurface).interactive(), in: Capsule())
+                    .accessibilityLabel("Open trace")
+                    .accessibilityHint("Watch how the latest response was generated, decision by decision")
                 }
-
-                Button {
-                    surpriseHighlighting.toggle()
-                    Haptics.lightTap()
-                } label: {
-                    Image(systemName: "highlighter")
-                        .font(.headline)
-                        .foregroundStyle(surpriseHighlighting ? Color.orange : .white)
-                        .frame(width: 38, height: 36)
-                }
-                .buttonStyle(.plain)
-                .glassEffect(
-                    .regular
-                        .tint(surpriseHighlighting ? Color.orange.opacity(0.5) : ChatPalette.elevatedSurface)
-                        .interactive(),
-                    in: Capsule()
-                )
-                .accessibilityLabel("Surprise highlighting")
             }
 
             if let warmupStatus = viewModel.warmupStatus {
@@ -379,7 +355,6 @@ struct ChatView: View {
                                 isProcessExpanded: expandedProcessMessageIDs.contains(message.id),
                                 generationStartDate: message.id == viewModel.activeAssistantMessageID ? viewModel.sendStartedAt : nil,
                                 tokenHistory: viewModel.tokenHistories[message.id] ?? [],
-                                surpriseHighlighting: surpriseHighlighting,
                                 onToggleProcess: {
                                     toggleProcessSummary(for: message.id)
                                 },
