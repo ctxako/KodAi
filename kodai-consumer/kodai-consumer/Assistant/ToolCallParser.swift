@@ -104,7 +104,8 @@ struct ToolCallParser {
               call.count == 2 else { return nil }
         let name = call[0]
         let argString = call[1]
-        guard AssistantToolName(rawValue: name) != nil else { return nil }
+        guard name == AssistantToolCatalog.respondToolName
+            || AssistantToolName(rawValue: name) != nil else { return nil }
 
         var arguments: [String: String] = [:]
         for pair in allMatches(#"([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*\"([^\"]*)\""#, in: argString) where pair.count == 2 {

@@ -62,6 +62,14 @@ struct ToolCallParserTests {
         #expect(result?.0.arguments["qty"] == "2")
     }
 
+    @Test func parsesRespondTool() {
+        let out = #"[respond(message="Hi! What can I help you with?")]"#
+        let result = parser.parse(out)
+        #expect(result?.0.name == "respond")
+        #expect(result?.0.arguments["message"] == "Hi! What can I help you with?")
+        #expect(result?.1 == .native)  // standalone → trusted
+    }
+
     @Test func returnsNilOnPlainText() {
         #expect(parser.parse("I'm not sure what you mean — could you clarify?") == nil)
     }

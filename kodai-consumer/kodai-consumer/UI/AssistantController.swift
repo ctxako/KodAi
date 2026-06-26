@@ -138,6 +138,13 @@ final class AssistantController {
             return finish("I can only set reminders, calendar events, save files, and manage lists right now.", .failed)
         }
 
+        // Non-action escape hatch: the model routed a greeting / question / small
+        // talk here instead of forcing a device action. Show the reply, do nothing.
+        if rawCall.name == AssistantToolCatalog.respondToolName {
+            let reply = rawCall.arguments["message"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return finish(reply?.isEmpty == false ? reply! : Self.capabilitiesMessage, .idle)
+        }
+
         var currentConfidence = confidence
         var validation = ToolCallValidator().validate(rawCall)
         if case let .failure(error) = validation {
@@ -329,6 +336,9 @@ final class AssistantController {
     private func append(_ kind: ActivityLine.Kind, _ text: String) {
         activity.append(ActivityLine(kind: kind, text: text))
     }
+
+    /// Shown when the model calls `respond` but leaves the message empty.
+    static let capabilitiesMessage = "I can set reminders, add calendar events, manage lists, and save or read files — what would you like to do?"
 
     static func kind(of call: AssistantToolCall) -> String {
         switch call {
