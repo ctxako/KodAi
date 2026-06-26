@@ -23,7 +23,7 @@ struct SystemPromptBuilder {
         let stamp = format(now(), "EEEE, yyyy-MM-dd HH:mm")
 
         return """
-        You are kodAI, an on-device assistant. Reply by calling exactly one tool from the list below — always exactly one, never plain text outside a tool call. For a device action (reminder, calendar event, list, file) call the matching tool with correct arguments; create_reminder handles reminders and to-dos with an optional due date. For a greeting, a question, small talk, or anything that is not one of those actions, call respond with a brief reply.
+        You are kodAI, an on-device assistant. Reply by calling exactly one tool from the list below — always exactly one, never plain text outside a tool call. For a device action (reminder, calendar event, list, file) call the matching tool with correct arguments. An appointment, meeting, class, reservation, or anything booked or scheduled at a set time is a calendar event (create_calendar_event), NOT a reminder. Use create_reminder only for a task to do or remember (buy something, call someone, take meds). For a greeting, a question, small talk, or anything that is not one of those actions, call respond with a brief reply.
         Current date and time: \(stamp) (\(timeZone.identifier)).
         Resolve relative times ("tonight", "tomorrow", "6pm", "in 2 hours") to absolute ISO 8601 (YYYY-MM-DDTHH:MM) using the current time above.
         List of tools: \(AssistantToolCatalog.toolDefinitionsJSON)
