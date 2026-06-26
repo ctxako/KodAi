@@ -21,7 +21,11 @@ struct EventKitToolRouter: ToolRouter {
     let confirm: (AssistantToolCall) async -> ConfirmDecision
     var onActivity: ((String) -> Void)?
 
-    private let store = EKEventStore()
+    /// One long-lived store for the whole app session. A fresh EKEventStore per
+    /// call can report nil/empty calendars before its sources finish loading,
+    /// which is part of why writes were failing with no_reminder_list_available.
+    private static let sharedStore = EKEventStore()
+    private var store: EKEventStore { Self.sharedStore }
 
     init(
         confirm: @escaping (AssistantToolCall) async -> ConfirmDecision,
@@ -109,22 +113,37 @@ struct EventKitToolRouter: ToolRouter {
         return .ok(tool: toolName, result: result)
     }
 
-    /// The named reminder list (created if absent), or the default list.
+    /// Resolves the list a reminder is saved to. Falls back through default →
+    /// any writable list → a created "kodAI" list, because
+    /// defaultCalendarForNewReminders() is nil whenever the user hasn't picked a
+    /// default list — even with writable iCloud lists present. The no-list case
+    /// is the common one (the model usually omits `list`), so it must be robust.
     private func reminderCalendar(named name: String?) throws -> EKCalendar? {
-        guard let name, !name.isEmpty else {
-            return store.defaultCalendarForNewReminders()
+        if let name, !name.isEmpty {
+            if let existing = store.calendars(for: .reminder).first(where: {
+                $0.title.caseInsensitiveCompare(name) == .orderedSame
+            }) {
+                return existing
+            }
+            return try createReminderList(named: name)
         }
-        if let existing = store.calendars(for: .reminder).first(where: {
-            $0.title.caseInsensitiveCompare(name) == .orderedSame
-        }) {
-            return existing
+        if let defaultList = store.defaultCalendarForNewReminders() { return defaultList }
+        if let writable = store.calendars(for: .reminder).first(where: { $0.allowsContentModifications }) {
+            return writable
         }
+        return try createReminderList(named: "kodAI")
+    }
+
+    /// Creates a reminder list on the best available source — one that already
+    /// holds reminder lists, else iCloud (calDAV), else local. nil only when no
+    /// source can hold reminders at all (Reminders off in iCloud and no local).
+    private func createReminderList(named name: String) throws -> EKCalendar? {
         guard let source = store.defaultCalendarForNewReminders()?.source
+            ?? store.calendars(for: .reminder).first?.source
+            ?? store.sources.first(where: { $0.sourceType == .calDAV })
             ?? store.sources.first(where: { $0.sourceType == .local })
             ?? store.sources.first
-        else {
-            return store.defaultCalendarForNewReminders()
-        }
+        else { return nil }
         let calendar = EKCalendar(for: .reminder, eventStore: store)
         calendar.title = name
         calendar.source = source

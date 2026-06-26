@@ -361,6 +361,7 @@ final class AssistantController {
         switch error {
         case "calendar_access_denied": return "calendar access is off (Settings › Privacy › Calendars)"
         case "reminders_access_denied": return "reminders access is off (Settings › Privacy › Reminders)"
+        case "no_reminder_list_available": return "no Reminders list found — open Reminders once, or turn it on in iCloud settings"
         case "access_denied": return "file access was denied"
         default: return error ?? "unknown error"
         }
