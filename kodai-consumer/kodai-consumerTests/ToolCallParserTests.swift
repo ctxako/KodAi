@@ -31,13 +31,29 @@ struct ToolCallParserTests {
         #expect(result?.1 == .json)
     }
 
-    @Test func parsesPythonicFallback() {
+    @Test func parsesStandalonePythonicAsTrusted() {
         let out = #"create_reminder(title="Walk dog", due_iso="2026-06-27T09:00")"#
         let result = parser.parse(out)
         #expect(result?.0.name == "create_reminder")
         #expect(result?.0.arguments["title"] == "Walk dog")
         #expect(result?.0.arguments["due_iso"] == "2026-06-27T09:00")
-        #expect(result?.1 == .pythonic)
+        #expect(result?.1 == .native)  // standalone call → trusted, no verify hint
+    }
+
+    @Test func parsesPrimedBracketedCallAsTrusted() {
+        // The shape the runtime's <|tool_call_start|> primer produces.
+        let out = #"[create_reminder(title="Feed the dogs", due_iso="2026-06-26T06:00", notes="")]"#
+        let result = parser.parse(out)
+        #expect(result?.0.name == "create_reminder")
+        #expect(result?.0.arguments["title"] == "Feed the dogs")
+        #expect(result?.1 == .native)
+    }
+
+    @Test func flagsPythonicRecoveredFromProse() {
+        let out = #"Sure, I'll set that up: create_reminder(title="Walk dog", due_iso="2026-06-27T09:00") for you."#
+        let result = parser.parse(out)
+        #expect(result?.0.name == "create_reminder")
+        #expect(result?.1 == .pythonic)  // embedded in prose → verify hint
     }
 
     @Test func coercesNumericArguments() {

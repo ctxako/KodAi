@@ -39,8 +39,17 @@ Status: **Phases 0–3 ✅ · native tool-calling design (no GBNF) · WORKING EN
 - **2026-06-25 — CONFIRMED WORKING ON A REAL iPhone.** "Create me a reminder to
   feed the dogs tomorrow at 6am" → confirm card (correct title/date/notes) →
   Confirm → the reminder appears in Apple Reminders ("Feed the dogs · Tomorrow
-  6:00 AM"). Phase 3 exit gate met. Next: Phase 4 task-log UI polish → Phase 6
-  TestFlight.
+  6:00 AM"). Phase 3 exit gate met.
+- **2026-06-25 — tool-layer hardening.** (1) `create_calendar_event` had the same
+  nil-default bug as reminders (`event.calendar = defaultCalendarForNewEvents`,
+  which can be nil). Fixed using the write-only **virtual calendar** from
+  `calendars(for: .event)` (EventKit saves to the user's chosen calendar under
+  write-only access); friendly `no_calendar_available` message. (2) The primer
+  makes every output a bare `[tool(args)]`, which parsed `.pythonic` → the confirm
+  card showed "Double-check this looks right" on *every* action. `ToolCallParser`
+  now treats a clean standalone call as trusted (`.native`), reserving the verify
+  hint for calls recovered from surrounding prose. All consumer unit tests green on
+  the iPhone 17 sim. Remaining: on-device sweep of add_to_list / save_file / read_file.
 
 ## 1. Objective & mental model
 

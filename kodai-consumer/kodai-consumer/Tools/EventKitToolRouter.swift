@@ -74,13 +74,20 @@ struct EventKitToolRouter: ToolRouter {
         guard try await store.requestWriteOnlyAccessToEvents() else {
             return .failure(tool: "create_calendar_event", error: "calendar_access_denied")
         }
+        // Under write-only access `defaultCalendarForNewEvents` can be nil, but
+        // `calendars(for: .event)` still returns a single virtual calendar and
+        // EventKit saves the event to the calendar the person actually uses.
+        // Fall back to it so a missing default doesn't block the write.
+        guard let calendar = store.defaultCalendarForNewEvents ?? store.calendars(for: .event).first else {
+            return .failure(tool: "create_calendar_event", error: "no_calendar_available")
+        }
         let event = EKEvent(eventStore: store)
         event.title = title
         event.startDate = start
         event.endDate = end ?? start.addingTimeInterval(3600)
         event.location = location
         event.notes = notes
-        event.calendar = store.defaultCalendarForNewEvents
+        event.calendar = calendar
         try store.save(event, span: .thisEvent)
         return .ok(tool: "create_calendar_event", result: ["title": title, "start": Self.iso(start)])
     }

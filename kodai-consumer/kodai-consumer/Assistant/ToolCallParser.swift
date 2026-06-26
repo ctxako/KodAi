@@ -12,6 +12,11 @@
 
 import Foundation
 
+/// How much to trust the extracted call — drives whether the confirm card nudges
+/// the user to double-check. `.native`: a clean tool-call emission (the native
+/// `<|tool_call_*|>` wrapper, or a standalone call that is essentially the whole
+/// output — the normal primed case). `.json`: structured JSON. `.pythonic`: a
+/// call recovered loosely from surrounding prose, worth a second look.
 enum ParseConfidence: Sendable {
     case native
     case json
@@ -28,7 +33,11 @@ struct ToolCallParser {
             return (call, .native)
         }
         if let call = parseJSON(in: output) { return (call, .json) }
-        if let call = parsePythonic(in: output) { return (call, .pythonic) }
+        if let (call, isStandalone) = parsePythonic(in: output) {
+            // A call that *is* essentially the whole output (the normal primed
+            // emission) is trusted; one fished out of prose gets a verify hint.
+            return (call, isStandalone ? .native : .pythonic)
+        }
         return nil
     }
 
@@ -86,7 +95,11 @@ struct ToolCallParser {
 
     // MARK: - Pythonic fallback
 
-    private func parsePythonic(in text: String) -> RawToolCall? {
+    /// Returns the call plus whether it stands alone — i.e. the call is the whole
+    /// output once wrapper tokens, enclosing brackets, and whitespace are removed.
+    /// Standalone calls are the normal primed emission; non-standalone ones were
+    /// recovered from surrounding prose and warrant a verify hint.
+    private func parsePythonic(in text: String) -> (RawToolCall, isStandalone: Bool)? {
         guard let call = firstMatch(#"([a-zA-Z_][a-zA-Z0-9_]*)\s*\((.*)\)"#, in: text),
               call.count == 2 else { return nil }
         let name = call[0]
@@ -97,7 +110,13 @@ struct ToolCallParser {
         for pair in allMatches(#"([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*\"([^\"]*)\""#, in: argString) where pair.count == 2 {
             arguments[pair[0]] = pair[1]
         }
-        return RawToolCall(name: name, arguments: arguments)
+
+        let cleaned = text.strippingModelTokens()
+            .trimmingCharacters(in: CharacterSet(charactersIn: "[] \n\t"))
+        let afterName = cleaned.hasPrefix(name)
+            ? cleaned.dropFirst(name.count).trimmingCharacters(in: .whitespaces)
+            : ""
+        return (RawToolCall(name: name, arguments: arguments), afterName.hasPrefix("("))
     }
 
     // MARK: - Regex helpers
