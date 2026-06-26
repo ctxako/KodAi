@@ -1,6 +1,6 @@
 # kodAI Consumer — Implementation Plan (v1)
 
-Status: **Phases 0–3 ✅ · native tool-calling design (no GBNF) · runtime tool-call reliability fixed & measured ~100% on macOS · awaiting on-device confirm** · Last updated: 2026-06-25
+Status: **Phases 0–3 ✅ · native tool-calling design (no GBNF) · WORKING END-TO-END ON DEVICE — "remind me tomorrow 6am to feed the dogs" → confirm card → reminder written to Apple Reminders** · Last updated: 2026-06-25
 
 > **Design note (supersedes the GBNF/forced-JSON language below):** the shipped
 > app uses **LFM2's native Pythonic tool-calling** — `[tool(arg="…")]` between
@@ -27,7 +27,20 @@ Status: **Phases 0–3 ✅ · native tool-calling design (no GBNF) · runtime to
   2. **Prompt whitespace aligned** to LFM2's embedded chat template (verified by dumping `tokenizer.chat_template` from the GGUF — it's ChatML + inlined `List of tools:`).
   3. **Stop decode on `<|tool_call_end|>`** (LFM2 doesn't mark it EOG) — halves generation length.
   4. **Firm system prompt** (always call exactly one tool; never refuse) + **assistant primed with `<|tool_call_start|>`** via a new optional `assistantPrimer` threaded through `generate`/`formatChatPrompt`. This is the big reliability lever: ~40% → **24/24** measured.
-  - Verified end-to-end against the real model on macOS via a throwaway harness. **iOS on-device confirmation still pending** — do a clean build so Xcode recompiles the KodaiCore package.
+  - Verified against the real model on macOS via a throwaway harness.
+- **2026-06-25 — EventKit save fixed (commit 97c725e).** With tool-calls working,
+  confirming a reminder failed with `no_reminder_list_available`: the model omits
+  `list`, so the save took the nil-list path which only returned
+  `defaultCalendarForNewReminders()` — nil when no *default* list is set (even
+  with writable iCloud lists present). Fix in `EventKitToolRouter`: one
+  long-lived `EKEventStore` (static, not per-call) + fallback default → first
+  writable reminders list → create a "kodAI" list on the best source; friendly
+  error string. **Requires Reminders enabled in the user's iCloud.**
+- **2026-06-25 — CONFIRMED WORKING ON A REAL iPhone.** "Create me a reminder to
+  feed the dogs tomorrow at 6am" → confirm card (correct title/date/notes) →
+  Confirm → the reminder appears in Apple Reminders ("Feed the dogs · Tomorrow
+  6:00 AM"). Phase 3 exit gate met. Next: Phase 4 task-log UI polish → Phase 6
+  TestFlight.
 
 ## 1. Objective & mental model
 
