@@ -8,6 +8,7 @@
 //
 
 import Foundation
+import KodaiKernel
 
 /// v1 tool names. Kept tiny on purpose — a small, closed routing surface is
 /// what makes a 1.2B reliable.
@@ -37,19 +38,10 @@ enum AssistantToolCall: Equatable, Sendable {
     case readFile(purpose: String)
 }
 
-/// The native LFM2 tool definitions injected into the system turn as
-/// `List of tools: [<json>, ...]`. Descriptions carry negations ("NOT for…")
-/// to keep routing crisp between the two date-ish tools.
+/// Thin façade over the canonical routing config in KodaiKernel
+/// (`ConsumerToolRouting`), kept so existing call sites stay unchanged while the
+/// catalog/prompt/primer live in one shared place the routing eval also reads.
 enum AssistantToolCatalog {
-    /// A non-action escape hatch. The runtime primer forces a tool call on every
-    /// input, so without this a greeting like "hi" gets coerced into a real
-    /// action (and a misrouted file tool opens the picker with no confirm). The
-    /// model routes non-actions here instead; the controller shows the reply and
-    /// executes nothing. Handled at the RawToolCall layer (never a typed
-    /// AssistantToolCall), so it stays out of the confirm/execute paths.
-    static let respondToolName = "respond"
-
-    static let toolDefinitionsJSON: String = """
-    [{"name":"create_calendar_event","description":"Create a calendar event at a specific date and time. Use for appointments, meetings, calls, reservations, classes — anything that happens AT a scheduled time. ALWAYS use this when the request mentions an appointment, a meeting, or to schedule something. NOT for undated to-dos (use create_reminder).","parameters":{"type":"object","properties":{"title":{"type":"string"},"start_iso":{"type":"string","description":"ISO 8601 local start, e.g. 2026-06-26T14:00"},"end_iso":{"type":"string","description":"ISO 8601 local end"},"location":{"type":"string"},"notes":{"type":"string"}},"required":["title","start_iso"]}},{"name":"create_reminder","description":"Create a reminder or to-do, optionally with a due date. Use for things to remember or do — buy or get something, call someone, take meds, a chore. NOT for appointments or meetings at a set time (use create_calendar_event).","parameters":{"type":"object","properties":{"title":{"type":"string"},"due_iso":{"type":"string","description":"ISO 8601 local due date/time"},"list":{"type":"string"},"notes":{"type":"string"}},"required":["title"]}},{"name":"add_to_list","description":"Add an item to a named list such as groceries, shopping, or packing. Use for list items — NOT for time-based reminders.","parameters":{"type":"object","properties":{"list":{"type":"string"},"item":{"type":"string"}},"required":["list","item"]}},{"name":"save_file","description":"Save text content to a file. The user chooses where to save in the Files app. Use for notes, lists, drafts — NOT for reminders or calendar events.","parameters":{"type":"object","properties":{"name":{"type":"string","description":"File name including extension, e.g. packing_list.txt"},"content":{"type":"string","description":"The text content to save"}},"required":["name","content"]}},{"name":"read_file","description":"Read a file the user selects from the Files app. Describe what you need so the user knows which file to pick. Use when the user asks you to read, review, or work with a file.","parameters":{"type":"object","properties":{"purpose":{"type":"string","description":"Brief description of what file is needed, shown to the user"}},"required":["purpose"]}},{"name":"respond","description":"Use ONLY when the request is NOT one of the device actions above — a greeting, small talk, a question, thanks, or anything you cannot do. Put a short reply in message. Never use this to avoid a real action the user asked for.","parameters":{"type":"object","properties":{"message":{"type":"string","description":"A brief reply to show the user"}},"required":["message"]}}]
-    """
+    static var respondToolName: String { ConsumerToolRouting.respondToolName }
+    static var toolDefinitionsJSON: String { ConsumerToolRouting.toolDefinitionsJSON }
 }

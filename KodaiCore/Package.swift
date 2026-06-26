@@ -15,7 +15,8 @@ let package = Package(
         .library(name: "KodaiBenchKit", targets: ["KodaiBenchKit"]),
         .executable(name: "kodai-bench", targets: ["KodAiBench"]),
         .executable(name: "kodai-bench-mac", targets: ["KodaiBenchMac"]),
-        .executable(name: "kodai-bench-server", targets: ["KodaiBenchServer"])
+        .executable(name: "kodai-bench-server", targets: ["KodaiBenchServer"]),
+        .executable(name: "kodai-route-eval", targets: ["KodaiRouteEval"])
     ],
     dependencies: [
         .package(path: "../kodai_ios/LlamaCPP")
@@ -48,6 +49,13 @@ let package = Package(
         .executableTarget(
             name: "KodaiBenchServer",
             dependencies: ["KodaiBenchKit"]
+        ),
+        // Committed regression eval for the consumer agent's tool routing.
+        // Runs labelled inputs through the real model using the shipped
+        // ConsumerToolRouting config. Local-only (needs the gitignored GGUF).
+        .executableTarget(
+            name: "KodaiRouteEval",
+            dependencies: ["KodaiKernel", "KodaiRuntime"]
         ),
         .testTarget(
             name: "KodaiCoreTests",
