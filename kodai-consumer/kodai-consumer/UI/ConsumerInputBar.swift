@@ -9,6 +9,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 /// The three palette colors lifted from chatbot-dev's ChatPalette.
 enum ConsumerPalette {
@@ -73,6 +74,11 @@ struct ConsumerInputBar: View {
     private func sendIfPossible() {
         guard canSend else { return }
         isInputFocused.wrappedValue = false
+        // FocusState alone can fail to resign a multi-line (axis: .vertical)
+        // TextField, so force the keyboard down as well.
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+        )
         onSend()
     }
 }
