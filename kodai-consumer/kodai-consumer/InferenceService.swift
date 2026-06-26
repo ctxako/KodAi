@@ -22,12 +22,14 @@ actor InferenceService {
     func generate(
         messages: [KodaiRuntimeMessage],
         systemPrompt: String,
-        samplerKnobs: SamplerKnobs
+        samplerKnobs: SamplerKnobs,
+        assistantPrimer: String? = nil
     ) async -> AsyncThrowingStream<InferenceEvent, Error> {
         await runtime.generate(
             messages: messages,
             systemPrompt: systemPrompt,
-            samplerKnobs: samplerKnobs
+            samplerKnobs: samplerKnobs,
+            assistantPrimer: assistantPrimer
         )
     }
 

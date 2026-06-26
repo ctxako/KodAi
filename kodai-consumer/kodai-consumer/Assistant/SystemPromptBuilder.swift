@@ -3,11 +3,13 @@
 //  kodai-consumer
 //
 //  Builds the system turn in the format LFM2 was trained on for tool use: a
-//  terse instruction, the current datetime/timezone (so relative times can be
+//  firm instruction to always call exactly one tool (a 1.2B otherwise refuses
+//  or narrates), the current datetime/timezone (so relative times can be
 //  resolved), and the tools rendered as `List of tools: [<json>]` — mirroring
-//  the GGUF chat template's `{%- if tools -%}` branch. LFM2 then emits a native
-//  <|tool_call_start|>…<|tool_call_end|> call, which ToolCallParser extracts.
-//  No grammar, no "emit JSON" rules, no plain-text escape.
+//  the GGUF chat template's `{%- if tools -%}` branch. The runtime also primes
+//  the assistant turn with `<|tool_call_start|>` (see RuntimeAgentModel) so the
+//  model continues straight into a native call, which ToolCallParser extracts.
+//  No grammar needed: firm prompt + primer ≈ 100% valid calls in measurement.
 //
 
 import Foundation
@@ -21,7 +23,7 @@ struct SystemPromptBuilder {
         let stamp = format(now(), "EEEE, yyyy-MM-dd HH:mm")
 
         return """
-        You are kodAI, an on-device assistant that completes one device action per request by calling the single most appropriate tool with correct arguments.
+        You are kodAI, an on-device assistant. Complete the user's request by calling exactly one tool from the list below. You ALWAYS call a tool — never refuse, never apologize, never reply in prose, and never say what you "can only" do. Every request maps to one tool here; create_reminder handles reminders and to-dos with an optional due date.
         Current date and time: \(stamp) (\(timeZone.identifier)).
         Resolve relative times ("tonight", "tomorrow", "6pm", "in 2 hours") to absolute ISO 8601 (YYYY-MM-DDTHH:MM) using the current time above.
         List of tools: \(AssistantToolCatalog.toolDefinitionsJSON)

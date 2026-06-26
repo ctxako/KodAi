@@ -184,10 +184,15 @@ public nonisolated final class LlamaContextWrapper: @unchecked Sendable {
 
     public nonisolated func formatChatPrompt(
         messages: [KodaiRuntimeMessage],
-        systemPrompt: String
+        systemPrompt: String,
+        assistantPrimer: String? = nil
     ) -> LlamaPromptBuildResult {
         let promptMessages = Self.recentPromptMessages(from: messages)
-        let prompt = Self.formatChatMLPrompt(messages: promptMessages, systemMessage: systemPrompt)
+        let prompt = Self.formatChatMLPrompt(
+            messages: promptMessages,
+            systemMessage: systemPrompt,
+            assistantPrimer: assistantPrimer
+        )
 
         return LlamaPromptBuildResult(
             prompt: prompt,
@@ -631,7 +636,16 @@ public nonisolated final class LlamaContextWrapper: @unchecked Sendable {
     // tokenizer (add_special). The trailing newline after `assistant` and the
     // absence of a newline before `<|im_end|>` are part of the trained format —
     // a 1.2B's tool-call reliability depends on getting this whitespace right.
-    private static func formatChatMLPrompt(messages: [KodaiRuntimeMessage], systemMessage: String) -> String {
+    //
+    // `assistantPrimer`, when set, is appended after the assistant marker so the
+    // model continues *from* it instead of choosing how to open. The consumer
+    // app primes `<|tool_call_start|>` to force a tool call — at 1.2B the model
+    // otherwise refuses/narrates most of the time. Default nil = normal chat.
+    private static func formatChatMLPrompt(
+        messages: [KodaiRuntimeMessage],
+        systemMessage: String,
+        assistantPrimer: String? = nil
+    ) -> String {
         var prompt = "<|im_start|>system\n\(systemMessage)<|im_end|>\n"
 
         for message in messages {
@@ -639,6 +653,7 @@ public nonisolated final class LlamaContextWrapper: @unchecked Sendable {
         }
 
         prompt += "<|im_start|>assistant\n"
+        if let assistantPrimer { prompt += assistantPrimer }
         return prompt
     }
 }

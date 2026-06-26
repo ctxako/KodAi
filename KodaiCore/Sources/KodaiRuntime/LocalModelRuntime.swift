@@ -23,7 +23,8 @@ public actor LocalModelRuntime {
     public func generate(
         messages: [KodaiRuntimeMessage],
         systemPrompt: String,
-        samplerKnobs: SamplerKnobs
+        samplerKnobs: SamplerKnobs,
+        assistantPrimer: String? = nil
     ) -> AsyncThrowingStream<InferenceEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task.detached(priority: .userInitiated) { [weak self] in
@@ -33,7 +34,7 @@ public actor LocalModelRuntime {
                 }
 
                 do {
-                    try await self.run(messages: messages, systemPrompt: systemPrompt, samplerKnobs: samplerKnobs, continuation: continuation)
+                    try await self.run(messages: messages, systemPrompt: systemPrompt, samplerKnobs: samplerKnobs, assistantPrimer: assistantPrimer, continuation: continuation)
                 } catch is CancellationError {
                     await self.logCancellation()
                     continuation.yield(.cancelled)
@@ -59,6 +60,7 @@ public actor LocalModelRuntime {
         messages: [KodaiRuntimeMessage],
         systemPrompt: String,
         samplerKnobs: SamplerKnobs,
+        assistantPrimer: String?,
         continuation: AsyncThrowingStream<InferenceEvent, Error>.Continuation
     ) async throws {
         let context = try await loadContext(continuation: continuation)
@@ -72,6 +74,7 @@ public actor LocalModelRuntime {
             context: context,
             configuration: configuration,
             samplerKnobs: samplerKnobs,
+            assistantPrimer: assistantPrimer,
             continuation: continuation
         )
 

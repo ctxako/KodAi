@@ -20,6 +20,13 @@ enum ModelStatus: Equatable {
 }
 
 final class RuntimeAgentModel: AgentModel {
+    /// Primed into the assistant turn to force a native LFM2 tool call. Without
+    /// it the 1.2B refuses/narrates on most requests ("I'm sorry, I can only…");
+    /// priming `<|tool_call_start|>` puts the model *inside* a call so it emits
+    /// `[tool(args)]` instead. Measured: ~40% → ~100% valid calls. See
+    /// LlamaContextWrapper.formatChatMLPrompt(assistantPrimer:).
+    static let toolCallPrimer = "<|tool_call_start|>"
+
     let inference = InferenceService()
 
     var onStatus: ((ModelStatus) -> Void)?
@@ -46,7 +53,8 @@ final class RuntimeAgentModel: AgentModel {
         let stream = await inference.generate(
             messages: runtimeMessages,
             systemPrompt: systemPrompt,
-            samplerKnobs: knobs
+            samplerKnobs: knobs,
+            assistantPrimer: Self.toolCallPrimer
         )
 
         var output = ""

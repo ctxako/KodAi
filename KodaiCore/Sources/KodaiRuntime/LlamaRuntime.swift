@@ -36,6 +36,7 @@ public actor LlamaRuntime {
         context: LlamaContextWrapper,
         configuration: LocalModelConfiguration,
         samplerKnobs: SamplerKnobs,
+        assistantPrimer: String? = nil,
         continuation: AsyncThrowingStream<InferenceEvent, Error>.Continuation
     ) async throws -> GenerationFinishReason {
         try Task.checkCancellation()
@@ -45,7 +46,7 @@ public actor LlamaRuntime {
 
         continuation.yield(.phase(.formattingPrompt))
         log.event("prompt formatting started")
-        let promptBuildResult = context.formatChatPrompt(messages: messages, systemPrompt: systemPrompt)
+        let promptBuildResult = context.formatChatPrompt(messages: messages, systemPrompt: systemPrompt, assistantPrimer: assistantPrimer)
         let formattedPrompt = promptBuildResult.prompt
         #if DEBUG
         log.event("raw formatted prompt sent to llama.cpp=\(formattedPrompt.debugDescription)")
