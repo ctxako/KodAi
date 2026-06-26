@@ -175,7 +175,7 @@ final class AssistantController {
 
         let result: ToolResult
         if Self.isFileTool(call) {
-            result = await executeFileTool(call)
+            result = await executeFileTool(call, confidence: currentConfidence)
         } else {
             result = await executeEventKitTool(call, confidence: currentConfidence)
         }
@@ -187,7 +187,7 @@ final class AssistantController {
             append(.info, "Retrying…")
             let retryResult: ToolResult
             if Self.isFileTool(call) {
-                retryResult = await executeFileTool(call)
+                retryResult = await executeFileTool(call, confidence: currentConfidence)
             } else {
                 retryResult = await executeEventKitTool(call, confidence: currentConfidence)
             }
@@ -214,13 +214,20 @@ final class AssistantController {
         return await router.execute(call)
     }
 
-    private func executeFileTool(_ call: AssistantToolCall) async -> ToolResult {
+    private func executeFileTool(_ call: AssistantToolCall, confidence: ParseConfidence) async -> ToolResult {
+        // Confirm file tools too (matching EventKit writes), so a misrouted
+        // action — e.g. "create a folder" → save_file — can be cancelled before
+        // the Files picker ever opens. The card can also edit name/content/purpose.
+        let decision = await confirmWithConfidence(call, confidence: confidence)
+        guard case let .accept(confirmed) = decision else {
+            return .failure(tool: EventKitToolRouter.name(call), error: "cancelled_by_user")
+        }
         let router = FileToolRouter(
             presentPicker: { [weak self] request in
                 await self?.presentFilePicker(request) ?? .cancelled
             }
         )
-        return await router.execute(call)
+        return await router.execute(confirmed)
     }
 
     private static func isFileTool(_ call: AssistantToolCall) -> Bool {
