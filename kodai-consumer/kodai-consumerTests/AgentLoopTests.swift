@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import KodaiKernel
 @testable import kodai_consumer
 
 private final class ScriptedModel: AgentModel {
@@ -29,6 +30,8 @@ private struct OKRouter: ToolRouter {
         case .addToList: return "add_to_list"
         case .saveFile: return "save_file"
         case .readFile: return "read_file"
+        case .queryCalendar: return "query_calendar"
+        case .queryReminders: return "query_reminders"
         }
     }
 }

@@ -13,6 +13,7 @@
 //
 
 import Foundation
+import KodaiKernel
 
 /// One conversation message as seen by the loop. `.tool` carries a structured
 /// `ToolResult` JSON line back to the model.
@@ -78,7 +79,7 @@ struct AgentLoop {
                 return .completed(summary: summary, steps: state.stepsCompleted)
             }
 
-            switch validator.validate(raw) {
+            switch validator.validate(raw, userInput: task) {
             case .failure(let error):
                 if !retriedThisStep {
                     retriedThisStep = true
@@ -119,6 +120,10 @@ struct AgentLoop {
             return "save_file: \(name)"
         case let .readFile(purpose):
             return "read_file: \(purpose)"
+        case let .queryCalendar(dateRange):
+            return "query_calendar: \(dateRange)"
+        case let .queryReminders(list, _):
+            return "query_reminders: \(list ?? "all")"
         }
     }
 }

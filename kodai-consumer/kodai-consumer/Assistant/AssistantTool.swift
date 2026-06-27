@@ -2,41 +2,27 @@
 //  AssistantTool.swift
 //  kodai-consumer
 //
-//  The v1 tool surface (3 create actions, all writes → confirm) plus the
-//  in-memory call types exchanged between the model output, the parser,
-//  the validator, and (later) the executor + confirm UI.
+//  The v1 tool surface (3 create actions, all writes → confirm). The call value
+//  types and the parse/validate path now live in KodaiKernel (so the shipped
+//  config is exercised verbatim by `kodai-route-eval`); the app re-exports them
+//  under their established names so existing call sites stay unchanged.
 //
 
 import Foundation
 import KodaiKernel
 
 /// v1 tool names. Kept tiny on purpose — a small, closed routing surface is
-/// what makes a 1.2B reliable.
-enum AssistantToolName: String, CaseIterable, Sendable {
-    case createCalendarEvent = "create_calendar_event"
-    case createReminder = "create_reminder"
-    case addToList = "add_to_list"
-    case saveFile = "save_file"
-    case readFile = "read_file"
-}
+/// what makes a 1.2B reliable. (Canonical definition in KodaiKernel.)
+typealias AssistantToolName = KodaiKernel.AssistantToolName
 
 /// A tool call as emitted by the model and extracted by `ToolCallParser`:
 /// a name plus flat string arguments. `ToolCallValidator` turns this into a
 /// typed, checked `AssistantToolCall`.
-struct RawToolCall: Equatable, Sendable {
-    let name: String
-    let arguments: [String: String]
-}
+typealias RawToolCall = KodaiKernel.RawToolCall
 
-/// A validated, typed tool call — ready to render in a confirm card and,
-/// in Phase 3, execute against EventKit.
-enum AssistantToolCall: Equatable, Sendable {
-    case createCalendarEvent(title: String, start: Date, end: Date?, location: String?, notes: String?)
-    case createReminder(title: String, due: Date?, list: String?, notes: String?)
-    case addToList(list: String, item: String)
-    case saveFile(name: String, content: String)
-    case readFile(purpose: String)
-}
+/// A validated, typed tool call — ready to render in a confirm card and execute
+/// against EventKit / the Files app.
+typealias AssistantToolCall = KodaiKernel.AssistantToolCall
 
 /// Thin façade over the canonical routing config in KodaiKernel
 /// (`ConsumerToolRouting`), kept so existing call sites stay unchanged while the

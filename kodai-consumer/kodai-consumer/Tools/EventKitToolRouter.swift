@@ -10,6 +10,7 @@
 
 import Foundation
 import EventKit
+import KodaiKernel
 
 enum ConfirmDecision: Sendable {
     case accept(AssistantToolCall)
@@ -37,6 +38,16 @@ struct EventKitToolRouter: ToolRouter {
 
     func execute(_ call: AssistantToolCall) async -> ToolResult {
         let toolName = Self.name(call)
+
+        if Self.isQuery(call) {
+            onActivity?("Checking: \(toolName)")
+            do {
+                return try await perform(call)
+            } catch {
+                return .failure(tool: toolName, error: error.localizedDescription)
+            }
+        }
+
         onActivity?("Awaiting confirmation: \(toolName)")
 
         let decision = await confirm(call)
@@ -63,6 +74,10 @@ struct EventKitToolRouter: ToolRouter {
             return try await createReminder(title: title, due: due, listName: list, notes: notes)
         case let .addToList(list, item):
             return try await createReminder(title: item, due: nil, listName: list, notes: nil)
+        case let .queryCalendar(dateRange):
+            return try await fetchCalendarEvents(dateRange: dateRange)
+        case let .queryReminders(list, status):
+            return try await fetchReminders(listName: list, status: status)
         case .saveFile, .readFile:
             return .failure(tool: "unknown", error: "not_an_eventkit_tool")
         }
@@ -158,7 +173,107 @@ struct EventKitToolRouter: ToolRouter {
         return calendar
     }
 
+    // MARK: - Queries
+
+    private func fetchCalendarEvents(dateRange: String) async throws -> ToolResult {
+        guard try await store.requestWriteOnlyAccessToEvents() else {
+            return .failure(tool: "query_calendar", error: "calendar_access_denied")
+        }
+        let (start, end) = Self.resolveDateRange(dateRange)
+        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
+        let events = store.events(matching: predicate)
+            .sorted { $0.startDate < $1.startDate }
+
+        if events.isEmpty {
+            let label = Self.dateRangeLabel(dateRange)
+            return .ok(tool: "query_calendar", result: [
+                "summary": "No events \(label).",
+                "count": "0"
+            ])
+        }
+
+        let lines = events.prefix(20).map { event in
+            var line = "• \(event.title ?? "Untitled") — \(Self.timeRange(event.startDate, event.endDate))"
+            if let loc = event.location, !loc.isEmpty { line += " (\(loc))" }
+            return line
+        }
+        let label = Self.dateRangeLabel(dateRange)
+        var summary = "\(events.count) event\(events.count == 1 ? "" : "s") \(label):\n" + lines.joined(separator: "\n")
+        if events.count > 20 { summary += "\n… and \(events.count - 20) more" }
+
+        return .ok(tool: "query_calendar", result: [
+            "summary": summary,
+            "count": "\(events.count)"
+        ])
+    }
+
+    private func fetchReminders(listName: String?, status: String?) async throws -> ToolResult {
+        guard try await store.requestFullAccessToReminders() else {
+            return .failure(tool: "query_reminders", error: "reminders_access_denied")
+        }
+        let showCompleted = status?.lowercased() == "completed"
+        let calendars: [EKCalendar]?
+        if let listName, !listName.isEmpty {
+            let match = store.calendars(for: .reminder).filter {
+                $0.title.caseInsensitiveCompare(listName) == .orderedSame
+            }
+            if match.isEmpty {
+                return .ok(tool: "query_reminders", result: [
+                    "summary": "No list named \"\(listName)\" found.",
+                    "count": "0"
+                ])
+            }
+            calendars = match
+        } else {
+            calendars = nil
+        }
+
+        let predicate = store.predicateForReminders(in: calendars)
+        let all = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<[EKReminder], Error>) in
+            store.fetchReminders(matching: predicate) { reminders in
+                cont.resume(returning: reminders ?? [])
+            }
+        }
+
+        let filtered = all.filter { $0.isCompleted == showCompleted }
+            .sorted { ($0.dueDateComponents?.date ?? .distantFuture) < ($1.dueDateComponents?.date ?? .distantFuture) }
+
+        if filtered.isEmpty {
+            let scope = listName.map { "in \($0)" } ?? ""
+            let label = showCompleted ? "completed reminders" : "pending reminders"
+            return .ok(tool: "query_reminders", result: [
+                "summary": "No \(label) \(scope).".trimmingCharacters(in: .whitespaces),
+                "count": "0"
+            ])
+        }
+
+        let lines = filtered.prefix(20).map { reminder in
+            var line = "• \(reminder.title ?? "Untitled")"
+            if let comps = reminder.dueDateComponents, let due = comps.date {
+                line += " — due \(Self.shortDate(due))"
+            }
+            if let list = reminder.calendar?.title { line += " [\(list)]" }
+            return line
+        }
+        let label = showCompleted ? "completed" : "pending"
+        let scope = listName.map { " in \($0)" } ?? ""
+        var summary = "\(filtered.count) \(label) reminder\(filtered.count == 1 ? "" : "s")\(scope):\n" + lines.joined(separator: "\n")
+        if filtered.count > 20 { summary += "\n… and \(filtered.count - 20) more" }
+
+        return .ok(tool: "query_reminders", result: [
+            "summary": summary,
+            "count": "\(filtered.count)"
+        ])
+    }
+
     // MARK: - Helpers
+
+    static func isQuery(_ call: AssistantToolCall) -> Bool {
+        switch call {
+        case .queryCalendar, .queryReminders: return true
+        default: return false
+        }
+    }
 
     static func name(_ call: AssistantToolCall) -> String {
         switch call {
@@ -167,6 +282,8 @@ struct EventKitToolRouter: ToolRouter {
         case .addToList: return "add_to_list"
         case .saveFile: return "save_file"
         case .readFile: return "read_file"
+        case .queryCalendar: return "query_calendar"
+        case .queryReminders: return "query_reminders"
         }
     }
 
@@ -174,5 +291,49 @@ struct EventKitToolRouter: ToolRouter {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         return formatter.string(from: date)
+    }
+
+    private static func resolveDateRange(_ range: String) -> (start: Date, end: Date) {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        switch range.lowercased().trimmingCharacters(in: .whitespaces) {
+        case "today":
+            return (today, cal.date(byAdding: .day, value: 1, to: today)!)
+        case "tomorrow":
+            let tomorrow = cal.date(byAdding: .day, value: 1, to: today)!
+            return (tomorrow, cal.date(byAdding: .day, value: 1, to: tomorrow)!)
+        case "this_week", "this week":
+            let end = cal.date(byAdding: .day, value: 7, to: today)!
+            return (today, end)
+        default:
+            let df = DateFormatter()
+            df.locale = Locale(identifier: "en_US_POSIX")
+            df.dateFormat = "yyyy-MM-dd"
+            if let date = df.date(from: range) {
+                return (date, cal.date(byAdding: .day, value: 1, to: date)!)
+            }
+            return (today, cal.date(byAdding: .day, value: 1, to: today)!)
+        }
+    }
+
+    private static func dateRangeLabel(_ range: String) -> String {
+        switch range.lowercased().trimmingCharacters(in: .whitespaces) {
+        case "today": return "today"
+        case "tomorrow": return "tomorrow"
+        case "this_week", "this week": return "this week"
+        default: return "on \(range)"
+        }
+    }
+
+    private static func timeRange(_ start: Date, _ end: Date?) -> String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "h:mm a"
+        let s = fmt.string(from: start)
+        guard let end else { return s }
+        return "\(s) – \(fmt.string(from: end))"
+    }
+
+    private static func shortDate(_ date: Date) -> String {
+        date.formatted(date: .abbreviated, time: .shortened)
     }
 }

@@ -1,7 +1,6 @@
 import Foundation
 import KodaiKernel
 import Observation
-import SwiftData
 
 struct PendingConfirmation: Identifiable {
     let id = UUID()
@@ -16,47 +15,44 @@ struct PendingFilePicker: Identifiable {
     let resolve: (FilePickerResult) -> Void
 }
 
-struct ActivityLine: Identifiable {
-    enum Kind {
-        case task
-        case info
-        case step
-    }
-
-    let id = UUID()
-    let kind: Kind
-    let text: String
-}
-
-enum AssistantPhase: Equatable {
+enum AssistantPhase: Equatable, Hashable {
     case idle
-    case downloading
     case loading
     case thinking
+    case callingTool(name: String)
     case confirming
-    case saving
-    case pickingFile
     case done
     case failed
+    case responded
 }
 
 @Observable
 final class AssistantController {
     var input: String = ""
-    var activity: [ActivityLine] = []
+    var currentTask: String = ""
     var thinking: String = ""
-    var rawDebug: String = ""
     var phase: AssistantPhase = .loading
     var summary: String?
     var isRunning = false
     var pendingConfirmation: PendingConfirmation?
     var pendingFilePicker: PendingFilePicker?
-    var thinkingStartedAt: Date?
     var isModelReady = false
 
     private let model = RuntimeAgentModel()
     private var runTask: Task<Void, Never>?
-    var actionLogger: ActionLogger?
+
+    var isResolving: Bool {
+        isRunning || pendingConfirmation != nil
+    }
+
+    @MainActor
+    func dismissOutcome() {
+        guard !isRunning else { return }
+        summary = nil
+        phase = .idle
+        thinking = ""
+        currentTask = ""
+    }
 
     func prewarm() {
         Task {
@@ -92,7 +88,11 @@ final class AssistantController {
         runTask?.cancel()
         runTask = nil
         Task { await model.cancel() }
-        finish("Stopped.", .idle)
+        summary = nil
+        thinking = ""
+        currentTask = ""
+        phase = .idle
+        isRunning = false
     }
 
     func run() async {
@@ -100,11 +100,9 @@ final class AssistantController {
         guard !task.isEmpty, !isRunning else { return }
 
         input = ""
-        activity = [ActivityLine(kind: .task, text: task)]
+        currentTask = task
         thinking = ""
-        rawDebug = ""
         summary = nil
-        thinkingStartedAt = nil
         phase = .loading
         isRunning = true
         defer { runTask = nil }
@@ -112,12 +110,10 @@ final class AssistantController {
         model.onStatus = { [weak self] status in
             guard let self else { return }
             switch status {
-            case .downloading: self.phase = .downloading
-            case .loading: self.phase = .loading
+            case .downloading, .loading: self.phase = .loading
             case .thinking:
                 self.phase = .thinking
                 self.thinking = ""
-                self.thinkingStartedAt = Date()
             }
         }
         model.onToken = { [weak self] chunk in self?.thinking += chunk }
@@ -130,7 +126,6 @@ final class AssistantController {
             return finish("That took too long — try again.", .failed)
         }
         if Task.isCancelled { return }
-        rawDebug = raw
 
         let parser = ToolCallParser()
         guard let (rawCall, confidence) = parser.parse(raw) else {
@@ -138,17 +133,15 @@ final class AssistantController {
             return finish("I can only set reminders, calendar events, save files, and manage lists right now.", .failed)
         }
 
-        // Non-action escape hatch: the model routed a greeting / question / small
-        // talk here instead of forcing a device action. Show the reply, do nothing.
         if rawCall.name == AssistantToolCatalog.respondToolName {
             let reply = rawCall.arguments["message"]?.trimmingCharacters(in: .whitespacesAndNewlines)
-            return finish(reply?.isEmpty == false ? reply! : Self.capabilitiesMessage, .idle)
+            let message = reply?.isEmpty == false ? reply! : Self.capabilitiesMessage
+            return finish(message, .responded)
         }
 
         var currentConfidence = confidence
-        var validation = ToolCallValidator().validate(rawCall)
+        var validation = ToolCallValidator().validate(rawCall, userInput: task)
         if case let .failure(error) = validation {
-            append(.info, "Adjusting the details…")
             currentConfidence = .json
             guard let retry = await emit(system: system, messages: [
                 AgentMessage(.user, task),
@@ -160,9 +153,8 @@ final class AssistantController {
                 return finish("That took too long — try again.", .failed)
             }
             if Task.isCancelled { return }
-            rawDebug = retry
             if let (retried, retryConf) = parser.parse(retry) {
-                validation = ToolCallValidator().validate(retried)
+                validation = ToolCallValidator().validate(retried, userInput: task)
                 currentConfidence = retryConf
             }
         }
@@ -171,34 +163,19 @@ final class AssistantController {
             return finish("I couldn't build a valid action from that.", .failed)
         }
 
-        append(.info, "Preparing \(Self.kind(of: call))…")
+        phase = .callingTool(name: Self.kind(of: call))
 
         let result: ToolResult
-        if Self.isFileTool(call) {
+        if EventKitToolRouter.isQuery(call) {
+            result = await executeQueryTool(call)
+        } else if Self.isFileTool(call) {
             result = await executeFileTool(call, confidence: currentConfidence)
         } else {
             result = await executeEventKitTool(call, confidence: currentConfidence)
         }
 
-        await logAction(originalInput: task, call: call, result: result)
-
-        if result.status == .error,
-           result.fields["error"] != "cancelled_by_user" {
-            append(.info, "Retrying…")
-            let retryResult: ToolResult
-            if Self.isFileTool(call) {
-                retryResult = await executeFileTool(call, confidence: currentConfidence)
-            } else {
-                retryResult = await executeEventKitTool(call, confidence: currentConfidence)
-            }
-            await logAction(originalInput: task, call: call, result: retryResult)
-            handleResult(retryResult, call: call)
-        } else {
-            handleResult(result, call: call)
-        }
-
+        handleResult(result, call: call)
         thinking = ""
-        thinkingStartedAt = nil
         isRunning = false
     }
 
@@ -209,15 +186,20 @@ final class AssistantController {
             confirm: { [weak self] candidate in
                 await self?.confirmWithConfidence(candidate, confidence: confidence) ?? .cancel
             },
-            onActivity: { [weak self] line in if line.hasPrefix("Saving") { self?.phase = .saving } }
+            onActivity: { _ in }
+        )
+        return await router.execute(call)
+    }
+
+    private func executeQueryTool(_ call: AssistantToolCall) async -> ToolResult {
+        let router = EventKitToolRouter(
+            confirm: { _ in .cancel },
+            onActivity: { _ in }
         )
         return await router.execute(call)
     }
 
     private func executeFileTool(_ call: AssistantToolCall, confidence: ParseConfidence) async -> ToolResult {
-        // Confirm file tools too (matching EventKit writes), so a misrouted
-        // action — e.g. "create a folder" → save_file — can be cancelled before
-        // the Files picker ever opens. The card can also edit name/content/purpose.
         let decision = await confirmWithConfidence(call, confidence: confidence)
         guard case let .accept(confirmed) = decision else {
             return .failure(tool: EventKitToolRouter.name(call), error: "cancelled_by_user")
@@ -237,18 +219,60 @@ final class AssistantController {
         }
     }
 
+    // MARK: - App Intents hand-off
+
+    @MainActor
+    func drainPendingIntentActions() {
+        guard !isRunning else { return }
+        let calls = IntentActionInbox.shared.drain()
+        guard !calls.isEmpty else { return }
+        Task { @MainActor in
+            for call in calls { await runDirectToolCall(call) }
+        }
+    }
+
+    @MainActor
+    func runDirectToolCall(_ call: AssistantToolCall) async {
+        guard !isRunning else { return }
+        isRunning = true
+        defer { isRunning = false }
+
+        currentTask = "\(Self.kind(of: call).capitalized) (Shortcut)"
+        summary = nil
+        phase = .loading
+
+        let result: ToolResult
+        if Self.isFileTool(call) {
+            result = await executeFileTool(call, confidence: .json)
+        } else {
+            result = await executeEventKitTool(call, confidence: .json)
+        }
+        handleResult(result, call: call)
+    }
+
     // MARK: - Result handling
 
     private func handleResult(_ result: ToolResult, call: AssistantToolCall) {
+        if EventKitToolRouter.isQuery(call) {
+            if result.status == .ok {
+                summary = result.fields["summary"] ?? "No results."
+                phase = .responded
+                HapticFeedback.success()
+            } else {
+                summary = "Couldn't check — \(Self.reason(result.fields["error"]))."
+                phase = .failed
+                HapticFeedback.error()
+            }
+            return
+        }
+
         switch result.status {
         case .ok:
-            let line = Self.successLine(for: call, result: result)
-            append(.step, line)
-            summary = line
+            summary = Self.successLine(for: call, result: result)
             phase = .done
             HapticFeedback.success()
         case .error where result.fields["error"] == "cancelled_by_user":
-            summary = "Cancelled."
+            summary = nil
             phase = .idle
             HapticFeedback.cancel()
         case .error:
@@ -292,7 +316,7 @@ final class AssistantController {
     }
 
     private func presentFilePicker(_ request: FilePickerRequest) async -> FilePickerResult {
-        phase = .pickingFile
+        phase = .loading
         return await withCheckedContinuation { continuation in
             pendingFilePicker = PendingFilePicker(request: request) { [weak self] result in
                 self?.pendingFilePicker = nil
@@ -301,51 +325,16 @@ final class AssistantController {
         }
     }
 
-    // MARK: - Logging
-
-    private func logAction(originalInput: String, call: AssistantToolCall, result: ToolResult) async {
-        guard let logger = actionLogger else { return }
-        var params: [String: String] = [:]
-        switch call {
-        case let .createCalendarEvent(title, start, _, location, _):
-            params = ["title": title, "start": Self.format(start)]
-            if let location { params["location"] = location }
-        case let .createReminder(title, due, list, _):
-            params = ["title": title]
-            if let due { params["due"] = Self.format(due) }
-            if let list { params["list"] = list }
-        case let .addToList(list, item):
-            params = ["list": list, "item": item]
-        case let .saveFile(name, _):
-            params = ["name": name]
-        case let .readFile(purpose):
-            params = ["purpose": purpose]
-        }
-        await logger.log(
-            originalInput: originalInput,
-            toolName: result.tool,
-            parameters: params,
-            status: result.status.rawValue,
-            errorMessage: result.fields["error"]
-        )
-    }
-
     // MARK: - Helpers
 
     private func finish(_ message: String, _ phase: AssistantPhase) {
         summary = message
         self.phase = phase
         thinking = ""
-        thinkingStartedAt = nil
         isRunning = false
     }
 
-    private func append(_ kind: ActivityLine.Kind, _ text: String) {
-        activity.append(ActivityLine(kind: kind, text: text))
-    }
-
-    /// Shown when the model calls `respond` but leaves the message empty.
-    static let capabilitiesMessage = "I can set reminders, add calendar events, manage lists, and save or read files — what would you like to do?"
+    static let capabilitiesMessage = "I can set reminders, add calendar events, manage lists, save or read files, and check your calendar or reminders — what would you like to do?"
 
     static func kind(of call: AssistantToolCall) -> String {
         switch call {
@@ -354,6 +343,8 @@ final class AssistantController {
         case .addToList: return "list item"
         case .saveFile: return "file"
         case .readFile: return "file read"
+        case .queryCalendar: return "calendar check"
+        case .queryReminders: return "reminders check"
         }
     }
 
@@ -371,6 +362,10 @@ final class AssistantController {
         case .readFile:
             let name = result?.fields["name"] ?? "file"
             return "Read — \(name)"
+        case .queryCalendar:
+            return result?.fields["summary"] ?? "Calendar checked."
+        case .queryReminders:
+            return result?.fields["summary"] ?? "Reminders checked."
         }
     }
 
@@ -378,8 +373,8 @@ final class AssistantController {
         switch error {
         case "calendar_access_denied": return "calendar access is off (Settings › Privacy › Calendars)"
         case "reminders_access_denied": return "reminders access is off (Settings › Privacy › Reminders)"
-        case "no_reminder_list_available": return "no Reminders list found — open Reminders once, or turn it on in iCloud settings"
-        case "no_calendar_available": return "no calendar found to add the event to — set a default in Settings › Calendar"
+        case "no_reminder_list_available": return "no Reminders list found — open Reminders once"
+        case "no_calendar_available": return "no calendar found — set a default in Settings › Calendar"
         case "access_denied": return "file access was denied"
         default: return error ?? "unknown error"
         }

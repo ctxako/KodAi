@@ -1,12 +1,4 @@
-//
-//  kodai_consumerApp.swift
-//  kodai-consumer
-//
-//  On-device agentic assistant. Phase 0: engine integration only.
-//
-
 import SwiftUI
-import SwiftData
 
 @main
 struct kodai_consumerApp: App {
@@ -20,6 +12,5 @@ struct kodai_consumerApp: App {
                 OnboardingView(isComplete: $hasCompletedOnboarding)
             }
         }
-        .modelContainer(for: ActionLogEntry.self)
     }
 }

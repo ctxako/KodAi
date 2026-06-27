@@ -30,4 +30,10 @@ enum HapticFeedback {
         let gen = UIImpactFeedbackGenerator(style: .light)
         gen.impactOccurred()
     }
+
+    /// A soft tick as the timeline crosses from Up Next into the archive.
+    static func boundary() {
+        let gen = UIImpactFeedbackGenerator(style: .soft)
+        gen.impactOccurred(intensity: 0.7)
+    }
 }

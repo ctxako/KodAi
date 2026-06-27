@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import KodaiKernel
 @testable import kodai_consumer
 
 struct ToolCallParserTests {
@@ -53,7 +54,7 @@ struct ToolCallParserTests {
         let out = #"Sure, I'll set that up: create_reminder(title="Walk dog", due_iso="2026-06-27T09:00") for you."#
         let result = parser.parse(out)
         #expect(result?.0.name == "create_reminder")
-        #expect(result?.1 == .pythonic)  // embedded in prose → verify hint
+        #expect(result?.1 == .low)  // embedded in prose → verify hint
     }
 
     @Test func coercesNumericArguments() {

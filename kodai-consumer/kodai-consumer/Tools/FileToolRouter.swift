@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
+import KodaiKernel
 
 enum FilePickerRequest: Sendable {
     case save(name: String, content: String)

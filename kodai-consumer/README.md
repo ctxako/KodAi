@@ -10,6 +10,8 @@ You type a request. The model emits a tool call. You confirm. It executes. Done.
 - `create_calendar_event` — creates a calendar event via EventKit
 - `create_reminder` — creates a reminder with optional due date
 - `add_to_list` — adds an item to a named reminder list (creates the list if needed)
+- `query_calendar` — checks what events are on the calendar for today, tomorrow, this week, or a specific date
+- `query_reminders` — checks pending or completed reminders, optionally filtered by list
 - `save_file` — saves text content to a file via the Files app picker
 - `read_file` — reads a file the user selects from the Files app
 
@@ -26,7 +28,7 @@ User input
   → ActionLogger (SwiftData log, auto-prunes at 100 entries)
 ```
 
-Single-shot flow — the model is a pure tool-call emitter, never generates user-facing prose.
+Single-shot flow — the model is a pure tool-call emitter, never generates user-facing prose. Query tools (calendar/reminders) skip the confirm card and show results directly.
 
 ## Model
 
@@ -46,6 +48,11 @@ kodai-consumer/
 ├── Agent/
 │   ├── AgentLoop.swift          # Multi-step infer→parse→validate→execute loop
 │   └── RuntimeAgentModel.swift  # Bridges KodaiCore inference, surfaces status + tokens
+├── AppIntents/
+│   ├── ToolAppIntents.swift     # One AppIntent per tool (Siri/Shortcuts/Spotlight)
+│   ├── ToolAppEntities.swift    # ReminderEntity / CalendarEventEntity result types
+│   ├── KodaiAppShortcuts.swift  # AppShortcutsProvider with spoken phrases
+│   └── ToolIntentSupport.swift  # Shared executor, errors, dialogs, file hand-off
 ├── Assistant/
 │   ├── AssistantTool.swift      # Tool names, typed calls, JSON schema catalog
 │   ├── SystemPromptBuilder.swift # LFM2 native prompt with datetime + tool defs
@@ -73,11 +80,34 @@ kodai-consumerTests/              # 26 unit tests
 
 ## Key behaviors
 
-- **Confirmation card**: Every action shows a confirm card before executing. Tool-specific icons (calendar=red, reminder=blue, list=orange, save=purple, read=teal). Edit button converts fields to inline editors (TextFields, DatePickers). ParseConfidence indicator warns on low-confidence parses.
+- **Confirmation card**: Every write action shows a confirm card before executing. Query tools (calendar/reminders) skip confirmation and show results in a glass reply card. Tool-specific icons (calendar=red, reminder=blue, list=orange, save=purple, read=teal). Edit button converts fields to inline editors (TextFields, DatePickers). ParseConfidence indicator warns on low-confidence parses.
 - **Auto-retry**: If a tool execution fails (not cancelled by user), retries once automatically before surfacing the error.
 - **Haptics**: Medium impact on card appear, success notification on confirm, light impact on cancel, error notification on failure.
 - **Permissions onboarding**: First-launch flow requests calendar (write-only) and reminders (full) access with privacy explanation. File access is per-use via the document picker.
 - **Widget**: Input-only widget that deep-links into the app via `kodai://task?q=<query>`. The widget can't run inference (memory limits).
+
+## System integration (App Intents)
+
+The same tools are exposed to the system as App Intents, so they're invokable from
+Siri, the Shortcuts app, and Spotlight — an **additional** surface, not a
+replacement. The in-app model pipeline above is unchanged and still runs fully
+offline.
+
+- **One intent per tool**: `CreateReminderIntent`, `CreateCalendarEventIntent`,
+  `AddToListIntent`, `SaveFileIntent`, `ReadFileIntent`. Each declares `@Parameter`
+  inputs and a `perform()` that builds the same `AssistantToolCall` the model emits
+  and runs it through the same routers — execution logic stays in one place.
+- **Confirmation preserved**: EventKit intents call App Intents'
+  `requestConfirmation` (wired into the router's confirm seam) before any write.
+  The file intents need the document picker, so they open the app and hand the call
+  to `AssistantController`, which shows the same confirm card + picker as a model run.
+- **Result entities**: writes return an `AppEntity` (`ReminderEntity`,
+  `CalendarEventEntity`) so Siri/Shortcuts can display the created object and chain
+  it into the next action.
+- **No network**: intents execute the on-device EventKit / FileManager code only.
+
+Out of scope (separate tasks): View annotations, multi-turn Siri dialogue, and
+invoking *other* apps' published intents.
 
 ## Dependencies
 

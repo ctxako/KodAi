@@ -11,11 +11,14 @@
 import SwiftUI
 import UIKit
 
-/// The three palette colors lifted from chatbot-dev's ChatPalette.
+/// The app's palette — the three colors the input bar needs, plus the two
+/// canvas tones the background gradient is built from (see ``CanvasBackground``).
 enum ConsumerPalette {
     static let accentBlue = Color(red: 0.184, green: 0.490, blue: 0.965)
     static let elevatedSurface = Color(red: 0.094, green: 0.106, blue: 0.122)
     static let inputField = Color(red: 0.125, green: 0.141, blue: 0.161)
+    static let mainCanvas = Color(red: 0.055, green: 0.061, blue: 0.071)
+    static let canvasGlow = Color(red: 0.104, green: 0.145, blue: 0.188)
 }
 
 struct ConsumerInputBar: View {

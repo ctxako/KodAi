@@ -3,6 +3,7 @@ import EventKit
 
 struct OnboardingView: View {
     @Binding var isComplete: Bool
+    @State private var showSplash = true
     @State private var page = 0
     @State private var calendarGranted = false
     @State private var remindersGranted = false
@@ -11,45 +12,27 @@ struct OnboardingView: View {
     private let store = EKEventStore()
 
     var body: some View {
-        VStack(spacing: 0) {
-            TabView(selection: $page) {
-                welcomePage.tag(0)
-                permissionsPage.tag(1)
-                readyPage.tag(2)
+        if showSplash {
+            SplashView {
+                withAnimation(.easeInOut(duration: 0.35)) { showSplash = false }
             }
-            .tabViewStyle(.page(indexDisplayMode: .always))
-            .animation(.easeInOut(duration: 0.3), value: page)
+            .transition(.opacity)
+            .preferredColorScheme(.dark)
+        } else {
+            VStack(spacing: 0) {
+                TabView(selection: $page) {
+                    permissionsPage.tag(0)
+                    readyPage.tag(1)
+                }
+                .tabViewStyle(.page(indexDisplayMode: .always))
+                .animation(.easeInOut(duration: 0.3), value: page)
+            }
+            .background(Color(.systemBackground))
+            .transition(.opacity)
         }
-        .background(Color(.systemBackground))
     }
 
     // MARK: - Pages
-
-    private var welcomePage: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            Image(systemName: "lock.shield")
-                .font(.system(size: 64))
-                .foregroundStyle(.tint)
-            Text("kodAI")
-                .font(.largeTitle.bold())
-            Text("A private assistant that runs entirely on your phone.\nNo cloud. No account. No data leaves this device.")
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-            Spacer()
-            Button { page = 1 } label: {
-                Text("Get started")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-            }
-            .buttonStyle(.borderedProminent)
-            .padding(.horizontal, 24)
-            .padding(.bottom, 40)
-        }
-    }
 
     private var permissionsPage: some View {
         VStack(spacing: 24) {
@@ -167,6 +150,6 @@ struct OnboardingView: View {
             remindersGranted = (try? await store.requestFullAccessToReminders()) ?? false
         }
 
-        page = 2
+        page = 1
     }
 }
