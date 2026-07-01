@@ -1,5 +1,18 @@
 # Production Plan: kodai-consumer v1.0
 
+> **Status log**
+> - **2026-07-01** — M1 ✅ (loop wired into UI, respond terminal, per-step cards,
+>   cancel semantics). M2 ✅ (download UX, disk guard, GGUF verify, recovery).
+>   M3 code ✅ (DeviceTier budgets + thermal guard; *device profiling still owed*).
+>   M5 ✅ (permission-model bugs fixed: calendar reads were write-only-broken,
+>   contacts had no usage description; web_fetch hardened; portrait/iPhone-only;
+>   a11y pass). M4 in flight: route-eval rebuilt for v2 (was broken since the
+>   rebuild); first baseline exposed hybrid-format parser losses + hallucinated
+>   past due-dates — both fixed; re-measuring. M6/M7: feedback button in
+>   Settings, APP_STORE.md + PRIVACY.md drafted. **Still owed:** device
+>   profiling (M3), eval bar (M4), TestFlight upload (M6), icon + screenshots +
+>   policy hosting (M7).
+
 Sequenced plan from current state → App Store production. Complements
 [NEXT_STEPS.md](NEXT_STEPS.md) (workstream catalog) by fixing an **order**, defining
 **exit criteria** per milestone, and pinning the two product constraints that shape

@@ -152,6 +152,33 @@ struct ToolCallParserTests {
         #expect(result?.1 == .json)
     }
 
+    // MARK: - Hybrid format (pythonic call wrapping JSON args — observed in
+    // real LFM2.5 emissions; see route-eval diagnostics 2026-07-01)
+
+    @Test func hybridJSONArgsInsideParens() {
+        let out = #"[reminders_create({"title": "Feed the dogs", "due_date": "2026-07-01T06:00", "notes": "Don't forget!"})]"#
+        let result = parser.parse(out)
+        #expect(result?.0.name == "reminders_create")
+        #expect(result?.0.arguments["title"] == "Feed the dogs")
+        #expect(result?.0.arguments["due_date"] == "2026-07-01T06:00")
+        #expect(result?.0.arguments["notes"] == "Don't forget!")
+    }
+
+    @Test func hybridJSONArgsMissingClosingParen() {
+        let out = #"[clipboard_write({"content": "hunter2"}]"#
+        let result = parser.parse(out)
+        #expect(result?.0.name == "clipboard_write")
+        #expect(result?.0.arguments["content"] == "hunter2")
+    }
+
+    @Test func hybridUnterminatedCalendarCreate() {
+        let out = #"[calendar_create_event({"title": "Dentist Appointment", "start_date": "2026-07-05T14:00", "location": "Dental Clinic"}]"#
+        let result = parser.parse(out)
+        #expect(result?.0.name == "calendar_create_event")
+        #expect(result?.0.arguments["title"] == "Dentist Appointment")
+        #expect(result?.0.arguments["location"] == "Dental Clinic")
+    }
+
     // MARK: - Pythonic format
 
     @Test func pythonicCalendarCreateEvent() {

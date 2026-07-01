@@ -129,6 +129,10 @@ public struct ToolCallValidator {
 
         let due: Date?
         switch resolveDate(iso: args["due_date"], userInput: userInput, field: "due_date") {
+        case .failure(.pastDate):
+            // The model routinely invents a past "today" due date when the user
+            // gave none. A dateless reminder beats a failed one — drop it.
+            due = nil
         case .failure(let error): return .failure(error)
         case .success(let date): due = date
         }
@@ -275,7 +279,13 @@ public struct ToolCallValidator {
     private func naturalFutureDate(from phrase: String) -> Date? {
         let trimmed = phrase.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let date = resolveNaturalDate(trimmed, now()) else { return nil }
-        return date > now() ? date : nil
+        if date > now() { return date }
+        // "at 8pm" said after 8pm means the NEXT 8pm: NSDataDetector anchors
+        // bare times to today, so roll a just-past time forward one day.
+        if date > now().addingTimeInterval(-86_400) {
+            return calendar.date(byAdding: .day, value: 1, to: date)
+        }
+        return nil
     }
 
     public static func resolveRelativeTime(in text: String, now: Date) -> Date? {

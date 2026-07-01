@@ -138,10 +138,12 @@ struct ToolCallValidatorTests {
         #expect(v.validate(RawToolCall(name: "reminders_create", arguments: ["due_date": "2026-06-25T18:00"])) == .failure(.missingField("title")))
     }
 
-    @Test func remindersCreateRejectsPastDue() {
+    @Test func remindersCreateDropsInventedPastDue() {
+        // The model routinely hallucinates a past "today" due date when the
+        // user gave none — a dateless reminder beats a failed call.
         let v = validator(now: date("2026-06-25T20:00"))
         let raw = RawToolCall(name: "reminders_create", arguments: ["title": "x", "due_date": "2026-06-25T18:00"])
-        #expect(v.validate(raw) == .failure(.pastDate(field: "due_date", value: "2026-06-25T18:00")))
+        #expect(v.validate(raw) == .success(.remindersCreate(title: "x", dueDate: nil, notes: nil, listName: nil, priority: nil)))
     }
 
     @Test func validRemindersList() {
@@ -540,11 +542,22 @@ struct ToolCallValidatorTests {
             == .success(.remindersCreate(title: "Call", dueDate: due, notes: nil, listName: nil, priority: nil)))
     }
 
-    @Test func reminderPastDateStillFailsWhenFallbackAlsoPast() {
+    @Test func reminderFallbackWithin24hRollsToNextDay() {
+        // "at 8pm" said after 8pm means the NEXT 8pm — a bare-time fallback
+        // that resolved to earlier today rolls forward one day.
         let v = validator(now: date("2026-06-25T20:00"), nl: date("2026-06-25T10:00"))
         let raw = RawToolCall(name: "reminders_create", arguments: ["title": "x", "due_date": "2026-06-25T18:00"])
-        #expect(v.validate(raw, userInput: "remind me earlier today")
-            == .failure(.pastDate(field: "due_date", value: "2026-06-25T18:00")))
+        #expect(v.validate(raw, userInput: "remind me at 10")
+            == .success(.remindersCreate(title: "x", dueDate: date("2026-06-26T10:00"), notes: nil, listName: nil, priority: nil)))
+    }
+
+    @Test func reminderDropsDueWhenFallbackIsDistantPast() {
+        // A fallback more than a day old isn't a rollable bare time — the due
+        // date is dropped rather than failing the whole call.
+        let v = validator(now: date("2026-06-25T20:00"), nl: date("2026-06-20T10:00"))
+        let raw = RawToolCall(name: "reminders_create", arguments: ["title": "x", "due_date": "2026-06-25T18:00"])
+        #expect(v.validate(raw, userInput: "remind me about last thursday")
+            == .success(.remindersCreate(title: "x", dueDate: nil, notes: nil, listName: nil, priority: nil)))
     }
 
     @Test func calendarFallsBackToPhraseForStart() {

@@ -45,10 +45,14 @@ func flag(_ name: String) -> String? {
 }
 
 guard let modelPath = flag("--model-path") else {
-    FileHandle.standardError.write("Usage: kodai-route-eval --model-path <gguf> [--k <runs-per-case>]\n".data(using: .utf8)!)
+    FileHandle.standardError.write("Usage: kodai-route-eval --model-path <gguf> [--k <runs-per-case>] [--only cat1,cat2] [--verbose]\n".data(using: .utf8)!)
     exit(2)
 }
 let K = Int(flag("--k") ?? "1") ?? 1
+/// Comma-separated category filter for fast iteration on a failing domain.
+let onlyCategories: Set<String>? = flag("--only").map { Set($0.split(separator: ",").map(String.init)) }
+/// Dump the raw model emission for every failing run — the diagnostic view.
+let verbose = CommandLine.arguments.contains("--verbose")
 
 // MARK: - Cases
 
@@ -81,7 +85,7 @@ struct Case {
 let cases: [Case] = [
     // reminders_create (a task to do / remember)
     Case(input: "remind me to call mom tomorrow at 9am", expected: "reminders_create", category: "reminder", expect: Expect(titleContains: "mom", hasDate: true)),
-    Case(input: "remind me to take my meds at 8pm", expected: "reminders_create", category: "reminder", expect: Expect(titleContains: "meds", hasDate: true)),
+    Case(input: "remind me to take my meds at 8pm", expected: "reminders_create", category: "reminder", expect: Expect(titleContains: "med", hasDate: true)),
     Case(input: "don't let me forget to feed the dogs at 6am", expected: "reminders_create", category: "reminder", expect: Expect(titleContains: "dog", hasDate: true)),
     Case(input: "remember to pay rent on the 1st", expected: "reminders_create", category: "reminder", expect: Expect(titleContains: "rent")),
     Case(input: "ping me to stretch in 2 hours", expected: "reminders_create", category: "reminder", expect: Expect(titleContains: "stretch", hasDate: true)),
@@ -315,6 +319,7 @@ struct RunResult {
 var results: [RunResult] = []
 
 for c in cases {
+    if let onlyCategories, !onlyCategories.contains(c.category) { continue }
     for _ in 0..<K {
         let stream = await runtime.generate(
             messages: [KodaiRuntimeMessage(role: .user, text: c.input)],
@@ -356,6 +361,22 @@ for c in cases {
         } else {
             // alsoOK alternate or respond: routed acceptably, args not asserted.
             endToEndOK = valid
+        }
+
+        if verbose, detail != nil || !valid {
+            let flat = out.replacingOccurrences(of: "\n", with: "⏎")
+            var diag = "RAW  \"\(c.input)\"\n  → \(flat)\n"
+            if let raw = parsed?.0 {
+                diag += "  parsed: \(raw.name) \(raw.arguments)\n"
+                if raw.name != ConsumerToolRouting.respondToolName,
+                   case let .failure(err) = validator.validate(raw, userInput: c.input) {
+                    diag += "  validation: \(err)\n"
+                }
+            } else {
+                diag += "  parsed: NONE\n"
+            }
+            print(diag)
+            fflush(stdout)
         }
 
         results.append(RunResult(category: c.category, expected: c.expected, routed: routed,

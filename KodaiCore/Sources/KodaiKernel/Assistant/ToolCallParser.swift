@@ -40,7 +40,32 @@ public struct ToolCallParser {
             // emission) is trusted; one fished out of prose gets a verify hint.
             return (call, isStandalone ? .native : .low)
         }
+        if let call = parseLooseHybrid(in: output) { return (call, .json) }
         return nil
+    }
+
+    /// Last-ditch recovery for the malformed hybrid the model sometimes emits:
+    /// `tool_name({"k": "v"}]` — JSON args opened with a paren that never
+    /// closes. The pythonic regex requires the closing paren, so without this
+    /// the call (and all its arguments) is lost.
+    private func parseLooseHybrid(in text: String) -> RawToolCall? {
+        guard let match = firstMatch(#"([a-zA-Z_][a-zA-Z0-9_]*)\s*\(\s*(\{.*)"#, in: text),
+              match.count == 2 else { return nil }
+        let name = match[0]
+        guard name == ConsumerToolRouting.respondToolName
+            || AssistantToolName(rawValue: name) != nil else { return nil }
+
+        let rest = match[1]
+        guard let closing = rest.lastIndex(of: "}") else { return nil }
+        let slice = String(rest[...closing])
+        guard let data = slice.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+
+        var arguments: [String: String] = [:]
+        for (key, value) in object {
+            arguments[key] = stringify(value)
+        }
+        return RawToolCall(name: name, arguments: arguments)
     }
 
     // MARK: - Wrapper extraction
@@ -110,8 +135,20 @@ public struct ToolCallParser {
             || AssistantToolName(rawValue: name) != nil else { return nil }
 
         var arguments: [String: String] = [:]
-        for pair in allMatches(#"([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*\"([^\"]*)\""#, in: argString) where pair.count == 2 {
-            arguments[pair[0]] = pair[1]
+        let trimmedArgs = argString.trimmingCharacters(in: .whitespaces)
+        if trimmedArgs.hasPrefix("{"),
+           let data = trimmedArgs.data(using: .utf8),
+           let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            // Hybrid emission the model actually produces: tool_name({json args}).
+            // The kwarg regex can't read JSON, which silently dropped every
+            // argument and failed validation on missingField.
+            for (key, value) in object {
+                arguments[key] = stringify(value)
+            }
+        } else {
+            for pair in allMatches(#"([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*\"([^\"]*)\""#, in: argString) where pair.count == 2 {
+                arguments[pair[0]] = pair[1]
+            }
         }
 
         let cleaned = strippingTokens(text)
