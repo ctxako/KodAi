@@ -125,79 +125,111 @@ final class AssistantController {
         }
         model.onToken = { [weak self] chunk in self?.thinking += chunk }
 
-        let system = SystemPromptBuilder().build()
+        // Per-step state the loop hooks feed; confirm cards read the latest
+        // parse confidence (execution is strictly sequential, so it's current).
+        var latestConfidence: ParseConfidence = .native
+        var lastCall: AssistantToolCall?
+        var lastResult: ToolResult?
+        var successCount = 0
 
-        guard let raw = await emit(system: system, messages: [AgentMessage(.user, task)]) else {
-            if Task.isCancelled { return }
-            HapticFeedback.error()
-            store?.logNote(text: "That took too long — try again.", sessionID: sessionID)
-            store?.endSession(id: sessionID)
-            return finish(.failed)
-        }
-        if Task.isCancelled { return }
-
-        let parser = ToolCallParser()
-        guard let (rawCall, confidence) = parser.parse(raw) else {
-            HapticFeedback.error()
-            store?.logNote(text: "I can only set reminders, calendar events, save files, and manage lists right now.", sessionID: sessionID)
-            store?.endSession(id: sessionID)
-            return finish(.failed)
-        }
-
-        if rawCall.name == AssistantToolCatalog.respondToolName {
-            let reply = rawCall.arguments["message"]?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let message = reply?.isEmpty == false ? reply! : Self.capabilitiesMessage
-            store?.logNote(text: message, sessionID: sessionID)
-            store?.endSession(id: sessionID)
-            return finish(.responded)
-        }
-
-        var currentConfidence = confidence
-        var validation = ToolCallValidator().validate(rawCall, userInput: task)
-        if case let .failure(error) = validation {
-            currentConfidence = .json
-            guard let retry = await emit(system: system, messages: [
-                AgentMessage(.user, task),
-                AgentMessage(.assistant, raw),
-                AgentMessage(.user, "That tool call was invalid (\(error)). Re-emit one corrected tool call.")
-            ]) else {
-                if Task.isCancelled { return }
-                HapticFeedback.error()
-                store?.logNote(text: "That took too long — try again.", sessionID: sessionID)
-                store?.endSession(id: sessionID)
-                return finish(.failed)
-            }
-            if Task.isCancelled { return }
-            if let (retried, retryConf) = parser.parse(retry) {
-                validation = ToolCallValidator().validate(retried, userInput: task)
-                currentConfidence = retryConf
-            }
-        }
-        guard case let .success(call) = validation else {
-            HapticFeedback.error()
-            store?.logNote(text: "I couldn't build a valid action from that.", sessionID: sessionID)
-            store?.endSession(id: sessionID)
-            return finish(.failed)
-        }
-
-        phase = .callingTool(name: Self.kind(of: call))
-
-        let resolvedConfidence = currentConfidence
         let dispatch = ToolRouterDispatch(
             confirm: { [weak self] candidate in
-                await self?.confirmWithConfidence(candidate, confidence: resolvedConfidence) ?? .cancel
+                await self?.confirmWithConfidence(candidate, confidence: latestConfidence) ?? .cancel
             },
             presentFilePicker: { [weak self] request in
                 await self?.presentFilePicker(request) ?? .cancelled
             }
         )
-        let result = await dispatch.execute(call)
 
-        logToolResult(result, call: call, sessionID: sessionID)
-        handleResult(result, call: call)
+        var loop = AgentLoop(
+            model: WatchdogAgentModel(base: model, timeout: Self.turnTimeout),
+            router: dispatch
+        )
+        loop.onToolStart = { [weak self] call, confidence in
+            latestConfidence = confidence
+            self?.phase = .callingTool(name: Self.kind(of: call))
+        }
+        loop.onStep = { [weak self] call, result in
+            guard let self else { return }
+            lastCall = call
+            lastResult = result
+            if result.status == .ok { successCount += 1 }
+            self.logToolResult(result, call: call, sessionID: sessionID)
+            self.thinking = ""
+            if result.status == .ok { HapticFeedback.cardAppear() }
+        }
+
+        do {
+            let outcome = try await loop.run(task: task)
+            conclude(outcome, lastCall: lastCall, lastResult: lastResult,
+                     successCount: successCount, sessionID: sessionID)
+        } catch is CancellationError {
+            // cancel() already reset the UI; completed step cards stand.
+            store?.endSession(id: sessionID)
+        } catch is AgentTurnTimeout {
+            HapticFeedback.error()
+            store?.logNote(text: "That took too long — try again.", sessionID: sessionID)
+            store?.endSession(id: sessionID)
+            finish(.failed)
+        } catch {
+            HapticFeedback.error()
+            store?.logNote(text: "Something went wrong with the model — try again.", sessionID: sessionID)
+            store?.endSession(id: sessionID)
+            finish(.failed)
+        }
+    }
+
+    /// Maps a loop outcome to the terminal phase, note card, and haptic.
+    private func conclude(
+        _ outcome: AgentOutcome,
+        lastCall: AssistantToolCall?,
+        lastResult: ToolResult?,
+        successCount: Int,
+        sessionID: UUID
+    ) {
+        let terminal: AssistantPhase
+        switch outcome {
+        case let .responded(message, steps):
+            store?.logNote(text: message.isEmpty ? Self.capabilitiesMessage : message, sessionID: sessionID)
+            terminal = steps.isEmpty
+                ? .responded
+                : Self.terminalPhase(lastCall: lastCall, lastResult: lastResult)
+
+        case let .completed(_, steps):
+            // With the primer this is the garble path — never surface raw output.
+            if steps.isEmpty {
+                store?.logNote(text: "I didn’t understand that — try rephrasing.", sessionID: sessionID)
+                terminal = .failed
+            } else {
+                terminal = Self.terminalPhase(lastCall: lastCall, lastResult: lastResult)
+            }
+
+        case .cancelled:
+            terminal = .idle
+
+        case let .budgetExceeded(steps):
+            store?.logNote(
+                text: "That was getting long — I stopped after \(steps.count) steps.",
+                sessionID: sessionID
+            )
+            terminal = successCount > 0 ? .done : .failed
+        }
+
+        switch terminal {
+        case .done, .responded: HapticFeedback.success()
+        case .failed: HapticFeedback.error()
+        case .idle: HapticFeedback.cancel()
+        default: break
+        }
+
         store?.endSession(id: sessionID)
-        thinking = ""
-        isRunning = false
+        finish(terminal)
+    }
+
+    private static func terminalPhase(lastCall: AssistantToolCall?, lastResult: ToolResult?) -> AssistantPhase {
+        guard let lastResult, lastResult.status == .ok else { return .failed }
+        if let lastCall, isReadOnly(lastCall) { return .responded }
+        return .done
     }
 
     // MARK: - App Intents hand-off
@@ -282,23 +314,8 @@ final class AssistantController {
 
     // MARK: - Watchdog
 
+    /// Seconds allowed per model turn (enforced by `WatchdogAgentModel`).
     private static let turnTimeout: UInt64 = 45
-
-    private func emit(system: String, messages: [AgentMessage]) async -> String? {
-        await withTaskGroup(of: String?.self) { group in
-            group.addTask {
-                (try? await self.model.complete(systemPrompt: system, messages: messages)) ?? ""
-            }
-            group.addTask {
-                try? await Task.sleep(nanoseconds: Self.turnTimeout * 1_000_000_000)
-                return nil
-            }
-            defer { group.cancelAll() }
-            let outcome = await group.next() ?? ""
-            if outcome == nil { await self.model.cancel() }
-            return outcome
-        }
-    }
 
     // MARK: - Confirm + file picker
 

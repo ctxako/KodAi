@@ -78,7 +78,7 @@ struct AgentLoopTests {
             return
         }
         #expect(steps.count == 2)
-        #expect(steps[0].contains("calendar_list_events") && steps[0].contains("ok"))
+        #expect(steps[0].contains("calendar_list_events") && steps[0].contains("error"))
         #expect(steps[1].contains("reminders_create") && steps[1].contains("ok"))
     }
 
@@ -151,16 +151,81 @@ struct AgentLoopTests {
 
     // MARK: - Respond tool
 
-    @Test func respondToolTerminatesLoop() async throws {
+    @Test func respondToolTerminatesLoopWithMessage() async throws {
         let model = ScriptedModel([respondCall])
         let loop = AgentLoop(model: model, router: OKRouter())
         let outcome = try await loop.run(task: "what can you do?")
-        guard case let .completed(summary, steps) = outcome else {
-            Issue.record("expected completed for respond tool")
+        guard case let .responded(message, steps) = outcome else {
+            Issue.record("expected responded for respond tool")
             return
         }
         #expect(steps.isEmpty)
-        #expect(summary.contains("respond"))
+        #expect(message == "I can help with calendars and reminders!")
+        #expect(model.calls == 1)
+    }
+
+    @Test func respondTerminatesChainAfterSteps() async throws {
+        let model = ScriptedModel([calendarListCall, respondCall])
+        let loop = AgentLoop(model: model, router: OKRouter())
+        let outcome = try await loop.run(task: "what's on my calendar tomorrow?")
+        guard case let .responded(message, steps) = outcome else {
+            Issue.record("expected responded terminal after a step")
+            return
+        }
+        #expect(steps.count == 1)
+        #expect(steps[0].contains("calendar_list_events"))
+        #expect(!message.isEmpty)
+    }
+
+    // MARK: - Step hooks (live card logging)
+
+    @Test func onStepFiresPerExecutedStep() async throws {
+        let model = ScriptedModel([calendarListCall, reminderCall, respondCall])
+        var loop = AgentLoop(model: model, router: OKRouter())
+        var stepEvents: [(String, ToolResult.Status)] = []
+        var startEvents: [String] = []
+        loop.onToolStart = { call, _ in startEvents.append(call.toolName) }
+        loop.onStep = { call, result in stepEvents.append((call.toolName, result.status)) }
+
+        let outcome = try await loop.run(task: "check calendar then remind me")
+
+        guard case let .responded(_, steps) = outcome else {
+            Issue.record("expected responded terminal")
+            return
+        }
+        #expect(steps.count == 2)
+        #expect(startEvents == ["calendar_list_events", "reminders_create"])
+        #expect(stepEvents.count == 2)
+        #expect(stepEvents.allSatisfy { $0.1 == .ok })
+    }
+
+    // MARK: - User cancel mid-chain
+
+    @Test func userCancelMidChainStopsChainKeepsCompletedSteps() async throws {
+        final class CancelSecondRouter: ToolRouter {
+            var calls = 0
+            func execute(_ call: AssistantToolCall) async -> ToolResult {
+                calls += 1
+                if calls >= 2 { return .failure(tool: call.toolName, error: "cancelled_by_user") }
+                return .ok(tool: call.toolName, result: ["created": "true"])
+            }
+        }
+        let model = ScriptedModel([reminderCall, reminderCall, "unreachable"])
+        var loop = AgentLoop(model: model, router: CancelSecondRouter())
+        var stepEvents: [ToolResult.Status] = []
+        loop.onStep = { _, result in stepEvents.append(result.status) }
+
+        let outcome = try await loop.run(task: "set two reminders")
+
+        guard case let .cancelled(steps) = outcome else {
+            Issue.record("expected cancelled outcome")
+            return
+        }
+        #expect(steps.count == 2)
+        #expect(steps[0].contains("ok"))
+        #expect(steps[1].contains("error"))
+        #expect(stepEvents == [.ok, .error])
+        #expect(model.calls == 2)
     }
 
     // MARK: - State anchor injection
