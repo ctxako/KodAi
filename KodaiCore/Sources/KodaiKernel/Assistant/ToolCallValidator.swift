@@ -182,7 +182,7 @@ public struct ToolCallValidator {
 
     private func validateFilesList(_ args: [String: String]) -> Result<AssistantToolCall, ToolValidationError> {
         guard let path = nonEmpty(args["path"]) else { return .failure(.missingField("path")) }
-        return .success(.filesList(path: path))
+        return .success(.filesList(path: Self.normalizedContainedPath(path)))
     }
 
     private func validateFilesRead(_ args: [String: String]) -> Result<AssistantToolCall, ToolValidationError> {
@@ -203,12 +203,34 @@ public struct ToolCallValidator {
 
     private func validateFilesCreateFolder(_ args: [String: String]) -> Result<AssistantToolCall, ToolValidationError> {
         guard let path = nonEmpty(args["path"]) else { return .failure(.missingField("path")) }
-        return .success(.filesCreateFolder(path: path))
+        return .success(.filesCreateFolder(path: Self.normalizedContainedPath(path)))
     }
 
     private func validateFilesDelete(_ args: [String: String]) -> Result<AssistantToolCall, ToolValidationError> {
         guard let path = nonEmpty(args["path"]) else { return .failure(.missingField("path")) }
-        return .success(.filesDelete(path: path))
+        return .success(.filesDelete(path: Self.normalizedContainedPath(path)))
+    }
+
+    /// The model drifts on path roots the same way it drifts on key names —
+    /// "files/Foo" or a bare "Foo" for what the schema calls icloud/Foo. Coerce
+    /// recognizable drift to a valid prefix instead of failing downstream.
+    /// files_read / files_create are NOT normalized: an unprefixed path there
+    /// intentionally falls back to the document picker.
+    public static func normalizedContainedPath(_ raw: String) -> String {
+        var path = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        while path.hasPrefix("/") { path.removeFirst() }
+        let lowered = path.lowercased()
+        if lowered.hasPrefix("local/") { return "local/" + path.dropFirst("local/".count) }
+        if lowered.hasPrefix("icloud/") { return "icloud/" + path.dropFirst("icloud/".count) }
+        for alias in ["files/", "file/", "icloud drive/"] where lowered.hasPrefix(alias) {
+            return "icloud/" + path.dropFirst(alias.count)
+        }
+        if lowered.hasPrefix("documents/") {
+            return "local/" + path.dropFirst("documents/".count)
+        }
+        if lowered == "files" || lowered == "icloud" || lowered == "icloud drive" { return "icloud/" }
+        if lowered == "local" || lowered == "documents" { return "local/" }
+        return "icloud/" + path
     }
 
     // MARK: - Clipboard

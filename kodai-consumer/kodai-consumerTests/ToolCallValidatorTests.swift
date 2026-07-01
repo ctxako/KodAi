@@ -239,8 +239,14 @@ struct ToolCallValidatorTests {
 
     @Test func validFilesList() {
         let v = validator(now: date("2026-06-25T12:00"))
+        let raw = RawToolCall(name: "files_list", arguments: ["path": "icloud/Documents"])
+        #expect(v.validate(raw) == .success(.filesList(path: "icloud/Documents")))
+    }
+
+    @Test func filesListNormalizesBareDocuments() {
+        let v = validator(now: date("2026-06-25T12:00"))
         let raw = RawToolCall(name: "files_list", arguments: ["path": "/Documents"])
-        #expect(v.validate(raw) == .success(.filesList(path: "/Documents")))
+        #expect(v.validate(raw) == .success(.filesList(path: "local/")))
     }
 
     @Test func filesListRequiresPath() {
@@ -250,8 +256,50 @@ struct ToolCallValidatorTests {
 
     @Test func validFilesDelete() {
         let v = validator(now: date("2026-06-25T12:00"))
+        let raw = RawToolCall(name: "files_delete", arguments: ["path": "local/old.txt"])
+        #expect(v.validate(raw) == .success(.filesDelete(path: "local/old.txt")))
+    }
+
+    @Test func filesDeleteNormalizesBarePathToICloud() {
+        let v = validator(now: date("2026-06-25T12:00"))
         let raw = RawToolCall(name: "files_delete", arguments: ["path": "old.txt"])
-        #expect(v.validate(raw) == .success(.filesDelete(path: "old.txt")))
+        #expect(v.validate(raw) == .success(.filesDelete(path: "icloud/old.txt")))
+    }
+
+    // MARK: - Path normalization (model drift on roots)
+
+    @Test func createFolderNormalizesFilesPrefix() {
+        // The observed failure: user says "in files", model emits files/coffee.
+        let v = validator(now: date("2026-06-25T12:00"))
+        let raw = RawToolCall(name: "files_create_folder", arguments: ["path": "files/coffee"])
+        #expect(v.validate(raw) == .success(.filesCreateFolder(path: "icloud/coffee")))
+    }
+
+    @Test func createFolderNormalizesCasedPrefixes() {
+        let v = validator(now: date("2026-06-25T12:00"))
+        #expect(v.validate(RawToolCall(name: "files_create_folder", arguments: ["path": "iCloud/Notes"]))
+            == .success(.filesCreateFolder(path: "icloud/Notes")))
+        #expect(v.validate(RawToolCall(name: "files_create_folder", arguments: ["path": "Local/Projects/Sub"]))
+            == .success(.filesCreateFolder(path: "local/Projects/Sub")))
+    }
+
+    @Test func createFolderNormalizesBarePath() {
+        let v = validator(now: date("2026-06-25T12:00"))
+        #expect(v.validate(RawToolCall(name: "files_create_folder", arguments: ["path": "coffee"]))
+            == .success(.filesCreateFolder(path: "icloud/coffee")))
+    }
+
+    @Test func createFolderKeepsValidPrefixUntouched() {
+        let v = validator(now: date("2026-06-25T12:00"))
+        #expect(v.validate(RawToolCall(name: "files_create_folder", arguments: ["path": "icloud/coffee"]))
+            == .success(.filesCreateFolder(path: "icloud/coffee")))
+    }
+
+    @Test func filesReadPathNotNormalized() {
+        // An unprefixed read path intentionally falls through to the picker.
+        let v = validator(now: date("2026-06-25T12:00"))
+        #expect(v.validate(RawToolCall(name: "files_read", arguments: ["path": "shopping list"]))
+            == .success(.filesRead(path: "shopping list")))
     }
 
     @Test func filesDeleteRequiresPath() {

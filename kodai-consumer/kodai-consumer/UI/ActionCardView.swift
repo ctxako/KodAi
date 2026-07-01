@@ -91,6 +91,7 @@ struct ActionCardView: View {
     }
 
     private var domainIcon: String {
+        if card.toolName == "files_create_folder" { return "folder.badge.plus" }
         switch card.domain {
         case "calendar": return "calendar.badge.plus"
         case "reminders": return "checklist"

@@ -62,18 +62,27 @@ struct FileToolRouter: ToolRouter {
             }
 
         case let .filesCreateFolder(path):
+            // Resolve before confirming: an unresolvable path goes back to the
+            // model to self-correct instead of asking the user to approve a
+            // call that can only fail.
+            guard let url = resolveContainedPath(path) else {
+                return .failure(tool: "files_create_folder", error: pathError(path))
+            }
             let decision = await confirm(call)
             guard case .accept = decision else {
                 return .failure(tool: "files_create_folder", error: "cancelled_by_user")
             }
-            return createFolder(path: path)
+            return createFolder(at: url, path: path)
 
         case let .filesDelete(path):
+            guard let url = resolveContainedPath(path) else {
+                return .failure(tool: "files_delete", error: pathError(path))
+            }
             let decision = await confirm(call)
             guard case .accept = decision else {
                 return .failure(tool: "files_delete", error: "cancelled_by_user")
             }
-            return deleteFile(path: path)
+            return deleteFile(at: url, path: path)
 
         default:
             return .failure(tool: call.toolName, error: "not_implemented")
@@ -150,10 +159,7 @@ struct FileToolRouter: ToolRouter {
         }
     }
 
-    private func createFolder(path: String) -> ToolResult {
-        guard let url = resolveContainedPath(path) else {
-            return .failure(tool: "files_create_folder", error: pathError(path))
-        }
+    private func createFolder(at url: URL, path: String) -> ToolResult {
         do {
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
             return .ok(tool: "files_create_folder", result: ["path": path])
@@ -162,10 +168,7 @@ struct FileToolRouter: ToolRouter {
         }
     }
 
-    private func deleteFile(path: String) -> ToolResult {
-        guard let url = resolveContainedPath(path) else {
-            return .failure(tool: "files_delete", error: pathError(path))
-        }
+    private func deleteFile(at url: URL, path: String) -> ToolResult {
         do {
             try FileManager.default.removeItem(at: url)
             return .ok(tool: "files_delete", result: ["path": path, "deleted": "true"])
