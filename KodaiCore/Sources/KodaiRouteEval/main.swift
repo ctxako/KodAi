@@ -274,7 +274,23 @@ func argFailures(_ call: AssistantToolCall, _ e: Expect) -> [String] {
 
 // MARK: - Run
 
-let runtime = LocalModelRuntime(modelFileResolver: FileResolver(path: modelPath))
+// Mirror the consumer app's floor-tier context (the kernel default of 2,048
+// can't even hold the shipped system prompt plus one user turn).
+let base = LocalModelConfiguration.lfm2_5_1_2B_Instruct_Q4_K_M
+let evalConfiguration = LocalModelConfiguration(
+    modelResourceName: base.modelResourceName,
+    modelResourceExtension: base.modelResourceExtension,
+    shortDisplayName: base.shortDisplayName,
+    contextSize: 4_096,
+    maxGeneratedTokens: base.maxGeneratedTokens,
+    temperature: base.temperature,
+    topP: base.topP,
+    topK: base.topK,
+    batchSize: base.batchSize,
+    repeatPenalty: base.repeatPenalty,
+    downloadURL: base.downloadURL
+)
+let runtime = LocalModelRuntime(configuration: evalConfiguration, modelFileResolver: FileResolver(path: modelPath))
 var knobs = LocalModelConfiguration.lfm2_5_1_2B_Instruct_Q4_K_M.defaultSamplerKnobs
 knobs.temperature = 0.3
 knobs.maxOutputTokens = 200

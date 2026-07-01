@@ -179,6 +179,21 @@ struct ToolCallParserTests {
         #expect(result?.0.arguments["location"] == "Dental Clinic")
     }
 
+    @Test func hybridPositionalPlusColonArgs() {
+        let out = #"[files_create("letter.txt", "content": "This is a draft.")]"#
+        let result = parser.parse(out)
+        #expect(result?.0.name == "files_create")
+        #expect(result?.0.arguments["path"] == "letter.txt")
+        #expect(result?.0.arguments["content"] == "This is a draft.")
+    }
+
+    @Test func barePositionalOnlyArgument() {
+        let out = #"[contacts_search("john")]"#
+        let result = parser.parse(out)
+        #expect(result?.0.name == "contacts_search")
+        #expect(result?.0.arguments["query"] == "john")
+    }
+
     // MARK: - Pythonic format
 
     @Test func pythonicCalendarCreateEvent() {

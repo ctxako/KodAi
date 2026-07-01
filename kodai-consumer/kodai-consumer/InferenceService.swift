@@ -15,7 +15,30 @@ actor InferenceService {
     private let runtime: LocalModelRuntime
 
     init() {
-        runtime = LocalModelRuntime(modelFileResolver: ConsumerModelFileResolver())
+        runtime = LocalModelRuntime(
+            configuration: Self.consumerConfiguration,
+            modelFileResolver: ConsumerModelFileResolver()
+        )
+    }
+
+    /// The kernel default context (2,048) can't hold the ~1,900-token system
+    /// prompt plus a multi-step chain — steps would die on promptTooLong.
+    /// Tier-sized context keeps the KV cache honest on 4 GB devices.
+    static var consumerConfiguration: LocalModelConfiguration {
+        let base = LocalModelConfiguration.lfm2_5_1_2B_Instruct_Q4_K_M
+        return LocalModelConfiguration(
+            modelResourceName: base.modelResourceName,
+            modelResourceExtension: base.modelResourceExtension,
+            shortDisplayName: base.shortDisplayName,
+            contextSize: DeviceTier.current.contextSize,
+            maxGeneratedTokens: base.maxGeneratedTokens,
+            temperature: base.temperature,
+            topP: base.topP,
+            topK: base.topK,
+            batchSize: base.batchSize,
+            repeatPenalty: base.repeatPenalty,
+            downloadURL: base.downloadURL
+        )
     }
 
     /// Stream a single completion for the given messages + system prompt.

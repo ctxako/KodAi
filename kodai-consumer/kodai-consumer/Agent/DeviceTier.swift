@@ -37,4 +37,15 @@ enum DeviceTier {
         case .standard: return 45
         }
     }
+
+    /// llama.cpp context window. The shipped system prompt alone is ~1,900
+    /// tokens, so the kernel default of 2,048 cannot hold even a two-step
+    /// chain (each step adds the call + tool result + state anchor). LFM2.5's
+    /// hybrid architecture keeps KV cost modest, so 4k is safe on the floor.
+    var contextSize: Int32 {
+        switch self {
+        case .floor: return 4_096
+        case .standard: return 8_192
+        }
+    }
 }

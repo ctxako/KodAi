@@ -149,6 +149,19 @@ public struct ToolCallParser {
             for pair in allMatches(#"([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*\"([^\"]*)\""#, in: argString) where pair.count == 2 {
                 arguments[pair[0]] = pair[1]
             }
+            // JSON-colon keys inside parens: tool("key": "value") — another
+            // real LFM2.5 emission the kwarg regex can't read.
+            for pair in allMatches(#"\"([a-zA-Z_][a-zA-Z0-9_]*)\"\s*:\s*\"([^\"]*)\""#, in: argString)
+            where pair.count == 2 && arguments[pair[0]] == nil {
+                arguments[pair[0]] = pair[1]
+            }
+            // Bare positional first argument: tool("value", ...) → the tool's
+            // primary parameter (observed as files_create("name", "content": …)).
+            if let primary = Self.primaryArgument[name], arguments[primary] == nil,
+               let first = firstMatch(#"^\s*\"([^\"]*)\"\s*(?:,|$)"#, in: argString),
+               let value = first.first {
+                arguments[primary] = value
+            }
         }
 
         let cleaned = strippingTokens(text)
@@ -158,6 +171,19 @@ public struct ToolCallParser {
             : ""
         return (RawToolCall(name: name, arguments: arguments), afterName.hasPrefix("("))
     }
+
+    /// What a bare positional first argument means, per tool — used when the
+    /// model emits `tool("value", …)` instead of naming the parameter.
+    private static let primaryArgument: [String: String] = [
+        "files_create": "path", "files_read": "path", "files_list": "path",
+        "files_create_folder": "path", "files_delete": "path",
+        "contacts_search": "query", "clipboard_write": "content",
+        "web_fetch": "url", "open_url": "url",
+        "reminders_create": "title", "calendar_create_event": "title",
+        "notification_schedule": "title",
+        "calendar_delete_event": "event_id", "reminders_complete": "reminder_id",
+        "respond": "message",
+    ]
 
     /// Strips LFM2 special tokens (`<|…|>`) so a primed call can be recognised as
     /// standalone. Local to the parser — the app keeps its own display-only copy.

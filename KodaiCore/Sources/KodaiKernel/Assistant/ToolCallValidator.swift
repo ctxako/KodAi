@@ -191,8 +191,13 @@ public struct ToolCallValidator {
     }
 
     private func validateFilesCreate(_ args: [String: String]) -> Result<AssistantToolCall, ToolValidationError> {
-        guard let path = nonEmpty(args["path"]) else { return .failure(.missingField("path")) }
-        guard let content = nonEmpty(args["content"]) else { return .failure(.missingField("content")) }
+        // The model drifts between key names here — accept the observed aliases
+        // rather than failing a correctly-routed call.
+        let path = nonEmpty(args["path"]) ?? nonEmpty(args["name"])
+            ?? nonEmpty(args["file_name"]) ?? nonEmpty(args["filename"])
+        guard let path else { return .failure(.missingField("path")) }
+        let content = nonEmpty(args["content"]) ?? nonEmpty(args["text"]) ?? nonEmpty(args["body"])
+        guard let content else { return .failure(.missingField("content")) }
         return .success(.filesCreate(path: path, content: content))
     }
 
@@ -217,7 +222,8 @@ public struct ToolCallValidator {
 
     private func validateNotificationSchedule(_ args: [String: String], userInput: String) -> Result<AssistantToolCall, ToolValidationError> {
         guard let title = nonEmpty(args["title"]) else { return .failure(.missingField("title")) }
-        guard let body = nonEmpty(args["body"]) else { return .failure(.missingField("body")) }
+        // A title-only notification is fine — don't fail the call over copy.
+        let body = nonEmpty(args["body"]) ?? nonEmpty(args["message"]) ?? title
 
         let triggerDate: Date
         switch resolveDate(iso: args["trigger_date"], userInput: userInput, field: "trigger_date") {
