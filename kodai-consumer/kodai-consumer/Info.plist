@@ -21,5 +21,17 @@
 	<string>kodAI searches or adds contacts only when you ask. Contacts never leave your device.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>kodAI creates reminders and list items you confirm. Everything stays on your device.</string>
+	<key>NSUbiquitousContainers</key>
+	<dict>
+		<key>iCloud.ctxa.kodai-consumer</key>
+		<dict>
+			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
+			<true/>
+			<key>NSUbiquitousContainerName</key>
+			<string>kodai</string>
+			<key>NSUbiquitousContainerSupportedFolderLevels</key>
+			<string>Any</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

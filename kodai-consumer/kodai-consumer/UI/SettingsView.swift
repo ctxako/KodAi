@@ -33,9 +33,23 @@ struct SettingsView: View {
                     HStack {
                         Text("Version")
                         Spacer()
-                        Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")
+                        Text(Self.versionString)
                             .foregroundStyle(.secondary)
                     }
+                    Button {
+                        if let url = Self.feedbackMailURL {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "envelope")
+                                .foregroundStyle(.blue)
+                                .frame(width: 24)
+                            Text("Send Feedback")
+                                .foregroundStyle(.primary)
+                        }
+                    }
+                    .accessibilityHint("Opens an email draft to the kodai team")
                     Text("All on-device. No tracking.")
                         .foregroundStyle(.secondary)
                         .font(.footnote)
@@ -87,6 +101,33 @@ struct SettingsView: View {
         case "Denied": return .red
         default: return .secondary
         }
+    }
+
+    static var versionString: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"
+        return "\(version) (\(build))"
+    }
+
+    /// Pre-filled feedback mail with the context a bug report needs. Plain
+    /// mailto keeps the no-dependencies promise (no MessageUI sheet state).
+    static var feedbackMailURL: URL? {
+        let device = UIDevice.current
+        let body = """
+
+
+        —
+        kodai \(versionString)
+        \(device.model), iOS \(device.systemVersion)
+        """
+        var components = URLComponents()
+        components.scheme = "mailto"
+        components.path = "15ctxa@gmail.com"
+        components.queryItems = [
+            URLQueryItem(name: "subject", value: "kodai feedback"),
+            URLQueryItem(name: "body", value: body),
+        ]
+        return components.url
     }
 
     private func refresh() async {

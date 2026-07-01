@@ -96,11 +96,19 @@ struct FileToolRouter: ToolRouter {
         return nil
     }
 
+    /// Distinguishes "iCloud isn't available" (signed out, or the container
+    /// isn't provisioned) from a genuinely malformed path, so the agent can
+    /// explain the real problem instead of blaming the path.
+    private func pathError(_ path: String) -> String {
+        if path.hasPrefix("icloud/") { return "icloud_unavailable" }
+        return "invalid_path_prefix"
+    }
+
     // MARK: - Operations
 
     private func listFiles(path: String) -> ToolResult {
         guard let url = resolveContainedPath(path) else {
-            return .failure(tool: "files_list", error: "invalid_path_prefix")
+            return .failure(tool: "files_list", error: pathError(path))
         }
         do {
             let keys: [URLResourceKey] = [.fileSizeKey, .contentTypeKey]
@@ -144,7 +152,7 @@ struct FileToolRouter: ToolRouter {
 
     private func createFolder(path: String) -> ToolResult {
         guard let url = resolveContainedPath(path) else {
-            return .failure(tool: "files_create_folder", error: "invalid_path_prefix")
+            return .failure(tool: "files_create_folder", error: pathError(path))
         }
         do {
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
@@ -156,7 +164,7 @@ struct FileToolRouter: ToolRouter {
 
     private func deleteFile(path: String) -> ToolResult {
         guard let url = resolveContainedPath(path) else {
-            return .failure(tool: "files_delete", error: "invalid_path_prefix")
+            return .failure(tool: "files_delete", error: pathError(path))
         }
         do {
             try FileManager.default.removeItem(at: url)

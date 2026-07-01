@@ -460,6 +460,7 @@ final class AssistantController {
         case "no_reminder_list_available": return "no Reminders list found — open Reminders once"
         case "no_calendar_available": return "no calendar found — set a default in Settings › Calendar"
         case "access_denied": return "file access was denied"
+        case "icloud_unavailable": return "iCloud Drive isn’t available — check you’re signed into iCloud"
         default: return error ?? "unknown error"
         }
     }
