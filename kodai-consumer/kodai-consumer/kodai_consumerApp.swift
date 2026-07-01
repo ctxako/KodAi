@@ -4,6 +4,7 @@ import SwiftData
 @main
 struct kodai_consumerApp: App {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @State private var modelSetup = ModelSetupController()
 
     let container: ModelContainer
 
@@ -15,11 +16,16 @@ struct kodai_consumerApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if hasCompletedOnboarding {
-                AssistantView()
-            } else {
-                OnboardingView(isComplete: $hasCompletedOnboarding)
+            Group {
+                if !modelSetup.isReady {
+                    ModelDownloadView(setup: modelSetup)
+                } else if hasCompletedOnboarding {
+                    AssistantView()
+                } else {
+                    OnboardingView(isComplete: $hasCompletedOnboarding)
+                }
             }
+            .task { modelSetup.checkOnLaunch() }
         }
         .modelContainer(container)
     }
