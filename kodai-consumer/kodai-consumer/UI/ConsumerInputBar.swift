@@ -43,6 +43,7 @@ struct ConsumerInputBar: View {
                 .onSubmit(sendIfPossible)
                 .padding(.leading, 14)
                 .padding(.vertical, 10)
+                .accessibilityLabel("What would you like to do?")
 
             if isGenerating {
                 Button(action: onStop) {

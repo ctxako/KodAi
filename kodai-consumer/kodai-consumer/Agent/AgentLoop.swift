@@ -110,20 +110,45 @@ struct AgentLoop {
 
     static func label(for call: AssistantToolCall) -> String {
         switch call {
-        case let .createCalendarEvent(title, _, _, _, _):
-            return "create_calendar_event: \(title)"
-        case let .createReminder(title, _, _, _):
-            return "create_reminder: \(title)"
-        case let .addToList(list, item):
-            return "add_to_list: \(item) → \(list)"
-        case let .saveFile(name, _):
-            return "save_file: \(name)"
-        case let .readFile(purpose):
-            return "read_file: \(purpose)"
-        case let .queryCalendar(dateRange):
-            return "query_calendar: \(dateRange)"
-        case let .queryReminders(list, _):
-            return "query_reminders: \(list ?? "all")"
+        case let .calendarCreateEvent(title, _, _, _, _, _, _):
+            return "calendar_create_event: \(title)"
+        case let .calendarListEvents(start, _, _):
+            return "calendar_list_events: \(start)"
+        case let .calendarDeleteEvent(eventId):
+            return "calendar_delete_event: \(eventId)"
+        case let .remindersCreate(title, _, _, _, _):
+            return "reminders_create: \(title)"
+        case let .remindersList(list, _):
+            return "reminders_list: \(list ?? "all")"
+        case let .remindersComplete(reminderId):
+            return "reminders_complete: \(reminderId)"
+        case let .contactsSearch(query):
+            return "contacts_search: \(query)"
+        case let .contactsCreate(firstName, _, _, _, _, _):
+            return "contacts_create: \(firstName)"
+        case let .filesList(path):
+            return "files_list: \(path)"
+        case let .filesRead(path):
+            return "files_read: \(path)"
+        case let .filesCreate(path, _):
+            return "files_create: \(path)"
+        case let .filesCreateFolder(path):
+            return "files_create_folder: \(path)"
+        case let .filesDelete(path):
+            return "files_delete: \(path)"
+        case .clipboardRead:
+            return "clipboard_read"
+        case let .clipboardWrite(content):
+            let preview = content.count > 20 ? String(content.prefix(20)) + "…" : content
+            return "clipboard_write: \(preview)"
+        case let .notificationSchedule(title, _, _, _):
+            return "notification_schedule: \(title)"
+        case let .notificationCancel(identifier):
+            return "notification_cancel: \(identifier)"
+        case let .webFetch(url):
+            return "web_fetch: \(url)"
+        case let .openUrl(url):
+            return "open_url: \(url)"
         }
     }
 }

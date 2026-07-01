@@ -17,38 +17,152 @@ enum FilePickerResult: Sendable {
 
 struct FileToolRouter: ToolRouter {
     let presentPicker: (FilePickerRequest) async -> FilePickerResult
+    var confirm: (AssistantToolCall) async -> ConfirmDecision = { .accept($0) }
 
     func execute(_ call: AssistantToolCall) async -> ToolResult {
         switch call {
-        case let .saveFile(name, content):
-            let result = await presentPicker(.save(name: name, content: content))
-            switch result {
-            case .saved(let name):
-                return .ok(tool: "save_file", result: ["name": name])
-            case .cancelled:
-                return .failure(tool: "save_file", error: "cancelled_by_user")
-            case .error(let message):
-                return .failure(tool: "save_file", error: message)
-            default:
-                return .failure(tool: "save_file", error: "unexpected_result")
-            }
+        case let .filesList(path):
+            return listFiles(path: path)
 
-        case let .readFile(purpose):
-            let result = await presentPicker(.read(purpose: purpose))
+        case let .filesRead(path):
+            if let url = resolveContainedPath(path) {
+                return readFile(at: url)
+            }
+            let result = await presentPicker(.read(purpose: path))
             switch result {
             case let .read(name, content):
-                let truncated = content.count > 2000 ? String(content.prefix(2000)) + "\n[truncated]" : content
-                return .ok(tool: "read_file", result: ["name": name, "content": truncated])
+                let truncated = content.count > 8000 ? String(content.prefix(8000)) + "\n[truncated]" : content
+                return .ok(tool: "files_read", result: ["name": name, "content": truncated])
             case .cancelled:
-                return .failure(tool: "read_file", error: "cancelled_by_user")
+                return .failure(tool: "files_read", error: "cancelled_by_user")
             case .error(let message):
-                return .failure(tool: "read_file", error: message)
+                return .failure(tool: "files_read", error: message)
             default:
-                return .failure(tool: "read_file", error: "unexpected_result")
+                return .failure(tool: "files_read", error: "unexpected_result")
             }
 
+        case let .filesCreate(path, content):
+            let decision = await confirm(call)
+            guard case .accept = decision else {
+                return .failure(tool: "files_create", error: "cancelled_by_user")
+            }
+            if let url = resolveContainedPath(path) {
+                return createFile(at: url, content: content)
+            }
+            let result = await presentPicker(.save(name: path, content: content))
+            switch result {
+            case .saved(let name):
+                return .ok(tool: "files_create", result: ["name": name])
+            case .cancelled:
+                return .failure(tool: "files_create", error: "cancelled_by_user")
+            case .error(let message):
+                return .failure(tool: "files_create", error: message)
+            default:
+                return .failure(tool: "files_create", error: "unexpected_result")
+            }
+
+        case let .filesCreateFolder(path):
+            let decision = await confirm(call)
+            guard case .accept = decision else {
+                return .failure(tool: "files_create_folder", error: "cancelled_by_user")
+            }
+            return createFolder(path: path)
+
+        case let .filesDelete(path):
+            let decision = await confirm(call)
+            guard case .accept = decision else {
+                return .failure(tool: "files_delete", error: "cancelled_by_user")
+            }
+            return deleteFile(path: path)
+
         default:
-            return .failure(tool: "unknown", error: "not_a_file_tool")
+            return .failure(tool: call.toolName, error: "not_implemented")
+        }
+    }
+
+    // MARK: - Path resolution
+
+    private func resolveContainedPath(_ path: String) -> URL? {
+        if path.hasPrefix("local/") {
+            let relative = String(path.dropFirst("local/".count))
+            let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+            return docs.appendingPathComponent(relative)
+        }
+        if path.hasPrefix("icloud/") {
+            let relative = String(path.dropFirst("icloud/".count))
+            guard let container = FileManager.default.url(forUbiquityContainerIdentifier: nil) else { return nil }
+            return container.appendingPathComponent("Documents").appendingPathComponent(relative)
+        }
+        return nil
+    }
+
+    // MARK: - Operations
+
+    private func listFiles(path: String) -> ToolResult {
+        guard let url = resolveContainedPath(path) else {
+            return .failure(tool: "files_list", error: "invalid_path_prefix")
+        }
+        do {
+            let keys: [URLResourceKey] = [.fileSizeKey, .contentTypeKey]
+            let contents = try FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: keys)
+            if contents.isEmpty {
+                return .ok(tool: "files_list", result: ["summary": "Empty directory.", "count": "0"])
+            }
+            let lines = contents.prefix(50).map { item -> String in
+                let values = try? item.resourceValues(forKeys: Set(keys))
+                let size = values?.fileSize.map { "\($0) bytes" } ?? "unknown"
+                let type = values?.contentType?.identifier ?? "unknown"
+                return "• \(item.lastPathComponent) — \(size) (\(type))"
+            }
+            var summary = "\(contents.count) item\(contents.count == 1 ? "" : "s"):\n" + lines.joined(separator: "\n")
+            if contents.count > 50 { summary += "\n… and \(contents.count - 50) more" }
+            return .ok(tool: "files_list", result: ["summary": summary, "count": "\(contents.count)"])
+        } catch {
+            return .failure(tool: "files_list", error: error.localizedDescription)
+        }
+    }
+
+    private func readFile(at url: URL) -> ToolResult {
+        do {
+            let content = try String(contentsOf: url, encoding: .utf8)
+            let truncated = content.count > 8000 ? String(content.prefix(8000)) + "\n[truncated]" : content
+            return .ok(tool: "files_read", result: ["name": url.lastPathComponent, "content": truncated])
+        } catch {
+            return .failure(tool: "files_read", error: error.localizedDescription)
+        }
+    }
+
+    private func createFile(at url: URL, content: String) -> ToolResult {
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try content.write(to: url, atomically: true, encoding: .utf8)
+            return .ok(tool: "files_create", result: ["name": url.lastPathComponent])
+        } catch {
+            return .failure(tool: "files_create", error: error.localizedDescription)
+        }
+    }
+
+    private func createFolder(path: String) -> ToolResult {
+        guard let url = resolveContainedPath(path) else {
+            return .failure(tool: "files_create_folder", error: "invalid_path_prefix")
+        }
+        do {
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            return .ok(tool: "files_create_folder", result: ["path": path])
+        } catch {
+            return .failure(tool: "files_create_folder", error: error.localizedDescription)
+        }
+    }
+
+    private func deleteFile(path: String) -> ToolResult {
+        guard let url = resolveContainedPath(path) else {
+            return .failure(tool: "files_delete", error: "invalid_path_prefix")
+        }
+        do {
+            try FileManager.default.removeItem(at: url)
+            return .ok(tool: "files_delete", result: ["path": path, "deleted": "true"])
+        } catch {
+            return .failure(tool: "files_delete", error: error.localizedDescription)
         }
     }
 }

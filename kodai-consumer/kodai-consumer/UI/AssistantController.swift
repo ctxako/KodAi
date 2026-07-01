@@ -32,11 +32,13 @@ final class AssistantController {
     var currentTask: String = ""
     var thinking: String = ""
     var phase: AssistantPhase = .loading
-    var summary: String?
     var isRunning = false
     var pendingConfirmation: PendingConfirmation?
     var pendingFilePicker: PendingFilePicker?
     var isModelReady = false
+
+    var store: ActionStore?
+    private var activeSessionID: UUID?
 
     private let model = RuntimeAgentModel()
     private var runTask: Task<Void, Never>?
@@ -48,7 +50,6 @@ final class AssistantController {
     @MainActor
     func dismissOutcome() {
         guard !isRunning else { return }
-        summary = nil
         phase = .idle
         thinking = ""
         currentTask = ""
@@ -88,7 +89,6 @@ final class AssistantController {
         runTask?.cancel()
         runTask = nil
         Task { await model.cancel() }
-        summary = nil
         thinking = ""
         currentTask = ""
         phase = .idle
@@ -102,10 +102,17 @@ final class AssistantController {
         input = ""
         currentTask = task
         thinking = ""
-        summary = nil
         phase = .loading
         isRunning = true
         defer { runTask = nil }
+
+        if let prev = activeSessionID {
+            store?.archiveSession(id: prev)
+        }
+
+        let sessionID = store?.startSession(prompt: task) ?? UUID()
+        activeSessionID = sessionID
+        store?.logPrompt(text: task, sessionID: sessionID)
 
         model.onStatus = { [weak self] status in
             guard let self else { return }
@@ -123,20 +130,26 @@ final class AssistantController {
         guard let raw = await emit(system: system, messages: [AgentMessage(.user, task)]) else {
             if Task.isCancelled { return }
             HapticFeedback.error()
-            return finish("That took too long — try again.", .failed)
+            store?.logNote(text: "That took too long — try again.", sessionID: sessionID)
+            store?.endSession(id: sessionID)
+            return finish(.failed)
         }
         if Task.isCancelled { return }
 
         let parser = ToolCallParser()
         guard let (rawCall, confidence) = parser.parse(raw) else {
             HapticFeedback.error()
-            return finish("I can only set reminders, calendar events, save files, and manage lists right now.", .failed)
+            store?.logNote(text: "I can only set reminders, calendar events, save files, and manage lists right now.", sessionID: sessionID)
+            store?.endSession(id: sessionID)
+            return finish(.failed)
         }
 
         if rawCall.name == AssistantToolCatalog.respondToolName {
             let reply = rawCall.arguments["message"]?.trimmingCharacters(in: .whitespacesAndNewlines)
             let message = reply?.isEmpty == false ? reply! : Self.capabilitiesMessage
-            return finish(message, .responded)
+            store?.logNote(text: message, sessionID: sessionID)
+            store?.endSession(id: sessionID)
+            return finish(.responded)
         }
 
         var currentConfidence = confidence
@@ -150,7 +163,9 @@ final class AssistantController {
             ]) else {
                 if Task.isCancelled { return }
                 HapticFeedback.error()
-                return finish("That took too long — try again.", .failed)
+                store?.logNote(text: "That took too long — try again.", sessionID: sessionID)
+                store?.endSession(id: sessionID)
+                return finish(.failed)
             }
             if Task.isCancelled { return }
             if let (retried, retryConf) = parser.parse(retry) {
@@ -160,63 +175,29 @@ final class AssistantController {
         }
         guard case let .success(call) = validation else {
             HapticFeedback.error()
-            return finish("I couldn't build a valid action from that.", .failed)
+            store?.logNote(text: "I couldn't build a valid action from that.", sessionID: sessionID)
+            store?.endSession(id: sessionID)
+            return finish(.failed)
         }
 
         phase = .callingTool(name: Self.kind(of: call))
 
-        let result: ToolResult
-        if EventKitToolRouter.isQuery(call) {
-            result = await executeQueryTool(call)
-        } else if Self.isFileTool(call) {
-            result = await executeFileTool(call, confidence: currentConfidence)
-        } else {
-            result = await executeEventKitTool(call, confidence: currentConfidence)
-        }
-
-        handleResult(result, call: call)
-        thinking = ""
-        isRunning = false
-    }
-
-    // MARK: - Tool dispatch
-
-    private func executeEventKitTool(_ call: AssistantToolCall, confidence: ParseConfidence) async -> ToolResult {
-        let router = EventKitToolRouter(
+        let resolvedConfidence = currentConfidence
+        let dispatch = ToolRouterDispatch(
             confirm: { [weak self] candidate in
-                await self?.confirmWithConfidence(candidate, confidence: confidence) ?? .cancel
+                await self?.confirmWithConfidence(candidate, confidence: resolvedConfidence) ?? .cancel
             },
-            onActivity: { _ in }
-        )
-        return await router.execute(call)
-    }
-
-    private func executeQueryTool(_ call: AssistantToolCall) async -> ToolResult {
-        let router = EventKitToolRouter(
-            confirm: { _ in .cancel },
-            onActivity: { _ in }
-        )
-        return await router.execute(call)
-    }
-
-    private func executeFileTool(_ call: AssistantToolCall, confidence: ParseConfidence) async -> ToolResult {
-        let decision = await confirmWithConfidence(call, confidence: confidence)
-        guard case let .accept(confirmed) = decision else {
-            return .failure(tool: EventKitToolRouter.name(call), error: "cancelled_by_user")
-        }
-        let router = FileToolRouter(
-            presentPicker: { [weak self] request in
+            presentFilePicker: { [weak self] request in
                 await self?.presentFilePicker(request) ?? .cancelled
             }
         )
-        return await router.execute(confirmed)
-    }
+        let result = await dispatch.execute(call)
 
-    private static func isFileTool(_ call: AssistantToolCall) -> Bool {
-        switch call {
-        case .saveFile, .readFile: return true
-        default: return false
-        }
+        logToolResult(result, call: call, sessionID: sessionID)
+        handleResult(result, call: call)
+        store?.endSession(id: sessionID)
+        thinking = ""
+        isRunning = false
     }
 
     // MARK: - App Intents hand-off
@@ -237,29 +218,49 @@ final class AssistantController {
         isRunning = true
         defer { isRunning = false }
 
-        currentTask = "\(Self.kind(of: call).capitalized) (Shortcut)"
-        summary = nil
+        let label = "\(Self.kind(of: call).capitalized) (Shortcut)"
+        currentTask = label
         phase = .loading
 
-        let result: ToolResult
-        if Self.isFileTool(call) {
-            result = await executeFileTool(call, confidence: .json)
-        } else {
-            result = await executeEventKitTool(call, confidence: .json)
+        if let prev = activeSessionID {
+            store?.archiveSession(id: prev)
         }
+
+        let sessionID = store?.startSession(prompt: label) ?? UUID()
+        activeSessionID = sessionID
+
+        let dispatch = ToolRouterDispatch(
+            confirm: { [weak self] candidate in
+                await self?.confirmWithConfidence(candidate, confidence: .json) ?? .cancel
+            },
+            presentFilePicker: { [weak self] request in
+                await self?.presentFilePicker(request) ?? .cancelled
+            }
+        )
+        let result = await dispatch.execute(call)
+        logToolResult(result, call: call, sessionID: sessionID)
         handleResult(result, call: call)
+        store?.endSession(id: sessionID)
     }
 
     // MARK: - Result handling
 
+    private static func isReadOnly(_ call: AssistantToolCall) -> Bool {
+        switch call {
+        case .calendarListEvents, .remindersList, .contactsSearch,
+             .filesList, .filesRead, .clipboardRead, .webFetch:
+            return true
+        default:
+            return false
+        }
+    }
+
     private func handleResult(_ result: ToolResult, call: AssistantToolCall) {
-        if EventKitToolRouter.isQuery(call) {
+        if Self.isReadOnly(call) {
             if result.status == .ok {
-                summary = result.fields["summary"] ?? "No results."
                 phase = .responded
                 HapticFeedback.success()
             } else {
-                summary = "Couldn't check — \(Self.reason(result.fields["error"]))."
                 phase = .failed
                 HapticFeedback.error()
             }
@@ -268,15 +269,12 @@ final class AssistantController {
 
         switch result.status {
         case .ok:
-            summary = Self.successLine(for: call, result: result)
             phase = .done
             HapticFeedback.success()
         case .error where result.fields["error"] == "cancelled_by_user":
-            summary = nil
             phase = .idle
             HapticFeedback.cancel()
         case .error:
-            summary = "Couldn't complete — \(Self.reason(result.fields["error"]))."
             phase = .failed
             HapticFeedback.error()
         }
@@ -325,47 +323,112 @@ final class AssistantController {
         }
     }
 
+    // MARK: - Store logging
+
+    private func logToolResult(_ result: ToolResult, call: AssistantToolCall, sessionID: UUID) {
+        let toolName = call.toolName
+        let domain = ActionStore.domain(for: toolName)
+        let status = result.status == .ok ? "done" : (result.fields["error"] == "cancelled_by_user" ? "cancelled" : "failed")
+        let summaryText = result.status == .ok
+            ? Self.successLine(for: call, result: result)
+            : "Failed — \(Self.reason(result.fields["error"]))"
+        store?.logAction(
+            toolName: toolName,
+            domain: domain,
+            summary: summaryText,
+            status: status,
+            details: result.fields,
+            sessionID: sessionID,
+            relatedDate: Self.relatedDate(for: call)
+        )
+    }
+
+    private static func relatedDate(for call: AssistantToolCall) -> Date? {
+        switch call {
+        case let .calendarCreateEvent(_, start, _, _, _, _, _): return start
+        case let .remindersCreate(_, due, _, _, _): return due
+        case let .notificationSchedule(_, _, trigger, _): return trigger
+        default: return nil
+        }
+    }
+
     // MARK: - Helpers
 
-    private func finish(_ message: String, _ phase: AssistantPhase) {
-        summary = message
+    private func finish(_ phase: AssistantPhase) {
         self.phase = phase
         thinking = ""
         isRunning = false
     }
 
-    static let capabilitiesMessage = "I can set reminders, add calendar events, manage lists, save or read files, and check your calendar or reminders — what would you like to do?"
+    static let capabilitiesMessage = "I can manage calendar events, reminders, contacts, files, clipboard, notifications, and open URLs — what would you like to do?"
 
     static func kind(of call: AssistantToolCall) -> String {
         switch call {
-        case .createCalendarEvent: return "event"
-        case .createReminder: return "reminder"
-        case .addToList: return "list item"
-        case .saveFile: return "file"
-        case .readFile: return "file read"
-        case .queryCalendar: return "calendar check"
-        case .queryReminders: return "reminders check"
+        case .calendarCreateEvent: return "event"
+        case .calendarListEvents: return "calendar check"
+        case .calendarDeleteEvent: return "event delete"
+        case .remindersCreate: return "reminder"
+        case .remindersList: return "reminders check"
+        case .remindersComplete: return "reminder complete"
+        case .contactsSearch: return "contact search"
+        case .contactsCreate: return "contact"
+        case .filesList: return "file list"
+        case .filesRead: return "file read"
+        case .filesCreate: return "file"
+        case .filesCreateFolder: return "folder"
+        case .filesDelete: return "file delete"
+        case .clipboardRead: return "clipboard read"
+        case .clipboardWrite: return "clipboard write"
+        case .notificationSchedule: return "notification"
+        case .notificationCancel: return "notification cancel"
+        case .webFetch: return "web fetch"
+        case .openUrl: return "open url"
         }
     }
 
     static func successLine(for call: AssistantToolCall, result: ToolResult? = nil) -> String {
         switch call {
-        case let .createReminder(title, due, _, _):
+        case let .calendarCreateEvent(title, start, _, _, _, _, _):
+            return "Event added — \(title), \(format(start))"
+        case .calendarListEvents:
+            return result?.fields["summary"] ?? "Calendar checked."
+        case .calendarDeleteEvent:
+            return "Event deleted."
+        case let .remindersCreate(title, due, _, _, _):
             if let due { return "Reminder set — \(title), \(format(due))" }
             return "Reminder set — \(title)"
-        case let .createCalendarEvent(title, start, _, _, _):
-            return "Event added — \(title), \(format(start))"
-        case let .addToList(list, item):
-            return "Added to \(list) — \(item)"
-        case let .saveFile(name, _):
-            return "File saved — \(name)"
-        case .readFile:
+        case .remindersList:
+            return result?.fields["summary"] ?? "Reminders checked."
+        case .remindersComplete:
+            return "Reminder completed."
+        case let .contactsSearch(query):
+            return result?.fields["summary"] ?? "Searched contacts for \(query)."
+        case let .contactsCreate(firstName, _, _, _, _, _):
+            return "Contact created — \(firstName)."
+        case .filesList:
+            return result?.fields["summary"] ?? "Files listed."
+        case .filesRead:
             let name = result?.fields["name"] ?? "file"
             return "Read — \(name)"
-        case .queryCalendar:
-            return result?.fields["summary"] ?? "Calendar checked."
-        case .queryReminders:
-            return result?.fields["summary"] ?? "Reminders checked."
+        case let .filesCreate(path, _):
+            return "File saved — \(path)"
+        case let .filesCreateFolder(path):
+            return "Folder created — \(path)"
+        case .filesDelete:
+            return "File deleted."
+        case .clipboardRead:
+            return "Clipboard read."
+        case let .clipboardWrite(content):
+            let preview = content.count > 40 ? String(content.prefix(40)) + "…" : content
+            return "Copied — \(preview)"
+        case let .notificationSchedule(title, _, _, _):
+            return "Notification scheduled — \(title)"
+        case .notificationCancel:
+            return "Notification cancelled."
+        case .webFetch:
+            return result?.fields["summary"] ?? "Content fetched."
+        case let .openUrl(url):
+            return "Opened — \(url)"
         }
     }
 
