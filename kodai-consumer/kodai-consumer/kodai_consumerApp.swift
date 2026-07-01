@@ -6,7 +6,7 @@ struct kodai_consumerApp: App {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var modelSetup = ModelSetupController()
 
-    let container: ModelContainer
+    let container: ModelContainer?
 
     init() {
         container = Self.makeContainer()
@@ -16,9 +16,15 @@ struct kodai_consumerApp: App {
     /// written by an incompatible earlier schema (pre-release churn), delete
     /// it and start fresh; as a last resort run with an ephemeral in-memory
     /// log rather than crashing at launch.
-    private static func makeContainer() -> ModelContainer {
+    private static func makeContainer() -> ModelContainer? {
         let schema = Schema([ActionCard.self, SessionGroup.self])
-        let config = ModelConfiguration(isStoredInMemoryOnly: false)
+        // cloudKitDatabase MUST be .none: the entitlements carry an iCloud
+        // container (for Files-app documents), and ModelConfiguration's
+        // .automatic default sees it and tries CloudKit mirroring — whose
+        // schema validation rejects these models (non-optional, non-default
+        // attributes) and fails container creation on device. The action log
+        // is local-only by design.
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .none)
         if let container = try? ModelContainer(for: schema, configurations: config) {
             return container
         }
@@ -33,23 +39,27 @@ struct kodai_consumerApp: App {
             return container
         }
 
-        let memory = ModelConfiguration(isStoredInMemoryOnly: true)
-        return try! ModelContainer(for: schema, configurations: memory)
+        let memory = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+        return try? ModelContainer(for: schema, configurations: memory)
     }
 
     var body: some Scene {
         WindowGroup {
-            Group {
-                if !modelSetup.isReady {
-                    ModelDownloadView(setup: modelSetup)
-                } else if hasCompletedOnboarding {
-                    AssistantView()
-                } else {
-                    OnboardingView(isComplete: $hasCompletedOnboarding)
+            if let container {
+                Group {
+                    if !modelSetup.isReady {
+                        ModelDownloadView(setup: modelSetup)
+                    } else if hasCompletedOnboarding {
+                        AssistantView()
+                    } else {
+                        OnboardingView(isComplete: $hasCompletedOnboarding)
+                    }
                 }
+                .task { modelSetup.checkOnLaunch() }
+                .modelContainer(container)
+            } else {
+                StorageUnavailableView()
             }
-            .task { modelSetup.checkOnLaunch() }
         }
-        .modelContainer(container)
     }
 }
