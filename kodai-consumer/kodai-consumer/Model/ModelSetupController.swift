@@ -109,8 +109,9 @@ final class ModelSetupController {
         let delegate = DownloadDelegate(
             destination: destination,
             onProgress: { [weak self] received, total in
+                guard let self else { return }
                 Task { @MainActor in
-                    guard let self, case .downloading = self.state else { return }
+                    guard case .downloading = self.state else { return }
                     self.state = .downloading(
                         received: received,
                         total: total > 0 ? total : Self.expectedModelBytes
@@ -118,8 +119,9 @@ final class ModelSetupController {
                 }
             },
             onCompletion: { [weak self] result in
+                guard let self else { return }
                 Task { @MainActor in
-                    self?.finishDownload(result, destination: destination)
+                    self.finishDownload(result, destination: destination)
                 }
             }
         )

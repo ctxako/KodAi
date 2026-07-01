@@ -97,7 +97,7 @@ struct AgentLoopTests {
 
     // MARK: - Budget exceeded
 
-    @Test func enforcesStepBudget() async throws {
+    @Test @MainActor func enforcesStepBudget() async throws {
         let model = ScriptedModel(Array(repeating: addMilkCall, count: 10))
         var loop = AgentLoop(model: model, router: OKRouter())
         loop.maxSteps = 3
@@ -179,7 +179,7 @@ struct AgentLoopTests {
 
     // MARK: - Step hooks (live card logging)
 
-    @Test func onStepFiresPerExecutedStep() async throws {
+    @Test @MainActor func onStepFiresPerExecutedStep() async throws {
         let model = ScriptedModel([calendarListCall, reminderCall, respondCall])
         var loop = AgentLoop(model: model, router: OKRouter())
         var stepEvents: [(String, ToolResult.Status)] = []
@@ -201,7 +201,7 @@ struct AgentLoopTests {
 
     // MARK: - User cancel mid-chain
 
-    @Test func userCancelMidChainStopsChainKeepsCompletedSteps() async throws {
+    @Test @MainActor func userCancelMidChainStopsChainKeepsCompletedSteps() async throws {
         final class CancelSecondRouter: ToolRouter {
             var calls = 0
             func execute(_ call: AssistantToolCall) async -> ToolResult {

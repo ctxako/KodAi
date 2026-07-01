@@ -59,12 +59,16 @@ final class AssistantController {
         Task {
             await model.inference.prewarm { [weak self] status in
                 guard let self else { return }
-                switch status {
-                case .ready:
-                    self.phase = .idle
-                    self.isModelReady = true
-                default:
-                    self.phase = .loading
+                // prewarm's callback is @Sendable off the main actor — hop
+                // before touching observed UI state.
+                Task { @MainActor in
+                    switch status {
+                    case .ready:
+                        self.phase = .idle
+                        self.isModelReady = true
+                    default:
+                        self.phase = .loading
+                    }
                 }
             }
             if phase != .idle {

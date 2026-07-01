@@ -13,7 +13,7 @@
 
 import Foundation
 
-enum DeviceTier {
+nonisolated enum DeviceTier {
     /// ≤4 GB RAM — iPhone 12/13 class. The device the budgets are proven on.
     case floor
     /// 6 GB+ RAM — iPhone 14 and newer.
