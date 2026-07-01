@@ -142,9 +142,10 @@ final class AssistantController {
         )
 
         var loop = AgentLoop(
-            model: WatchdogAgentModel(base: model, timeout: Self.turnTimeout),
+            model: WatchdogAgentModel(base: model, timeout: DeviceTier.current.turnTimeoutSeconds),
             router: dispatch
         )
+        loop.maxSteps = DeviceTier.current.maxAgentSteps
         loop.onToolStart = { [weak self] call, confidence in
             latestConfidence = confidence
             self?.phase = .callingTool(name: Self.kind(of: call))
@@ -169,6 +170,14 @@ final class AssistantController {
         } catch is AgentTurnTimeout {
             HapticFeedback.error()
             store?.logNote(text: "That took too long — try again.", sessionID: sessionID)
+            store?.endSession(id: sessionID)
+            finish(.failed)
+        } catch is AgentThermalCritical {
+            HapticFeedback.error()
+            store?.logNote(
+                text: "Your phone is running hot — give it a minute to cool down, then try again.",
+                sessionID: sessionID
+            )
             store?.endSession(id: sessionID)
             finish(.failed)
         } catch {
@@ -311,11 +320,6 @@ final class AssistantController {
             HapticFeedback.error()
         }
     }
-
-    // MARK: - Watchdog
-
-    /// Seconds allowed per model turn (enforced by `WatchdogAgentModel`).
-    private static let turnTimeout: UInt64 = 45
 
     // MARK: - Confirm + file picker
 
