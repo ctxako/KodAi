@@ -2,10 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
-	<string>kodAI adds events you confirm to your calendar. It never reads your existing events.</string>
-	<key>NSRemindersFullAccessUsageDescription</key>
-	<string>kodAI creates reminders and list items you confirm. Everything stays on your device.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -17,9 +13,13 @@
 			</array>
 		</dict>
 	</array>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>remote-notification</string>
-	</array>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>kodAI reads your calendar only when you ask it to check or change your schedule. Everything stays on your device.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>kodAI adds events you confirm to your calendar. It never reads your existing events.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>kodAI searches or adds contacts only when you ask. Contacts never leave your device.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>kodAI creates reminders and list items you confirm. Everything stays on your device.</string>
 </dict>
 </plist>

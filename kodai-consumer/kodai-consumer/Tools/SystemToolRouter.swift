@@ -22,12 +22,22 @@ struct SystemToolRouter: ToolRouter {
         }
     }
 
+    /// 10s cap: the user may be intentionally offline — fail fast, never retry.
+    private static let fetchTimeout: TimeInterval = 10
+
     private func fetchURL(_ urlString: String) async -> ToolResult {
         guard let url = URL(string: urlString) else {
             return .failure(tool: "web_fetch", error: "invalid_url")
         }
+        // http(s) only — anything else (file://, ftp://) sidesteps the
+        // sandboxed file flow and its confirm gates.
+        guard let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http" else {
+            return .failure(tool: "web_fetch", error: "unsupported_url_scheme")
+        }
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
+            var request = URLRequest(url: url)
+            request.timeoutInterval = Self.fetchTimeout
+            let (data, response) = try await URLSession.shared.data(for: request)
             if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
                 return .failure(tool: "web_fetch", error: "http_\(http.statusCode)")
             }

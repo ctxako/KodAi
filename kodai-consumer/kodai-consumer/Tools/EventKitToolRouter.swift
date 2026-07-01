@@ -101,7 +101,8 @@ struct EventKitToolRouter: ToolRouter {
     }
 
     private func deleteEvent(eventId: String) async throws -> ToolResult {
-        guard try await store.requestWriteOnlyAccessToEvents() else {
+        // Full access: write-only can't look up events by identifier.
+        guard try await store.requestFullAccessToEvents() else {
             return .failure(tool: "calendar_delete_event", error: "calendar_access_denied")
         }
         guard let event = store.event(withIdentifier: eventId) else {
@@ -191,7 +192,8 @@ struct EventKitToolRouter: ToolRouter {
     // MARK: - Queries
 
     private func fetchCalendarEvents(start: Date, end: Date) async throws -> ToolResult {
-        guard try await store.requestWriteOnlyAccessToEvents() else {
+        // Full access: write-only returns no events from queries.
+        guard try await store.requestFullAccessToEvents() else {
             return .failure(tool: "calendar_list_events", error: "calendar_access_denied")
         }
         let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)

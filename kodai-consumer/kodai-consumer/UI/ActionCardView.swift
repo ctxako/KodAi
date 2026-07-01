@@ -56,6 +56,8 @@ struct ActionCardView: View {
         .onAppear { HapticFeedback.cardAppear() }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(card.summary), \(chipLabel), \(card.domain)")
+        .accessibilityHint(card.details.isEmpty ? "" : (isExpanded ? "Double tap to hide details" : "Double tap to show details"))
+        .accessibilityAddTraits(card.details.isEmpty ? [] : .isButton)
     }
 
     private var statusChip: some View {

@@ -122,7 +122,11 @@ struct UpcomingView: View {
 
         let twoWeeks = Calendar.current.date(byAdding: .day, value: 14, to: now)!
 
-        if let granted = try? await Self.eventStore.requestWriteOnlyAccessToEvents(), granted {
+        // Read only with an existing full-access grant: write-only returns no
+        // events from queries, and a passive tab shouldn't spring a permission
+        // prompt — the grant escalates when the user asks the agent to check
+        // their calendar.
+        if EKEventStore.authorizationStatus(for: .event) == .fullAccess {
             let predicate = Self.eventStore.predicateForEvents(withStart: now, end: twoWeeks, calendars: nil)
             for event in Self.eventStore.events(matching: predicate) {
                 let title = event.title ?? "Untitled"
@@ -138,7 +142,7 @@ struct UpcomingView: View {
             }
         }
 
-        if let granted = try? await Self.eventStore.requestFullAccessToReminders(), granted {
+        if EKEventStore.authorizationStatus(for: .reminder) == .fullAccess {
             let predicate = Self.eventStore.predicateForReminders(in: nil)
             let reminders = await withCheckedContinuation { (cont: CheckedContinuation<[EKReminder], Never>) in
                 Self.eventStore.fetchReminders(matching: predicate) { cont.resume(returning: $0 ?? []) }
