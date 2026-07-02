@@ -7,3 +7,4 @@
 - added Life HQ: journal + dashboard embedded from ~/life
 - added kb_search tool: semantic retrieval over ~/life kb via Foundation Models
 - fixed Life HQ sandbox access
+- qol: empty Streams starts collapsed; strip 'called/named' filler from tool titles

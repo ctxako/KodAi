@@ -138,7 +138,7 @@ final class WorkspaceToolExecutor {
 
     func createTask(title: String, priority: String, dueDate rawDueDate: String) async -> ToolResult {
         let toolID = Self.createTaskToolID
-        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanTitle = Self.strippingNamingFiller(from: title)
         guard !cleanTitle.isEmpty else {
             return .failure(tool: toolID, error: "missing task title")
         }
@@ -179,7 +179,7 @@ final class WorkspaceToolExecutor {
 
     func createProject(title: String) async -> ToolResult {
         let toolID = Self.createProjectToolID
-        let cleanTitle = String(title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60))
+        let cleanTitle = String(Self.strippingNamingFiller(from: title).prefix(60))
         guard !cleanTitle.isEmpty else {
             return .failure(tool: toolID, error: "missing project name")
         }
@@ -207,6 +207,19 @@ final class WorkspaceToolExecutor {
             detail: cleanTitle
         ))
         return result
+    }
+
+    /// The model sometimes passes the user's phrasing through as the title:
+    /// "create a project called WGU" → title "called WGU". Strip that filler.
+    static func strippingNamingFiller(from title: String) -> String {
+        var clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        for filler in ["called ", "named ", "titled "] {
+            if clean.lowercased().hasPrefix(filler), clean.count > filler.count {
+                clean = String(clean.dropFirst(filler.count))
+                    .trimmingCharacters(in: .whitespaces)
+            }
+        }
+        return clean
     }
 
     private static func mediumDate(_ date: Date) -> String {

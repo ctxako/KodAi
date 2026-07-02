@@ -638,6 +638,13 @@ struct KodaiSidebar: View {
                 }
             }
         }
+        .onAppear {
+            // Empty section starts collapsed; the header's + stays reachable
+            // for creating the first stream, and a manual expand sticks.
+            if streams.isEmpty {
+                streamsExpanded = false
+            }
+        }
     }
 
     private func streamRow(_ stream: KodaiStream) -> some View {
