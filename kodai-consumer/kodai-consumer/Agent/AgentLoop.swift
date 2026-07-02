@@ -94,6 +94,10 @@ struct AgentLoop {
         var messages: [AgentMessage] = [AgentMessage(.user, task)]
         var step = 0
         var retriedThisStep = false
+        // IDs the model has actually been shown by earlier tool results — the
+        // only valid targets for delete/complete. A 1.2B invents plausible
+        // ids otherwise, and EventKit would silently no-op or fail.
+        var knownIDs = Set<String>()
 
         while step < maxSteps {
             let turnMessages = messages + [AgentMessage(.user, "[TASK STATE]\n" + state.asContextJSON())]
@@ -129,11 +133,29 @@ struct AgentLoop {
                 retriedThisStep = false
 
             case .success(let call):
+                if let inventedID = Self.unknownRequiredID(for: call, known: knownIDs) {
+                    if !retriedThisStep {
+                        retriedThisStep = true
+                        onActivity?("Looking that up first…")
+                        messages.append(AgentMessage(.user,
+                            "Tool call rejected: id \"\(inventedID)\" was not returned by any earlier tool result. Call calendar_list_events or reminders_list first, then use a real id from its result."))
+                        continue
+                    }
+                    let result = ToolResult.failure(tool: call.toolName, error: "unknown_id")
+                    messages.append(AgentMessage(.tool, result.asContextJSON()))
+                    state.record("\(call.toolName) → error")
+                    onActivity?("⚠︎ \(call.toolName) couldn’t be completed")
+                    step += 1
+                    retriedThisStep = false
+                    continue
+                }
+
                 // A call that needed a correction gets a verify nudge.
                 let effective: ParseConfidence =
                     retriedThisStep && confidence == .native ? .json : confidence
                 onToolStart?(call, effective)
                 let result = await router.execute(call)
+                knownIDs.formUnion(Self.harvestIDs(from: result))
                 messages.append(AgentMessage(.tool, result.asContextJSON()))
                 state.record("\(Self.label(for: call)) → \(result.status.rawValue)")
                 onStep?(call, result)
@@ -148,6 +170,40 @@ struct AgentLoop {
         }
 
         return .budgetExceeded(steps: state.stepsCompleted)
+    }
+
+    /// The id argument of a delete/complete call when it was never shown to
+    /// the model by an earlier result — i.e. the model invented it.
+    static func unknownRequiredID(for call: AssistantToolCall, known: Set<String>) -> String? {
+        switch call {
+        case let .calendarDeleteEvent(eventId):
+            return known.contains(eventId) ? nil : eventId
+        case let .remindersComplete(reminderId):
+            return known.contains(reminderId) ? nil : reminderId
+        default:
+            return nil
+        }
+    }
+
+    /// Collects real EventKit ids from a result: explicit id fields plus the
+    /// `[event_id: …]` / `[reminder_id: …]` markers list summaries embed.
+    static func harvestIDs(from result: ToolResult) -> Set<String> {
+        var ids = Set<String>()
+        for key in ["event_id", "reminder_id"] {
+            if let value = result.fields[key] { ids.insert(value) }
+        }
+        guard let regex = try? NSRegularExpression(
+            pattern: #"\[(?:event_id|reminder_id): ([^\]]+)\]"#
+        ) else { return ids }
+        for value in result.fields.values {
+            let range = NSRange(value.startIndex..., in: value)
+            for match in regex.matches(in: value, range: range) {
+                if let idRange = Range(match.range(at: 1), in: value) {
+                    ids.insert(String(value[idRange]))
+                }
+            }
+        }
+        return ids
     }
 
     static func label(for call: AssistantToolCall) -> String {

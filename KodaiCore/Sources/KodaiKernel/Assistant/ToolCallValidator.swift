@@ -125,6 +125,18 @@ public struct ToolCallValidator {
     // MARK: - Reminders
 
     private func validateRemindersCreate(_ args: [String: String], userInput: String) -> Result<AssistantToolCall, ToolValidationError> {
+        // "What's on my groceries list" / "show me my to-do list" magnetize a
+        // 1.2B toward reminders_create no matter how the routing rules are
+        // worded — the create rule's list_name examples teach exactly that
+        // extraction. A pure question must never create; remap deterministically
+        // and keep any list filter the model extracted.
+        if Self.isTaskQuery(userInput) {
+            return .success(.remindersList(
+                listName: nonEmpty(args["list_name"]),
+                completed: false
+            ))
+        }
+
         guard let title = nonEmpty(args["title"]) else { return .failure(.missingField("title")) }
 
         let due: Date?
@@ -144,6 +156,20 @@ public struct ToolCallValidator {
             listName: nonEmpty(args["list_name"]),
             priority: nonEmpty(args["priority"])
         ))
+    }
+
+    /// A request that only asks about tasks — question phrasing with no
+    /// creation verb anywhere. Deliberately conservative: any hint of an
+    /// imperative ("add", "remind me", …) keeps the model's create call.
+    public static func isTaskQuery(_ userInput: String) -> Bool {
+        let text = userInput.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return false }
+        let creationHints = ["add ", "put ", "throw ", "create", "new ", "remind me to",
+                             "remember", "set ", "make ", "buy ", "get ", "don't forget"]
+        if creationHints.contains(where: text.contains) { return false }
+        let queryStarts = ["what", "show me", "show my", "do i have", "list my",
+                           "which ", "any ", "am i", "how many"]
+        return queryStarts.contains(where: text.hasPrefix)
     }
 
     private func validateRemindersList(_ args: [String: String]) -> Result<AssistantToolCall, ToolValidationError> {

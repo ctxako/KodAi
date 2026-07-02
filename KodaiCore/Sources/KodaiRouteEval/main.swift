@@ -349,9 +349,7 @@ for c in cases {
         for try await event in stream { if case let .token(t, _) = event { out += t } }
 
         let parsed = parser.parse(out)
-        let routed = parsed?.0.name ?? "NONE"
         let conf = parsed?.1
-        let routedOK = routed == c.expected || c.alsoOK.contains(routed)
 
         // First-try-valid: the single emission must parse and either be `respond`
         // (a legitimate terminal) or validate as a real action call — no retry.
@@ -365,6 +363,12 @@ for c in cases {
                 validatedCall = call
             }
         }
+
+        // Route by the call that actually executes: validation deterministically
+        // remaps some calls (a question-phrased reminders_create becomes
+        // reminders_list), and the shipped pipeline runs the remapped call.
+        let routed = validatedCall?.toolName ?? parsed?.0.name ?? "NONE"
+        let routedOK = routed == c.expected || c.alsoOK.contains(routed)
 
         var endToEndOK = false
         var detail: String? = nil

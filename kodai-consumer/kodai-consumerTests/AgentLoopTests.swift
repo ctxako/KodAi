@@ -256,4 +256,47 @@ struct AgentLoopTests {
         #expect(steps.isEmpty)
         #expect(model.calls == 1)
     }
+
+    // MARK: - Invented-id guard
+
+    /// A delete targeting an id the model was never shown is rejected; after
+    /// a list call returns real ids, the same delete goes through.
+    @Test func inventedIDRejectedThenRealIDAccepted() async throws {
+        let inventedDelete = #"[{"name":"calendar_delete_event","arguments":{"event_id":"dentist_appointment"}}]"#
+        let realDelete = #"[{"name":"calendar_delete_event","arguments":{"event_id":"ABC-123"}}]"#
+        struct ListRouter: ToolRouter {
+            func execute(_ call: AssistantToolCall) async -> ToolResult {
+                if case .calendarListEvents = call {
+                    return .ok(tool: "calendar_list_events",
+                               result: ["summary": "Dentist Fri 2pm [event_id: ABC-123]"])
+                }
+                return .ok(tool: call.toolName, result: ["deleted": "true"])
+            }
+        }
+        let model = ScriptedModel([inventedDelete, calendarListCall, realDelete, "Deleted."])
+        let loop = AgentLoop(model: model, router: ListRouter())
+        let outcome = try await loop.run(task: "delete my dentist appointment")
+        guard case let .completed(_, steps) = outcome else {
+            Issue.record("expected completed, got \(outcome)")
+            return
+        }
+        // The invented-id call must not reach the router; the list and the
+        // corrected delete both execute.
+        #expect(steps.count == 2)
+        #expect(steps[0].contains("calendar_list_events") && steps[0].contains("ok"))
+        #expect(steps[1].contains("calendar_delete_event: ABC-123") && steps[1].contains("ok"))
+    }
+
+    @Test func harvestsIDsFromSummariesAndFields() {
+        let listResult = ToolResult.ok(
+            tool: "reminders_list",
+            result: ["summary": "Milk [reminder_id: R-1]\nEggs [reminder_id: R-2]"]
+        )
+        #expect(AgentLoop.harvestIDs(from: listResult) == ["R-1", "R-2"])
+        let deleteResult = ToolResult.ok(
+            tool: "calendar_delete_event",
+            result: ["event_id": "E-9", "deleted": "true"]
+        )
+        #expect(AgentLoop.harvestIDs(from: deleteResult) == ["E-9"])
+    }
 }

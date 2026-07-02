@@ -111,6 +111,29 @@ struct ToolCallValidatorTests {
 
     // MARK: - Reminders
 
+    /// A question-phrased input must never create a reminder — the validator
+    /// deterministically remaps the model's create call to a list call,
+    /// keeping any list filter it extracted.
+    @Test func queryPhrasedCreateRemapsToList() {
+        let v = validator(now: date("2026-06-25T12:00"))
+        let raw = RawToolCall(name: "reminders_create", arguments: [
+            "title": "groceries", "list_name": "groceries"
+        ])
+        #expect(v.validate(raw, userInput: "what's on my groceries list")
+            == .success(.remindersList(listName: "groceries", completed: false)))
+        #expect(v.validate(raw, userInput: "show me my to-do list")
+            == .success(.remindersList(listName: "groceries", completed: false)))
+    }
+
+    @Test func imperativeInputsAreNotRemapped() {
+        // Any creation verb keeps the create call, even with question-y phrasing.
+        #expect(ToolCallValidator.isTaskQuery("add bread to my groceries") == false)
+        #expect(ToolCallValidator.isTaskQuery("remind me to call mom tomorrow") == false)
+        #expect(ToolCallValidator.isTaskQuery("what should I get mom for her birthday") == false)
+        #expect(ToolCallValidator.isTaskQuery("what do I need to do today") == true)
+        #expect(ToolCallValidator.isTaskQuery("do I have any pending reminders") == true)
+    }
+
     @Test func validRemindersCreate() {
         let v = validator(now: date("2026-06-25T12:00"))
         let raw = RawToolCall(name: "reminders_create", arguments: [
