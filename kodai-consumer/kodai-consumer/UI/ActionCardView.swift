@@ -1,9 +1,11 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct ActionCardView: View {
     let card: ActionCard
     @State private var isExpanded = false
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -25,6 +27,22 @@ struct ActionCardView: View {
                     .foregroundStyle(.secondary)
 
                 statusChip
+            }
+
+            // A permission failure is recoverable in one tap — offer the jump
+            // to this app's Settings page instead of a dead-end "Failed" chip.
+            if isPermissionFailure {
+                Button {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        openURL(url)
+                    }
+                } label: {
+                    Label("Open Settings", systemImage: "gear")
+                        .font(.caption.weight(.medium))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .padding(.top, 8)
             }
 
             if isExpanded, !card.details.isEmpty {
@@ -58,6 +76,11 @@ struct ActionCardView: View {
         .accessibilityLabel("\(card.summary), \(chipLabel), \(card.domain)")
         .accessibilityHint(card.details.isEmpty ? "" : (isExpanded ? "Double tap to hide details" : "Double tap to show details"))
         .accessibilityAddTraits(card.details.isEmpty ? [] : .isButton)
+    }
+
+    private var isPermissionFailure: Bool {
+        card.status == "failed"
+            && (card.details["error"]?.hasSuffix("_access_denied") ?? false)
     }
 
     private var statusChip: some View {

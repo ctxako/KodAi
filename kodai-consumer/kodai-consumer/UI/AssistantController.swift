@@ -31,6 +31,9 @@ final class AssistantController {
     var input: String = ""
     var currentTask: String = ""
     var thinking: String = ""
+    /// Live loop activity ("Re-trying an invalid tool call…") shown in place
+    /// of the generic phase label so a retry reads as work, not a hang.
+    var activity: String = ""
     var phase: AssistantPhase = .loading
     var isRunning = false
     var pendingConfirmation: PendingConfirmation?
@@ -94,6 +97,7 @@ final class AssistantController {
         runTask = nil
         Task { await model.cancel() }
         thinking = ""
+        activity = ""
         currentTask = ""
         phase = .idle
         isRunning = false
@@ -106,6 +110,7 @@ final class AssistantController {
         input = ""
         currentTask = task
         thinking = ""
+        activity = ""
         phase = .loading
         isRunning = true
         defer { runTask = nil }
@@ -152,6 +157,7 @@ final class AssistantController {
         loop.maxSteps = DeviceTier.current.maxAgentSteps
         loop.onToolStart = { [weak self] call, confidence in
             latestConfidence = confidence
+            self?.activity = ""
             self?.phase = .callingTool(name: Self.kind(of: call))
         }
         loop.onStep = { [weak self] call, result in
@@ -162,6 +168,9 @@ final class AssistantController {
             self.logToolResult(result, call: call, sessionID: sessionID)
             self.thinking = ""
             if result.status == .ok { HapticFeedback.cardAppear() }
+        }
+        loop.onActivity = { [weak self] line in
+            self?.activity = line
         }
 
         do {
@@ -382,6 +391,7 @@ final class AssistantController {
     private func finish(_ phase: AssistantPhase) {
         self.phase = phase
         thinking = ""
+        activity = ""
         isRunning = false
     }
 
@@ -461,10 +471,24 @@ final class AssistantController {
         switch error {
         case "calendar_access_denied": return "calendar access is off (Settings › Privacy › Calendars)"
         case "reminders_access_denied": return "reminders access is off (Settings › Privacy › Reminders)"
+        case "contacts_access_denied": return "contacts access is off (Settings › Privacy › Contacts)"
+        case "notifications_access_denied": return "notifications are off (Settings › Notifications)"
         case "no_reminder_list_available": return "no Reminders list found — open Reminders once"
         case "no_calendar_available": return "no calendar found — set a default in Settings › Calendar"
         case "access_denied": return "file access was denied"
         case "icloud_unavailable": return "iCloud Drive isn’t available — check you’re signed into iCloud"
+        case "invalid_path_prefix": return "file paths need an icloud/ or local/ prefix"
+        case "event_not_found": return "couldn’t find that event — it may have been changed or removed"
+        case "reminder_not_found": return "couldn’t find that reminder — it may have been changed or removed"
+        case "trigger_date_in_past": return "that time is already in the past"
+        case "invalid_url": return "that isn’t a valid link"
+        case "unsupported_url_scheme": return "only web (http/https) pages can be fetched"
+        case "could_not_open_url": return "iOS couldn’t open that link"
+        case "not_implemented": return "that action isn’t supported"
+        case "unknown_id": return "couldn’t match that to a real item — try asking me to list them first"
+        case "invalid_call", "unexpected_result": return "something went wrong — try again"
+        case let code? where code.hasPrefix("http_"):
+            return "the site returned an error (\(code.dropFirst("http_".count)))"
         default: return error ?? "unknown error"
         }
     }

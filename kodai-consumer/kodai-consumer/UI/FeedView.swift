@@ -168,6 +168,9 @@ struct FeedView: View {
     // MARK: - Phase label
 
     private var phaseLabel: String {
+        // A live activity line (retry, step error) is more honest than the
+        // generic phase word — a silent retry otherwise reads as a hang.
+        if !controller.activity.isEmpty { return controller.activity }
         switch controller.phase {
         case .loading: return controller.isModelReady ? "Working…" : "Loading model…"
         case .thinking: return "Thinking…"
