@@ -73,7 +73,8 @@ final class ChatViewModel {
         workspaceExecutor = executor
         backend = FoundationModelsBackend(tools: [
             CreateTaskTool(executor: executor),
-            CreateProjectTool(executor: executor)
+            CreateProjectTool(executor: executor),
+            SearchKnowledgeBaseTool()
         ])
     }
 
