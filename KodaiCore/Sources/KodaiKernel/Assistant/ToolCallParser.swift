@@ -115,7 +115,14 @@ public struct ToolCallParser {
     private func stringify(_ value: Any) -> String {
         switch value {
         case let string as String: return string
-        case let number as NSNumber: return number.stringValue
+        case let number as NSNumber:
+            // JSON booleans decode as CFBoolean, whose stringValue is "1"/"0" —
+            // which the validator's `== "true"` checks read as false. Keep the
+            // JSON spelling instead.
+            if CFGetTypeID(number) == CFBooleanGetTypeID() {
+                return number.boolValue ? "true" : "false"
+            }
+            return number.stringValue
         default: return String(describing: value)
         }
     }
@@ -174,7 +181,9 @@ public struct ToolCallParser {
 
     /// What a bare positional first argument means, per tool — used when the
     /// model emits `tool("value", …)` instead of naming the parameter.
-    private static let primaryArgument: [String: String] = [
+    /// Internal (not private) so ToolCallGrammar can permit a positional first
+    /// argument exactly where the parser can interpret one.
+    static let primaryArgument: [String: String] = [
         "files_create": "path", "files_read": "path", "files_list": "path",
         "files_create_folder": "path", "files_delete": "path",
         "contacts_search": "query", "clipboard_write": "content",

@@ -384,4 +384,12 @@ struct ToolCallParserTests {
         #expect(result?.0.name == "notification_cancel")
         #expect(result?.0.arguments["identifier"] == "mtg1")
     }
+
+    @Test func stringifiesJSONBooleansAsTrueFalse() {
+        // CFBoolean's stringValue is "1"/"0", which the validator's `== "true"`
+        // checks would read as false — booleans must keep their JSON spelling.
+        let out = #"[{"name":"calendar_create_event","arguments":{"title":"trip","start_date":"2027-01-01T09:00","all_day":true}}]"#
+        let result = parser.parse(out)
+        #expect(result?.0.arguments["all_day"] == "true")
+    }
 }

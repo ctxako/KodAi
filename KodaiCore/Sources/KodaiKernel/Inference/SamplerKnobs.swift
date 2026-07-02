@@ -17,6 +17,11 @@ public struct SamplerKnobs: Equatable, Sendable {
     // Generation
     public var maxOutputTokens: Int
 
+    /// GBNF grammar constraining generation (llama.cpp grammar sampler, root
+    /// rule "root"). nil = unconstrained. Invalid GBNF is dropped at chain
+    /// build time with a log, never a crash.
+    public var grammar: String?
+
     public static let minTemperature: Float = 0.05
 
     public init(
@@ -29,7 +34,8 @@ public struct SamplerKnobs: Equatable, Sendable {
         presencePenalty: Float = 0.0,
         deterministic: Bool = false,
         seed: UInt32? = nil,
-        maxOutputTokens: Int = 384
+        maxOutputTokens: Int = 384,
+        grammar: String? = nil
     ) {
         self.temperature = temperature
         self.topP = topP
@@ -41,5 +47,6 @@ public struct SamplerKnobs: Equatable, Sendable {
         self.deterministic = deterministic
         self.seed = seed
         self.maxOutputTokens = maxOutputTokens
+        self.grammar = grammar
     }
 }

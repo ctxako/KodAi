@@ -45,7 +45,7 @@ func flag(_ name: String) -> String? {
 }
 
 guard let modelPath = flag("--model-path") else {
-    FileHandle.standardError.write("Usage: kodai-route-eval --model-path <gguf> [--k <runs-per-case>] [--only cat1,cat2] [--verbose]\n".data(using: .utf8)!)
+    FileHandle.standardError.write("Usage: kodai-route-eval --model-path <gguf> [--k <runs-per-case>] [--only cat1,cat2] [--verbose] [--grammar]\n".data(using: .utf8)!)
     exit(2)
 }
 let K = Int(flag("--k") ?? "1") ?? 1
@@ -53,6 +53,9 @@ let K = Int(flag("--k") ?? "1") ?? 1
 let onlyCategories: Set<String>? = flag("--only").map { Set($0.split(separator: ",").map(String.init)) }
 /// Dump the raw model emission for every failing run — the diagnostic view.
 let verbose = CommandLine.arguments.contains("--verbose")
+/// Constrain sampling with the tool-catalog GBNF — the shipped consumer
+/// configuration. Run with and without to A/B the grammar's contribution.
+let useGrammar = CommandLine.arguments.contains("--grammar")
 
 // MARK: - Cases
 
@@ -294,6 +297,7 @@ let runtime = LocalModelRuntime(configuration: evalConfiguration, modelFileResol
 var knobs = LocalModelConfiguration.lfm2_5_1_2B_Instruct_Q4_K_M.defaultSamplerKnobs
 knobs.temperature = 0.3
 knobs.maxOutputTokens = 200
+if useGrammar { knobs.grammar = ToolCallGrammar.gbnf() }
 let system = ConsumerToolRouting.systemPrompt()
 let primer = ConsumerToolRouting.toolCallPrimer
 let parser = ToolCallParser()
@@ -379,7 +383,7 @@ for c in cases {
             endToEndOK = valid
         }
 
-        if verbose, detail != nil || !valid {
+        if verbose {
             let flat = out.replacingOccurrences(of: "\n", with: "⏎")
             var diag = "RAW  \"\(c.input)\"\n  → \(flat)\n"
             if let raw = parsed?.0 {

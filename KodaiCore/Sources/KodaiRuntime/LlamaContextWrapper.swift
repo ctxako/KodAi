@@ -71,7 +71,7 @@ public nonisolated final class LlamaContextWrapper: @unchecked Sendable {
         }
 
         onWarmupStatus(.warmingTokenizer)
-        guard let samplerChain = Self.makeSamplerChain(configuration.defaultSamplerKnobs) else {
+        guard let samplerChain = Self.makeSamplerChain(configuration.defaultSamplerKnobs, model: loadedModel) else {
             llama_free(loadedContext)
             llama_model_free(loadedModel)
             throw LocalModelRuntimeError.samplerCreateFailed
@@ -105,7 +105,7 @@ public nonisolated final class LlamaContextWrapper: @unchecked Sendable {
     }
 
     public nonisolated func applySamplerKnobs(_ knobs: SamplerKnobs) {
-        guard let chain = Self.makeSamplerChain(knobs) else {
+        guard let chain = Self.makeSamplerChain(knobs, model: model) else {
             log.event("sampler rebuild failed, keeping previous chain")
             return
         }
@@ -114,7 +114,8 @@ public nonisolated final class LlamaContextWrapper: @unchecked Sendable {
     }
 
     private static func makeSamplerChain(
-        _ knobs: SamplerKnobs
+        _ knobs: SamplerKnobs,
+        model: OpaquePointer
     ) -> UnsafeMutablePointer<llama_sampler>? {
         guard let chain = llama_sampler_chain_init(llama_sampler_chain_default_params()) else {
             return nil
@@ -125,6 +126,18 @@ public nonisolated final class LlamaContextWrapper: @unchecked Sendable {
                 chain,
                 llama_sampler_init_penalties(128, knobs.repeatPenalty, knobs.frequencyPenalty, knobs.presencePenalty)
             )
+        }
+
+        // Grammar masks invalid continuations before any selection sampler
+        // runs, so top-k/temp/dist (or greedy) choose among valid tokens only.
+        // llama_sampler_init_grammar returns NULL on unparseable GBNF — drop
+        // the constraint rather than poison the chain with a null sampler.
+        if let grammar = knobs.grammar, !grammar.isEmpty {
+            if let grammarSampler = llama_sampler_init_grammar(llama_model_get_vocab(model), grammar, "root") {
+                llama_sampler_chain_add(chain, grammarSampler)
+            } else {
+                KodaiLog(category: "LlamaContext").event("grammar rejected by llama.cpp, sampling unconstrained")
+            }
         }
 
         if knobs.deterministic {
@@ -266,8 +279,11 @@ public nonisolated final class LlamaContextWrapper: @unchecked Sendable {
                 }
             }
 
+            // llama_sampler_sample already accepts the sampled token into the
+            // chain (see llama.h) — a second llama_sampler_accept here would
+            // double-count it in the penalties window and advance a grammar
+            // sampler twice, desyncing it from the actual output.
             let token = llama_sampler_sample(sampler, context, -1)
-            llama_sampler_accept(sampler, token)
             let distribution = readTopAlternatives(sampledToken: token)
 
             #if DEBUG
