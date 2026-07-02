@@ -52,6 +52,7 @@ struct KodaiSidebar: View {
     let onOpenGlassBox: () -> Void
     let onOpenStream: () -> Void
     let onOpenStudio: () -> Void
+    let onOpenLifeHQ: () -> Void
     let onNewSession: (KodaiProject?) -> Void
     let onSelectChat: (KodaiChatSession) -> Void
     let onResetSession: () -> Void
@@ -98,6 +99,10 @@ struct KodaiSidebar: View {
 
                         sidebarRow("Studio", icon: "chart.bar.xaxis") {
                             onOpenStudio()
+                        }
+
+                        sidebarRow("Life HQ", icon: "flame.fill") {
+                            onOpenLifeHQ()
                         }
 
                         sidebarRow("New thread", icon: "plus") {

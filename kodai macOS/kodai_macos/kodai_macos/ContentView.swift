@@ -15,6 +15,7 @@ struct ContentView: View {
         case glassBox
         case stream
         case studio
+        case lifeHQ
     }
 
     @Environment(\.modelContext) private var modelContext
@@ -111,6 +112,14 @@ struct ContentView: View {
                 case .studio:
                     StudioView(
                         viewModel: studioViewModel,
+                        onClose: {
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                mainContentRoute = .chat
+                            }
+                        }
+                    )
+                case .lifeHQ:
+                    LifeHQView(
                         onClose: {
                             withAnimation(.easeInOut(duration: 0.18)) {
                                 mainContentRoute = .chat
@@ -304,6 +313,11 @@ struct ContentView: View {
             onOpenStudio: {
                 withAnimation(.easeInOut(duration: 0.18)) {
                     mainContentRoute = .studio
+                }
+            },
+            onOpenLifeHQ: {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    mainContentRoute = .lifeHQ
                 }
             },
             onNewSession: { project in

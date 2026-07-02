@@ -3,3 +3,5 @@
 - Sphere UI upgrades
 ## 2026-07-02
 - agentic toolflow pass: consumer widget + intents + kernel ToolExecution
+## 2026-07-02
+- added Life HQ: journal + dashboard embedded from ~/life
