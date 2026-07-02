@@ -6,3 +6,4 @@
 ## 2026-07-02
 - added Life HQ: journal + dashboard embedded from ~/life
 - added kb_search tool: semantic retrieval over ~/life kb via Foundation Models
+- fixed Life HQ sandbox access

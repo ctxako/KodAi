@@ -29,28 +29,47 @@ struct LifeHQView: View {
 
     @State private var panel: Panel = .journal
     @State private var reloadToken = 0
-
-    private var lifeDirectory: URL {
-        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("life")
-    }
-
-    private var pageURL: URL {
-        lifeDirectory.appendingPathComponent(panel.fileName)
-    }
+    @State private var lifeDirectory: URL?
 
     var body: some View {
         VStack(spacing: 0) {
             header
 
-            if FileManager.default.fileExists(atPath: pageURL.path) {
-                LifeHQWebView(url: pageURL, readAccessURL: lifeDirectory, reloadToken: reloadToken)
-                    .id(panel)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .padding([.horizontal, .bottom], 12)
+            if let lifeDirectory {
+                let pageURL = lifeDirectory.appendingPathComponent(panel.fileName)
+                if FileManager.default.fileExists(atPath: pageURL.path) {
+                    LifeHQWebView(url: pageURL, readAccessURL: lifeDirectory, reloadToken: reloadToken)
+                        .id(panel)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .padding([.horizontal, .bottom], 12)
+                } else {
+                    missingFileView(pageURL)
+                }
             } else {
-                missingFileView
+                connectView
             }
         }
+        .onAppear {
+            lifeDirectory = LifeFolderAccess.lifeDirectory
+        }
+    }
+
+    private var connectView: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "folder.badge.plus")
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
+            Text("KodAi needs one-time access to your ~/life folder")
+                .foregroundStyle(.secondary)
+            Text("Sandboxed app — the grant is remembered across launches.")
+                .font(.callout)
+                .foregroundStyle(.tertiary)
+            Button("Choose ~/life Folder…") {
+                lifeDirectory = LifeFolderAccess.requestAccess()
+            }
+            .keyboardShortcut(.defaultAction)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var header: some View {
@@ -88,7 +107,7 @@ struct LifeHQView: View {
         .padding(.vertical, 12)
     }
 
-    private var missingFileView: some View {
+    private func missingFileView(_ pageURL: URL) -> some View {
         VStack(spacing: 8) {
             Image(systemName: "questionmark.folder")
                 .font(.largeTitle)

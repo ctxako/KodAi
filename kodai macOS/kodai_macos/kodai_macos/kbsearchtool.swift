@@ -47,15 +47,15 @@ enum LifeKnowledgeBase {
         let embeddings: [[Double]]
     }
 
-    static var databaseURL: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("life/data/life.db")
-    }
-
     static func search(query: String, limit: Int) async -> String {
+        guard let lifeDirectory = await MainActor.run(body: { LifeFolderAccess.lifeDirectory }) else {
+            return "error: no access to the ~/life folder — the user must open Life HQ in the sidebar and grant it once"
+        }
+        let databaseURL = lifeDirectory.appendingPathComponent("data/life.db")
+
         let chunks: [Chunk]
         do {
-            chunks = try loadChunks()
+            chunks = try loadChunks(at: databaseURL)
         } catch {
             return "error: knowledge base unavailable — \(error.localizedDescription)"
         }
@@ -100,7 +100,7 @@ enum LifeKnowledgeBase {
         }
     }
 
-    private static func loadChunks() throws -> [Chunk] {
+    private static func loadChunks(at databaseURL: URL) throws -> [Chunk] {
         var db: OpaquePointer?
         guard sqlite3_open_v2(databaseURL.path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else {
             sqlite3_close(db)
