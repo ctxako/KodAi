@@ -17,7 +17,7 @@ struct kodai_consumerApp: App {
     /// it and start fresh; as a last resort run with an ephemeral in-memory
     /// log rather than crashing at launch.
     private static func makeContainer() -> ModelContainer? {
-        let schema = Schema([ActionCard.self, SessionGroup.self])
+        let schema = Schema([ActionCard.self, SessionGroup.self, Toolflow.self])
         // cloudKitDatabase MUST be .none: the entitlements carry an iCloud
         // container (for Files-app documents), and ModelConfiguration's
         // .automatic default sees it and tries CloudKit mirroring — whose

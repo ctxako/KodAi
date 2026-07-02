@@ -87,17 +87,76 @@ struct kodai_macosTests {
         #expect(storedSessions.map(\.id) == [populatedSession.id])
     }
 
-    @Test func projectProposalUsesProjectConfirmationCopy() {
-        let proposal = PendingToolProposal(
-            id: UUID(),
-            kind: .createProject(CreateProjectProposal(title: "WGU")),
-            createdAt: Date(),
-            sourceTurnID: nil
-        )
+    @MainActor
+    @Test func workspaceExecutorCreatesProjectAfterApproval() async throws {
+        let broker = ConfirmBroker()
+        let executor = WorkspaceToolExecutor(broker: broker)
+        var createdTitle: String?
+        executor.performCreateProject = { title in
+            createdTitle = title
+            return .ok(tool: WorkspaceToolExecutor.createProjectToolID, result: ["title": title])
+        }
 
-        #expect(proposal.confirmationContent.heading == "Create project?")
-        #expect(proposal.confirmationContent.subject == "Create WGU project")
-        #expect(proposal.confirmationContent.buttonLabel == "Create Project")
+        let resultTask = Task { await executor.createProject(title: "WGU") }
+        var spins = 0
+        while broker.pending == nil && spins < 10_000 {
+            await Task.yield()
+            spins += 1
+        }
+
+        let pending = try #require(broker.pending)
+        #expect(pending.request.heading == "Create project?")
+        #expect(pending.request.subject == "WGU")
+        #expect(pending.request.confirmLabel == "Create Project")
+
+        broker.resolve(approved: true)
+        let result = await resultTask.value
+        #expect(result.status == .ok)
+        #expect(createdTitle == "WGU")
+    }
+
+    @MainActor
+    @Test func workspaceExecutorReportsCancellationWhenDeclined() async throws {
+        let broker = ConfirmBroker()
+        let executor = WorkspaceToolExecutor(broker: broker)
+        var performed = false
+        executor.performCreateTask = { title, priority, _ in
+            performed = true
+            return .ok(
+                tool: WorkspaceToolExecutor.createTaskToolID,
+                result: ["title": title, "priority": priority.rawValue]
+            )
+        }
+
+        let resultTask = Task {
+            await executor.createTask(title: "Read", priority: "high", dueDate: "")
+        }
+        var spins = 0
+        while broker.pending == nil && spins < 10_000 {
+            await Task.yield()
+            spins += 1
+        }
+
+        #expect(broker.pending?.request.heading == "Create task?")
+        broker.resolve(approved: false)
+
+        let result = await resultTask.value
+        #expect(result.status == .error)
+        #expect(result.fields["error"] == "cancelled_by_user")
+        #expect(performed == false)
+        #expect(broker.pending == nil)
+    }
+
+    @MainActor
+    @Test func workspaceExecutorFailsSafelyWithoutTurnBindings() async {
+        let broker = ConfirmBroker()
+        let executor = WorkspaceToolExecutor(broker: broker)
+
+        let result = await executor.createTask(title: "Read", priority: "medium", dueDate: "")
+
+        #expect(result.status == .error)
+        #expect(result.fields["error"] == "workspace unavailable")
+        #expect(broker.pending == nil)
     }
 
     @Test func juneThirteenthRemainsJuneThirteenthInCurrentCalendar() throws {
@@ -123,17 +182,15 @@ struct kodai_macosTests {
         let project = viewModel.createProject(title: "WGU", context: context)
         _ = viewModel.createNewChat(context: context, project: project)
 
-        viewModel.pendingToolProposal = PendingToolProposal(
-            id: UUID(),
-            kind: .createTask(CreateTaskProposal(
-                title: "Read",
-                priority: "medium",
-                dueDate: TaskDueDateSemantics.parse("2026-06-14")
-            )),
-            createdAt: Date(),
-            sourceTurnID: nil
+        let session = try #require(viewModel.selectedChat)
+        let createdTask = viewModel.createTask(
+            in: project,
+            title: "Read",
+            priority: .medium,
+            dueDate: TaskDueDateSemantics.parse("2026-06-14"),
+            context: context
         )
-        viewModel.confirmProposal(context: context, projects: [project])
+        viewModel.noteRecentCreatedTask(createdTask, sessionID: session.id)
 
         viewModel.inputText = "no, due June 13th!"
         viewModel.send(context: context, projects: [project])
@@ -147,9 +204,12 @@ struct kodai_macosTests {
         #expect(viewModel.lastAssistantMessage == "Updated task: Read (due Jun 13)")
     }
 
+    // The KodAi test host is CloudKit-entitled, so ModelConfiguration's default
+    // cloudKitDatabase (.automatic) tries to mirror these in-memory stores to
+    // CloudKit and container creation fails with loadIssueModelContainer.
     @MainActor
     private func makeContainer() throws -> ModelContainer {
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         return try ModelContainer(
             for: KodaiChatSession.self,
             KodaiChatMessage.self,
@@ -159,7 +219,7 @@ struct kodai_macosTests {
 
     @MainActor
     private func makeFullContainer() throws -> ModelContainer {
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         return try ModelContainer(
             for: KodaiProject.self,
             KodaiTask.self,

@@ -71,6 +71,8 @@ public enum InferenceEvent: @unchecked Sendable {
     case diagnostic(String)
     case token(String, generatedTokenCount: Int)
     case tokenDecision(TokenDecision)
+    /// A tool call's lifecycle progress while an agentic turn runs.
+    case toolActivity(ToolActivity)
     case completed(InferenceResult)
     case done(GenerationFinishReason)
     case cancelled

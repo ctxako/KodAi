@@ -114,15 +114,18 @@ struct KodaiAppShortcuts: AppShortcutsProvider {
             systemImageName: "bell.badge"
         )
 
-        // Clipboard
+        // Toolflows (replaces the clipboard slot — iOS caps App Shortcuts at
+        // 10 and running a saved flow by voice is worth more than a paste peek;
+        // ReadClipboardIntent is still available in the Shortcuts app).
         AppShortcut(
-            intent: ReadClipboardIntent(),
+            intent: RunToolflowIntent(),
             phrases: [
-                "Read clipboard with \(.applicationName)",
-                "What's on my clipboard in \(.applicationName)"
+                "Run a flow in \(.applicationName)",
+                "Run a toolflow with \(.applicationName)",
+                "Run \(\.$flow) in \(.applicationName)"
             ],
-            shortTitle: "Read Clipboard",
-            systemImageName: "doc.on.clipboard"
+            shortTitle: "Run Toolflow",
+            systemImageName: "bolt.fill"
         )
     }
 }

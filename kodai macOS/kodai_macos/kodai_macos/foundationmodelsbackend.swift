@@ -36,14 +36,10 @@ final class FoundationModelsBackend: KodaiInferenceBackend {
     private(set) var currentInstructions = ""
     private var streamTask: Task<Void, Never>?
 
-    let proposalCollector = ToolProposalCollector()
     private let kodaiTools: [any Tool]
 
-    init() {
-        kodaiTools = [
-            CreateTaskTool(collector: proposalCollector),
-            CreateProjectTool(collector: proposalCollector)
-        ]
+    init(tools: [any Tool] = []) {
+        kodaiTools = tools
     }
 
     // MARK: KodaiInferenceBackend

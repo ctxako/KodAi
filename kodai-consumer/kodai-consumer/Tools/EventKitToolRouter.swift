@@ -11,11 +11,6 @@ import Foundation
 import EventKit
 import KodaiKernel
 
-enum ConfirmDecision: Sendable {
-    case accept(AssistantToolCall)
-    case cancel
-}
-
 struct EventKitToolRouter: ToolRouter {
     let confirm: (AssistantToolCall) async -> ConfirmDecision
     var onActivity: ((String) -> Void)?

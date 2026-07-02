@@ -2,87 +2,168 @@
 //  kodai_consumer_widget.swift
 //  kodai-consumer-widget
 //
-//  Created by Charles Thomas Xavier Austin III on 6/25/26.
+//  Home Screen toolflow launcher. Tiles are the user's saved toolflows in
+//  their in-app order (small = top flow, medium = top three + "Ask kodAI").
+//  A tap deep-links into the app, which runs the flow's prompt through the
+//  normal agent pipeline — the widget itself never executes tools, so every
+//  confirmation gate stays intact.
 //
 
 import WidgetKit
 import SwiftUI
 
-struct Provider: AppIntentTimelineProvider {
-    func placeholder(in context: Context) -> SimpleEntry {
-        SimpleEntry(date: Date(), configuration: ConfigurationAppIntent())
-    }
-
-    func snapshot(for configuration: ConfigurationAppIntent, in context: Context) async -> SimpleEntry {
-        SimpleEntry(date: Date(), configuration: configuration)
-    }
-    
-    func timeline(for configuration: ConfigurationAppIntent, in context: Context) async -> Timeline<SimpleEntry> {
-        var entries: [SimpleEntry] = []
-
-        // Generate a timeline consisting of five entries an hour apart, starting from the current date.
-        let currentDate = Date()
-        for hourOffset in 0 ..< 5 {
-            let entryDate = Calendar.current.date(byAdding: .hour, value: hourOffset, to: currentDate)!
-            let entry = SimpleEntry(date: entryDate, configuration: configuration)
-            entries.append(entry)
-        }
-
-        return Timeline(entries: entries, policy: .atEnd)
-    }
-
-//    func relevances() async -> WidgetRelevances<ConfigurationAppIntent> {
-//        // Generate a list containing the contexts this widget is relevant in.
-//    }
-}
-
-struct SimpleEntry: TimelineEntry {
+struct ToolflowEntry: TimelineEntry {
     let date: Date
-    let configuration: ConfigurationAppIntent
+    let flows: [ToolflowSnapshot]
 }
 
-struct kodai_consumer_widgetEntryView : View {
-    var entry: Provider.Entry
+struct ToolflowProvider: TimelineProvider {
+    static let sampleFlows = [
+        ToolflowSnapshot(id: UUID(), name: "Morning Brief", icon: "sun.max.fill",
+                         prompt: "", sortOrder: 0),
+        ToolflowSnapshot(id: UUID(), name: "Clip to File", icon: "doc.on.clipboard.fill",
+                         prompt: "", sortOrder: 1),
+        ToolflowSnapshot(id: UUID(), name: "Check Reminders", icon: "checklist",
+                         prompt: "", sortOrder: 2),
+    ]
+
+    func placeholder(in context: Context) -> ToolflowEntry {
+        ToolflowEntry(date: .now, flows: Self.sampleFlows)
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (ToolflowEntry) -> Void) {
+        let flows = ToolflowSnapshotStore.load()
+        completion(ToolflowEntry(date: .now, flows: flows.isEmpty ? Self.sampleFlows : flows))
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<ToolflowEntry>) -> Void) {
+        // Content only changes when the app edits toolflows, and the app
+        // calls reloadTimelines(ofKind:) on every mutation — no schedule.
+        let entry = ToolflowEntry(date: .now, flows: ToolflowSnapshotStore.load())
+        completion(Timeline(entries: [entry], policy: .never))
+    }
+}
+
+// MARK: - Views
+
+private func toolflowURL(_ flow: ToolflowSnapshot) -> URL {
+    URL(string: "kodai://toolflow?id=\(flow.id.uuidString)") ?? newTaskURL
+}
+
+private let newTaskURL = URL(string: "kodai://new")!
+
+struct ToolflowWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    var entry: ToolflowEntry
 
     var body: some View {
-        VStack {
-            Text("Time:")
-            Text(entry.date, style: .time)
+        Group {
+            switch family {
+            case .systemMedium:
+                mediumGrid
+            default:
+                smallTile
+            }
+        }
+        .containerBackground(for: .widget) {
+            LinearGradient(
+                colors: [Color(red: 0.09, green: 0.11, blue: 0.14), .black],
+                startPoint: .top, endPoint: .bottom
+            )
+        }
+    }
 
-            Text("Favorite Emoji:")
-            Text(entry.configuration.favoriteEmoji)
+    // Small: the single top flow fills the widget.
+    @ViewBuilder
+    private var smallTile: some View {
+        if let flow = entry.flows.first {
+            Link(destination: toolflowURL(flow)) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Image(systemName: flow.icon)
+                        .font(.title2)
+                        .foregroundStyle(.teal)
+                    Spacer(minLength: 0)
+                    Text(flow.name)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                    Text("Tap to run")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+        } else {
+            emptyState
+        }
+    }
+
+    // Medium: 2×2 grid — top three flows plus a fixed "Ask kodAI" tile.
+    private var mediumGrid: some View {
+        let flows = Array(entry.flows.prefix(3))
+        return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+            ForEach(flows) { flow in
+                Link(destination: toolflowURL(flow)) {
+                    tile(icon: flow.icon, label: flow.name, tint: .teal)
+                }
+            }
+            Link(destination: newTaskURL) {
+                tile(icon: "pawprint.fill", label: "Ask kodAI", tint: .secondary)
+            }
+        }
+    }
+
+    private func tile(icon: String, label: String, tint: Color) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.callout)
+                .foregroundStyle(tint)
+                .frame(width: 22)
+            Text(label)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(.white)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, minHeight: 48)
+        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var emptyState: some View {
+        Link(destination: newTaskURL) {
+            VStack(spacing: 8) {
+                Image(systemName: "bolt.slash")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                Text("Save a toolflow in kodAI Settings")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
         }
     }
 }
 
-struct kodai_consumer_widget: Widget {
-    let kind: String = "kodai_consumer_widget"
+// MARK: - Widget
 
+struct KodaiToolflowWidget: Widget {
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: kind, intent: ConfigurationAppIntent.self, provider: Provider()) { entry in
-            kodai_consumer_widgetEntryView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
+        StaticConfiguration(
+            kind: "KodaiToolflows",
+            provider: ToolflowProvider()
+        ) { entry in
+            ToolflowWidgetView(entry: entry)
         }
+        .configurationDisplayName("Toolflows")
+        .description("Run your saved kodAI tasks with one tap.")
+        .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
 
-extension ConfigurationAppIntent {
-    fileprivate static var smiley: ConfigurationAppIntent {
-        let intent = ConfigurationAppIntent()
-        intent.favoriteEmoji = "😀"
-        return intent
-    }
-    
-    fileprivate static var starEyes: ConfigurationAppIntent {
-        let intent = ConfigurationAppIntent()
-        intent.favoriteEmoji = "🤩"
-        return intent
-    }
-}
-
-#Preview(as: .systemSmall) {
-    kodai_consumer_widget()
+#Preview(as: .systemMedium) {
+    KodaiToolflowWidget()
 } timeline: {
-    SimpleEntry(date: .now, configuration: .smiley)
-    SimpleEntry(date: .now, configuration: .starEyes)
+    ToolflowEntry(date: .now, flows: ToolflowProvider.sampleFlows)
 }

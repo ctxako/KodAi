@@ -179,6 +179,7 @@ final class IntentActionInbox {
     private init() {}
 
     private var pending: [AssistantToolCall] = []
+    private var pendingPrompts: [String] = []
 
     var onDeposit: (() -> Void)?
 
@@ -190,5 +191,17 @@ final class IntentActionInbox {
     func drain() -> [AssistantToolCall] {
         defer { pending.removeAll() }
         return pending
+    }
+
+    // Full agent prompts (toolflows) — run through the model loop rather than
+    // as a direct tool call, so they need the app open and the model loaded.
+    func depositPrompt(_ prompt: String) {
+        pendingPrompts.append(prompt)
+        onDeposit?()
+    }
+
+    func drainPrompts() -> [String] {
+        defer { pendingPrompts.removeAll() }
+        return pendingPrompts
     }
 }

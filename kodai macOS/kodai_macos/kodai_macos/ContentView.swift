@@ -84,7 +84,7 @@ struct ContentView: View {
             tasksDueCount: todaysTasks.count,
             selectedProjectName: activeProject?.title,
             memoryReady: viewModel.selectedChat != nil,
-            toolActionReady: viewModel.pendingToolProposal == nil && !viewModel.isSummarizing
+            toolActionReady: viewModel.confirmBroker.pending == nil && !viewModel.isSummarizing
         )
     }
 
@@ -189,17 +189,17 @@ struct ContentView: View {
                 .frame(maxWidth: mainChatLaneMaxWidth)
                 .frame(maxWidth: .infinity)
 
-            if let proposal = viewModel.pendingToolProposal {
-                ToolProposalConfirmationCard(
-                    proposal: proposal,
+            if let pending = viewModel.confirmBroker.pending {
+                ToolConfirmationCard(
+                    request: pending.request,
                     onConfirm: {
                         withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
-                            viewModel.confirmProposal(context: modelContext, projects: projects)
+                            viewModel.confirmBroker.resolve(approved: true)
                         }
                     },
                     onCancel: {
                         withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
-                            viewModel.cancelProposal(context: modelContext)
+                            viewModel.confirmBroker.resolve(approved: false)
                         }
                     }
                 )

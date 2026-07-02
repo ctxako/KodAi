@@ -29,6 +29,34 @@ struct SettingsView: View {
                     contextRow(label: "Timezone", value: timezone)
                 }
 
+                Section("Toolflows") {
+                    NavigationLink {
+                        ToolflowsView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "bolt.fill")
+                                .foregroundStyle(.yellow)
+                                .frame(width: 24)
+                            Text("Saved Toolflows")
+                        }
+                    }
+                    .accessibilityHint("One-tap tasks for the widget and Siri")
+                }
+
+                Section("Help") {
+                    NavigationLink {
+                        HowToView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "questionmark.circle")
+                                .foregroundStyle(.teal)
+                                .frame(width: 24)
+                            Text("How to Use kodai")
+                        }
+                    }
+                    .accessibilityHint("Tips and example prompts for the kodai agent")
+                }
+
                 Section("About") {
                     HStack {
                         Text("Version")

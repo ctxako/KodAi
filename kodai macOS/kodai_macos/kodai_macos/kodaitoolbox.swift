@@ -2,21 +2,22 @@
 //  kodaitoolbox.swift
 //  kodai_macos
 //
-//  Foundation Models tool definitions for Kodai.
-//  This file is plumbing-only: tools are wired into the session but do not
-//  mutate any app data. No SwiftData writes happen here.
+//  Foundation Models tool definitions for Kodai. Tools execute for real:
+//  a mutating call suspends on ConfirmBroker until the user approves the
+//  inline card, then WorkspaceToolExecutor performs the SwiftData write and
+//  the model receives the true outcome as a structured ToolResult, so it can
+//  continue the chain or report honestly.
 //
 
 import Foundation
 import FoundationModels
 import KodaiCore
 
-// MARK: - Task creation request
+// MARK: - Tool argument types
 
-/// Structured argument type for the CreateTaskTool.
 /// @Generable satisfies Tool.Arguments : ConvertibleFromGeneratedContent
 /// and provides the default parameters schema.
-@Generable(description: "A request to propose creating a new task")
+@Generable(description: "A request to create a new task")
 struct TaskCreationRequest {
     @Guide(description: "The title of the task, e.g. 'Finish design doc'")
     var title: String
@@ -28,63 +29,13 @@ struct TaskCreationRequest {
     var dueDate: String
 }
 
-@Generable(description: "A request to propose creating a new project")
+@Generable(description: "A request to create a new project")
 struct ProjectCreationRequest {
     @Guide(description: "The name of the project, e.g. 'WGU'")
     var title: String
 }
 
-// MARK: - Pending tool proposal
-
-struct PendingToolProposal: Identifiable, Equatable {
-    let id: UUID
-    let kind: PendingToolProposalKind
-    let createdAt: Date
-    let sourceTurnID: UUID?
-}
-
-enum PendingToolProposalKind: Equatable {
-    case createTask(CreateTaskProposal)
-    case createProject(CreateProjectProposal)
-}
-
-struct CreateTaskProposal: Equatable {
-    var title: String
-    var priority: String
-    var dueDate: Date?
-    var projectID: UUID?
-    var projectName: String?
-    var rationale: String?
-}
-
-struct CreateProjectProposal: Equatable {
-    var title: String
-}
-
-struct ToolProposalConfirmationContent: Equatable {
-    let heading: String
-    let subject: String
-    let buttonLabel: String
-}
-
-extension PendingToolProposal {
-    var confirmationContent: ToolProposalConfirmationContent {
-        switch kind {
-        case .createTask(let proposal):
-            return ToolProposalConfirmationContent(
-                heading: "Create task?",
-                subject: proposal.title,
-                buttonLabel: "Create Task"
-            )
-        case .createProject(let proposal):
-            return ToolProposalConfirmationContent(
-                heading: "Create project?",
-                subject: "Create \(proposal.title) project",
-                buttonLabel: "Create Project"
-            )
-        }
-    }
-}
+// MARK: - Due date semantics
 
 enum TaskDueDateSemantics {
     nonisolated static func normalized(_ date: Date, calendar: Calendar = .current) -> Date? {
@@ -158,83 +109,148 @@ enum TaskDueDateSemantics {
     }
 }
 
-// MARK: - Collector
+// MARK: - Workspace tool executor
 
+/// Runs workspace (SwiftData) tool calls behind the confirm gate. The actual
+/// write closures are bound by ChatViewModel at the start of each turn — they
+/// capture that turn's ModelContext and project list — and cleared after, so
+/// a tool can never write through a stale context.
 @MainActor
-final class ToolProposalCollector {
-    var pending: PendingToolProposal?
+final class WorkspaceToolExecutor {
+    static let createTaskToolID = "task_create"
+    static let createProjectToolID = "project_create"
 
-    func collect(_ proposal: PendingToolProposal) {
-        pending = proposal
+    let broker: ConfirmBroker
+
+    var onActivity: ((ToolActivity) -> Void)?
+    var performCreateTask: ((_ title: String, _ priority: TaskPriority, _ dueDate: Date?) -> ToolResult)?
+    var performCreateProject: ((_ title: String) -> ToolResult)?
+
+    init(broker: ConfirmBroker) {
+        self.broker = broker
     }
 
-    func take() -> PendingToolProposal? {
-        defer { pending = nil }
-        return pending
+    func clearTurnBindings() {
+        onActivity = nil
+        performCreateTask = nil
+        performCreateProject = nil
+    }
+
+    func createTask(title: String, priority: String, dueDate rawDueDate: String) async -> ToolResult {
+        let toolID = Self.createTaskToolID
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanTitle.isEmpty else {
+            return .failure(tool: toolID, error: "missing task title")
+        }
+        guard let perform = performCreateTask else {
+            return .failure(tool: toolID, error: "workspace unavailable")
+        }
+
+        let priorityValue = TaskPriority(rawValue: priority.lowercased()) ?? .medium
+        let cleanDue = rawDueDate.trimmingCharacters(in: .whitespaces)
+        let parsedDue = cleanDue.isEmpty ? nil : TaskDueDateSemantics.parse(cleanDue)
+
+        var details = [ToolConfirmationRequest.Detail(icon: "flag", text: priorityValue.rawValue)]
+        if let due = parsedDue {
+            details.append(ToolConfirmationRequest.Detail(icon: "calendar", text: Self.mediumDate(due)))
+        }
+
+        onActivity?(ToolActivity(tool: toolID, phase: .awaitingConfirmation, detail: cleanTitle))
+        let approved = await broker.request(ToolConfirmationRequest(
+            heading: "Create task?",
+            subject: cleanTitle,
+            details: details,
+            confirmLabel: "Create Task"
+        ))
+        guard approved else {
+            onActivity?(ToolActivity(tool: toolID, phase: .cancelled, detail: cleanTitle))
+            return .failure(tool: toolID, error: "cancelled_by_user")
+        }
+
+        onActivity?(ToolActivity(tool: toolID, phase: .executing, detail: cleanTitle))
+        let result = perform(cleanTitle, priorityValue, parsedDue)
+        onActivity?(ToolActivity(
+            tool: toolID,
+            phase: result.status == .ok ? .succeeded : .failed,
+            detail: cleanTitle
+        ))
+        return result
+    }
+
+    func createProject(title: String) async -> ToolResult {
+        let toolID = Self.createProjectToolID
+        let cleanTitle = String(title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60))
+        guard !cleanTitle.isEmpty else {
+            return .failure(tool: toolID, error: "missing project name")
+        }
+        guard let perform = performCreateProject else {
+            return .failure(tool: toolID, error: "workspace unavailable")
+        }
+
+        onActivity?(ToolActivity(tool: toolID, phase: .awaitingConfirmation, detail: cleanTitle))
+        let approved = await broker.request(ToolConfirmationRequest(
+            heading: "Create project?",
+            subject: cleanTitle,
+            details: [],
+            confirmLabel: "Create Project"
+        ))
+        guard approved else {
+            onActivity?(ToolActivity(tool: toolID, phase: .cancelled, detail: cleanTitle))
+            return .failure(tool: toolID, error: "cancelled_by_user")
+        }
+
+        onActivity?(ToolActivity(tool: toolID, phase: .executing, detail: cleanTitle))
+        let result = perform(cleanTitle)
+        onActivity?(ToolActivity(
+            tool: toolID,
+            phase: result.status == .ok ? .succeeded : .failed,
+            detail: cleanTitle
+        ))
+        return result
+    }
+
+    private static func mediumDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
     }
 }
 
-// MARK: - CreateTaskTool
+// MARK: - Foundation Models tools
 
-/// Proposes a new task to the user without writing to SwiftData.
-/// The model calls this when it detects task-creation intent.
-/// The user must confirm before any mutation occurs.
 struct CreateTaskTool: Tool {
     typealias Arguments = TaskCreationRequest
 
-    let collector: ToolProposalCollector
+    let executor: WorkspaceToolExecutor
+
+    var name: String { "createTask" }
 
     var description: String {
-        "Propose creating a new task. Returns a plain-text proposal — does not persist anything. The user confirms before it is created."
+        "Create a new task in the user's current project. The user approves it before it is saved. The returned JSON is the real outcome — report it truthfully."
     }
 
     func call(arguments: TaskCreationRequest) async throws -> String {
-        let trimmedTitle = arguments.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedDue = arguments.dueDate.trimmingCharacters(in: .whitespaces)
-        let parsedDate = trimmedDue.isEmpty ? nil : TaskDueDateSemantics.parse(trimmedDue)
-
-        let proposal = PendingToolProposal(
-            id: UUID(),
-            kind: .createTask(CreateTaskProposal(
-                title: trimmedTitle,
-                priority: arguments.priority,
-                dueDate: parsedDate
-            )),
-            createdAt: Date(),
-            sourceTurnID: nil
-        )
-        await collector.collect(proposal)
-
-        let dueLabel = parsedDate.map {
-            let f = DateFormatter()
-            f.dateStyle = .medium
-            f.timeStyle = .none
-            return f.string(from: $0)
-        } ?? "none"
-        return "Proposed task: \(trimmedTitle) (priority: \(arguments.priority), due: \(dueLabel)). Awaiting user confirmation."
+        await executor.createTask(
+            title: arguments.title,
+            priority: arguments.priority,
+            dueDate: arguments.dueDate
+        ).asContextJSON()
     }
 }
-
-// MARK: - CreateProjectTool
 
 struct CreateProjectTool: Tool {
     typealias Arguments = ProjectCreationRequest
 
-    let collector: ToolProposalCollector
+    let executor: WorkspaceToolExecutor
+
+    var name: String { "createProject" }
 
     var description: String {
-        "Propose creating a new project. Returns a plain-text proposal and waits for user confirmation before persisting it."
+        "Create a new project for the user. The user approves it before it is saved. The returned JSON is the real outcome — report it truthfully."
     }
 
     func call(arguments: ProjectCreationRequest) async throws -> String {
-        let trimmedTitle = arguments.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let proposal = PendingToolProposal(
-            id: UUID(),
-            kind: .createProject(CreateProjectProposal(title: trimmedTitle)),
-            createdAt: Date(),
-            sourceTurnID: nil
-        )
-        await collector.collect(proposal)
-        return "Proposed project: \(trimmedTitle). Awaiting user confirmation."
+        await executor.createProject(title: arguments.title).asContextJSON()
     }
 }

@@ -22,11 +22,9 @@ He prefers short, practical responses. Don't over-explain unless asked.
 Kodai is project- and task-aware. When project, task, or deadline context appears in the conversation, use it naturally.
 - If asked what to work on, prioritize overdue tasks first, then tasks due today, then upcoming project work.
 - Reference specific task titles and deadlines when they appear in context.
-- If the user describes something that sounds like a task they need to track, suggest they use `/task <title>` to create it.
-- You cannot create tasks, projects, or mark tasks complete directly. For those actions, direct the user:
-  - `/task <title>` — create a task in the current project
-  - `/project <name>` — create a new project
-  - `/done <task name>` — mark a task as complete
+- You can create tasks and projects with your tools (createTask, createProject). When the user asks you to track or plan work, call the tool — the user approves before anything is saved.
+- A tool's returned JSON is the real outcome. If it reports ok, confirm what was created; if it reports an error or cancellation, say so plainly and never claim the action happened.
+- You cannot mark tasks complete. For that, direct the user to `/done <task name>`.
 """
 
 @MainActor
@@ -46,10 +44,11 @@ final class ChatViewModel {
     }
     var estimatedContextPercent: Int = 0
     var turnRecords: [UUID: TurnRecord] = [:]
-    var pendingToolProposal: PendingToolProposal?
     var isSummarizing = false
 
-    private let backend = FoundationModelsBackend()
+    let confirmBroker: ConfirmBroker
+    private let workspaceExecutor: WorkspaceToolExecutor
+    private let backend: FoundationModelsBackend
     private let summaryEngine = SummaryEngine()
     let telemetryStore = TelemetryStore()
     let ledgerRecorder = LedgerRecorder()
@@ -66,6 +65,17 @@ final class ChatViewModel {
     private var activeLastTokenAt: Date?
     private var activePromptTokens: Int = 0
     private var recentCreatedTaskCorrectionTarget: (taskID: UUID, sessionID: UUID)?
+
+    init() {
+        let broker = ConfirmBroker()
+        let executor = WorkspaceToolExecutor(broker: broker)
+        confirmBroker = broker
+        workspaceExecutor = executor
+        backend = FoundationModelsBackend(tools: [
+            CreateTaskTool(executor: executor),
+            CreateProjectTool(executor: executor)
+        ])
+    }
 
     var lastAssistantMessage: String {
         messages.reversed().first { $0.role == .assistant }?.text ?? ""
@@ -160,7 +170,7 @@ final class ChatViewModel {
 
         discardTransientSelectedChat()
         cleanupEmptySessions(context: context)
-        pendingToolProposal = nil
+        confirmBroker.cancelPending()
         backend.reset()
 
         let session = KodaiChatSession(projectID: project?.id)
@@ -184,7 +194,7 @@ final class ChatViewModel {
 
         discardTransientSelectedChat(excluding: session.id)
         cleanupEmptySessions(context: context, excluding: session.id)
-        pendingToolProposal = nil
+        confirmBroker.cancelPending()
         selectedChat = session
         messages = messagesForSession(session)
         turnRecords = [:]
@@ -578,6 +588,9 @@ final class ChatViewModel {
     }
 
     func stopGeneration() {
+        // Decline any tool call suspended on a confirmation first, so its
+        // continuation resumes before the stream task is torn down.
+        confirmBroker.cancelPending()
         responseTask?.cancel()
         responseTask = nil
         backend.cancel()
@@ -612,7 +625,7 @@ final class ChatViewModel {
         let currentSession = ensureCurrentChat(context: context)
 
         metricsTask?.cancel()
-        pendingToolProposal = nil
+        confirmBroker.cancelPending()
 
         inputText = ""
         isLoading = true
@@ -655,6 +668,13 @@ final class ChatViewModel {
 
         startMetricsTicker(assistantID: assistantID, startedAt: startedAt)
 
+        bindWorkspaceExecutor(
+            context: context,
+            projects: projects,
+            assistantID: assistantID,
+            startedAt: startedAt
+        )
+
         telemetryStore.emit(.modelPrefillStarted, to: reqID)
 
         // Consume the inference stream.
@@ -664,9 +684,11 @@ final class ChatViewModel {
 
         for await event in backend.stream(prompt: cleanInput, instructions: assembledInstructions) {
             switch event {
-            case .phase(_), .warmup(_), .diagnostic(_), .done(_), .tokenDecision(_):
+            case .phase(_), .warmup(_), .diagnostic(_), .done(_), .tokenDecision(_), .toolActivity(_):
                 // .tokenDecision carries pre-sampling logit telemetry from the
                 // llama.cpp runtime; Foundation Models never emits it on macOS.
+                // Tool activity arrives via WorkspaceToolExecutor.onActivity,
+                // not through the event stream.
                 break
 
             case .token(let text, _):
@@ -704,6 +726,12 @@ final class ChatViewModel {
 
         metricsTask?.cancel()
         metricsTask = nil
+
+        // Release any tool call still suspended on a confirmation (e.g. the
+        // stream ended or was cancelled mid-confirm), then drop this turn's
+        // context bindings so nothing can write through a stale ModelContext.
+        confirmBroker.cancelPending()
+        workspaceExecutor.clearTurnBindings()
 
         if Task.isCancelled || wasCancelled {
             finishStoppedMessage(assistantID: assistantID, startedAt: startedAt)
@@ -760,15 +788,6 @@ final class ChatViewModel {
                     context: context
                 )
                 turnRecords[assistantID] = turn
-
-                if let proposal = backend.proposalCollector.take() {
-                    pendingToolProposal = proposal
-                    ledgerRecorder.recordActivity(
-                        kind: .toolProposal,
-                        summary: proposalSummary(proposal),
-                        context: context
-                    )
-                }
             }
         }
 
@@ -1266,88 +1285,90 @@ final class ChatViewModel {
         reply("Created task: \(title) (\(parts.joined(separator: ", ")))")
     }
 
-    // MARK: – Tool proposal confirmation
+    // MARK: – Workspace tool execution
 
-    func confirmProposal(context: ModelContext, projects: [KodaiProject]) {
-        guard let proposal = pendingToolProposal else { return }
+    /// Binds this turn's ModelContext and project list into the executor so
+    /// confirmed tool calls write through live state. Cleared when the turn's
+    /// stream finishes.
+    private func bindWorkspaceExecutor(
+        context: ModelContext,
+        projects: [KodaiProject],
+        assistantID: UUID,
+        startedAt: Date
+    ) {
+        workspaceExecutor.onActivity = { [weak self] activity in
+            guard let self else { return }
+            self.updateMessageMetrics(
+                assistantID: assistantID,
+                phase: Self.toolActivityLabel(activity),
+                startedAt: startedAt
+            )
+        }
 
-        switch proposal.kind {
-        case .createTask(let p):
-            let currentSession = ensureCurrentChat(context: context)
-            let project: KodaiProject? = {
-                if let id = p.projectID {
-                    return projects.first { $0.id == id }
-                }
-                return currentProject(in: projects)
-            }()
-
-            guard let project else {
-                let msg = "No active project — open a project chat or use /project to create one."
-                messages.append(ChatMessage(role: .assistant, text: msg))
-                saveStoredMessage(role: .assistant, content: msg, in: currentSession, context: context)
-                pendingToolProposal = nil
-                return
+        workspaceExecutor.performCreateTask = { [weak self] title, priority, dueDate in
+            guard let self else {
+                return .failure(tool: WorkspaceToolExecutor.createTaskToolID, error: "workspace unavailable")
             }
-
-            let priority = TaskPriority(rawValue: p.priority.lowercased()) ?? .medium
-            let task = createTask(
+            guard let project = self.currentProject(in: projects) else {
+                return .failure(
+                    tool: WorkspaceToolExecutor.createTaskToolID,
+                    error: "no active project — the user must open a project chat or create one first"
+                )
+            }
+            let session = self.ensureCurrentChat(context: context)
+            let task = self.createTask(
                 in: project,
-                title: p.title,
+                title: title,
                 priority: priority,
-                dueDate: p.dueDate,
+                dueDate: dueDate,
                 context: context
             )
-            recentCreatedTaskCorrectionTarget = (task.id, currentSession.id)
+            self.noteRecentCreatedTask(task, sessionID: session.id)
 
-            var parts: [String] = [priority.rawValue]
-            if let due = task.dueDate { parts.append("due \(shortDateString(due))") }
-            let msg = "Created task: \(p.title) (\(parts.joined(separator: ", ")))"
-            messages.append(ChatMessage(role: .assistant, text: msg))
-            saveStoredMessage(role: .assistant, content: msg, in: currentSession, context: context)
-        case .createProject(let p):
-            let currentSession = ensureCurrentChat(context: context)
-            let project = createProject(title: p.title, context: context)
-            ledgerRecorder.recordActivity(
+            var fields = [
+                "title": task.title,
+                "priority": priority.rawValue,
+                "project": project.title
+            ]
+            if let due = task.dueDate {
+                fields["due"] = self.shortDateString(due)
+            }
+            return .ok(tool: WorkspaceToolExecutor.createTaskToolID, result: fields)
+        }
+
+        workspaceExecutor.performCreateProject = { [weak self] title in
+            guard let self else {
+                return .failure(tool: WorkspaceToolExecutor.createProjectToolID, error: "workspace unavailable")
+            }
+            let project = self.createProject(title: title, context: context)
+            self.ledgerRecorder.recordActivity(
                 kind: .taskChange,
                 summary: "created project: \(project.title)",
                 context: context
             )
-            let msg = "Created project: \(project.title)"
-            messages.append(ChatMessage(role: .assistant, text: msg))
-            saveStoredMessage(role: .assistant, content: msg, in: currentSession, context: context)
+            return .ok(
+                tool: WorkspaceToolExecutor.createProjectToolID,
+                result: ["title": project.title]
+            )
         }
-
-        pendingToolProposal = nil
     }
 
-    func cancelProposal(context: ModelContext) {
-        guard let proposal = pendingToolProposal else { return }
-        ledgerRecorder.recordActivity(
-            kind: .toolProposal,
-            summary: "dismissed: \(proposalSummary(proposal))",
-            context: context
-        )
-        pendingToolProposal = nil
-        let currentSession = ensureCurrentChat(context: context)
-        let msg: String
-        switch proposal.kind {
-        case .createTask:
-            msg = "Canceled task creation."
-        case .createProject:
-            msg = "Canceled project creation."
-        }
-        messages.append(ChatMessage(role: .assistant, text: msg))
-        saveStoredMessage(role: .assistant, content: msg, in: currentSession, context: context)
+    /// Marks a just-created task as the target for a follow-up due-date
+    /// correction ("no, due June 13th!") in the same chat session.
+    func noteRecentCreatedTask(_ task: KodaiTask, sessionID: UUID) {
+        recentCreatedTaskCorrectionTarget = (task.id, sessionID)
     }
 
-    private func proposalSummary(_ proposal: PendingToolProposal) -> String {
-        switch proposal.kind {
-        case .createTask(let p):
-            var parts = ["proposed task: \(p.title)"]
-            if let name = p.projectName { parts.append("project: \(name)") }
-            return parts.joined(separator: ", ")
-        case .createProject(let p):
-            return "proposed project: \(p.title)"
+    private static func toolActivityLabel(_ activity: ToolActivity) -> String {
+        switch activity.phase {
+        case .started, .executing:
+            return "Working"
+        case .awaitingConfirmation:
+            return "Waiting for approval"
+        case .succeeded:
+            return "Generating"
+        case .failed, .cancelled:
+            return "Generating"
         }
     }
 

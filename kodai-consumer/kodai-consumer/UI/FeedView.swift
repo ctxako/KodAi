@@ -50,8 +50,14 @@ struct FeedView: View {
                                     .foregroundStyle(.secondary)
                             }
                             .padding()
-                            .id("bottom")
                         }
+
+                        // Persistent anchor: the running indicator disappears
+                        // with its id when a turn ends, which left the final
+                        // card scroll with nothing to target.
+                        Color.clear
+                            .frame(height: 1)
+                            .id("bottom")
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
@@ -89,6 +95,22 @@ struct FeedView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                if !cards.isEmpty {
+                    Button {
+                        HapticFeedback.cancel()
+                        withAnimation(.smooth(duration: 0.3)) {
+                            controller.clearFeed()
+                        }
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                            .foregroundStyle(.secondary)
+                    }
+                    .disabled(controller.isResolving)
+                    .accessibilityLabel("New session")
+                    .accessibilityHint("Moves the current feed to the archive")
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showSettings = true } label: {
                     Image(systemName: "gearshape")
@@ -121,12 +143,24 @@ struct FeedView: View {
             }
         }
         .onOpenURL { url in
-            guard url.scheme == "kodai",
-                  url.host == "task",
-                  let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            guard url.scheme == "kodai" else { return }
+            switch url.host {
+            case "task":
+                guard let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?
                     .queryItems?.first(where: { $0.name == "q" })?.value
-            else { return }
-            controller.handleDeepLink(query: query)
+                else { return }
+                controller.handleDeepLink(query: query)
+            case "toolflow":
+                // Widget tile tap — resolve the saved flow and run its prompt.
+                guard let idString = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                        .queryItems?.first(where: { $0.name == "id" })?.value,
+                      let id = UUID(uuidString: idString),
+                      let flow = ToolflowStore(context: modelContext).flow(id: id)
+                else { return }
+                controller.handleDeepLink(query: flow.prompt)
+            default:
+                break // kodai://new just opens the app to the input bar
+            }
         }
         .task {
             if controller.store == nil {
@@ -134,6 +168,7 @@ struct FeedView: View {
                 controller.store = store
                 store.pruneOldSessions()
             }
+            ToolflowStore(context: modelContext).seedIfEmpty()
             controller.prewarm()
         }
         .onAppear {

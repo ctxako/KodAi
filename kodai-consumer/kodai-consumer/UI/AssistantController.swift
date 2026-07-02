@@ -81,6 +81,16 @@ final class AssistantController {
         }
     }
 
+    /// User tapped "clear" — archive everything in the feed and drop the
+    /// active session so the next prompt starts a fresh one.
+    @MainActor
+    func clearFeed() {
+        guard !isRunning else { return }
+        store?.archiveFeed()
+        activeSessionID = nil
+        dismissOutcome()
+    }
+
     func handleDeepLink(query: String) {
         input = query
         start()
@@ -259,6 +269,13 @@ final class AssistantController {
     @MainActor
     func drainPendingIntentActions() {
         guard !isRunning else { return }
+        // A deposited toolflow prompt wins over direct calls — it's a full
+        // agent run; only the most recent one matters if several queued up.
+        let prompts = IntentActionInbox.shared.drainPrompts()
+        if let prompt = prompts.last {
+            handleDeepLink(query: prompt)
+            return
+        }
         let calls = IntentActionInbox.shared.drain()
         guard !calls.isEmpty else { return }
         Task { @MainActor in

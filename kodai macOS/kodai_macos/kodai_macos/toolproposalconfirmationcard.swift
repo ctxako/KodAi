@@ -2,44 +2,38 @@
 //  toolproposalconfirmationcard.swift
 //  kodai_macos
 //
+//  Inline confirmation card for a tool call suspended on ConfirmBroker.
+//  Approving or canceling resumes the tool with the decision.
+//
 
 import SwiftUI
 
-struct ToolProposalConfirmationCard: View {
+struct ToolConfirmationCard: View {
     @Environment(\.kodaiTheme) private var theme
 
-    let proposal: PendingToolProposal
+    let request: ToolConfirmationRequest
     let onConfirm: () -> Void
     let onCancel: () -> Void
 
     var body: some View {
-        let content = proposal.confirmationContent
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.circle.badge.questionmark")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(theme.primaryAccent.opacity(0.9))
-                Text(content.heading)
+                Text(request.heading)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.primary)
             }
 
-            Text(content.subject)
+            Text(request.subject)
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.primary)
 
-            if case .createTask(let task) = proposal.kind {
-                if task.dueDate != nil || task.projectName != nil || task.rationale != nil {
-                    VStack(alignment: .leading, spacing: 4) {
-                        if let due = task.dueDate {
-                            detailRow("calendar", formatDate(due))
-                        }
-                        if let project = task.projectName {
-                            detailRow("folder", project)
-                        }
-                        if let rationale = task.rationale, !rationale.isEmpty {
-                            detailRow("text.quote", rationale)
-                        }
+            if !request.details.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(request.details, id: \.text) { detail in
+                        detailRow(detail.icon, detail.text)
                     }
                 }
             }
@@ -60,7 +54,7 @@ struct ToolProposalConfirmationCard: View {
                 }
 
                 Button(action: onConfirm) {
-                    Text(content.buttonLabel)
+                    Text(request.confirmLabel)
                         .font(.system(size: 12, weight: .semibold))
                         .frame(maxWidth: .infinity)
                 }
@@ -90,12 +84,5 @@ struct ToolProposalConfirmationCard: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
         }
-    }
-
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-        return formatter.string(from: date)
     }
 }

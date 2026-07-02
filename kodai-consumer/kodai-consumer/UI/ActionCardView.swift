@@ -18,7 +18,9 @@ struct ActionCardView: View {
                 Text(card.summary)
                     .font(.callout)
                     .foregroundStyle(.primary)
-                    .lineLimit(isExpanded ? nil : 1)
+                    // Failure summaries carry the actionable explanation —
+                    // never truncate them down to a bare error-code fragment.
+                    .lineLimit(isExpanded ? nil : (isFailure ? 4 : 1))
 
                 Spacer(minLength: 4)
 
@@ -76,6 +78,10 @@ struct ActionCardView: View {
         .accessibilityLabel("\(card.summary), \(chipLabel), \(card.domain)")
         .accessibilityHint(card.details.isEmpty ? "" : (isExpanded ? "Double tap to hide details" : "Double tap to show details"))
         .accessibilityAddTraits(card.details.isEmpty ? [] : .isButton)
+    }
+
+    private var isFailure: Bool {
+        card.status == "failed" || card.status == "cancelled"
     }
 
     private var isPermissionFailure: Bool {

@@ -25,7 +25,9 @@ struct AssistantView: View {
         .toolbarBackgroundVisibility(.visible, for: .tabBar)
         .preferredColorScheme(.dark)
         .onOpenURL { url in
-            guard url.scheme == "kodai", url.host == "task" else { return }
+            guard url.scheme == "kodai",
+                  ["task", "toolflow", "new"].contains(url.host)
+            else { return }
             selectedTab = .feed
         }
     }

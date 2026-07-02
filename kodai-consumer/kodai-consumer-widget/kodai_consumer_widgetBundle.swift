@@ -11,7 +11,7 @@ import SwiftUI
 @main
 struct kodai_consumer_widgetBundle: WidgetBundle {
     var body: some Widget {
-        kodai_consumer_widget()
+        KodaiToolflowWidget()
         kodai_consumer_widgetControl()
         kodai_consumer_widgetLiveActivity()
     }

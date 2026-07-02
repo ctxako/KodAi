@@ -138,6 +138,23 @@ final class ActionStore {
         try? context.save()
     }
 
+    /// User-initiated "clear" — archives every card still in the feed and
+    /// closes any session left open, so the feed starts fresh.
+    func archiveFeed() {
+        let cardDescriptor = FetchDescriptor<ActionCard>(
+            predicate: #Predicate { !$0.isArchived }
+        )
+        guard let cards = try? context.fetch(cardDescriptor), !cards.isEmpty else { return }
+        for card in cards { card.isArchived = true }
+        let sessionDescriptor = FetchDescriptor<SessionGroup>(
+            predicate: #Predicate { $0.endedAt == nil }
+        )
+        if let open = try? context.fetch(sessionDescriptor) {
+            for session in open { session.endedAt = Date() }
+        }
+        try? context.save()
+    }
+
     // MARK: - Maintenance
 
     func pruneOldSessions(keepLast: Int = 200) {

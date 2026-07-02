@@ -44,11 +44,8 @@ protocol AgentModel {
     func complete(systemPrompt: String, messages: [AgentMessage]) async throws -> String
 }
 
-/// Executes a validated call (confirming writes in the real implementation)
-/// and returns a structured result.
-protocol ToolRouter {
-    func execute(_ call: AssistantToolCall) async -> ToolResult
-}
+// ToolRouter, ToolResult, and ConfirmDecision live in KodaiKernel
+// (Assistant/ToolExecution.swift) so the macOS agent shares them.
 
 enum AgentOutcome: Equatable, Sendable {
     /// Model terminated with a `respond` call — the normal primed terminal.

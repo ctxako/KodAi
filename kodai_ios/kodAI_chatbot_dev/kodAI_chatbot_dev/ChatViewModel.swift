@@ -338,9 +338,10 @@ final class ChatViewModel {
                         cancelScheduledFlush()
                         updateActiveSession()
                         saveSessions()
-                    case .completed, .error:
+                    case .completed, .error, .toolActivity:
                         // Emitted only by the macOS FoundationModels backend; the iOS
-                        // llama runtime signals end-of-turn via .done/.cancelled.
+                        // llama runtime signals end-of-turn via .done/.cancelled and
+                        // does not stream tool activity.
                         break
                     }
                 }
@@ -1520,7 +1521,7 @@ final class ChatViewModel {
             case .token(let chunk, let generatedTokenCount):
                 summary += chunk
                 self.generatedTokenCount = generatedTokenCount
-            case .done, .cancelled, .completed, .error:
+            case .done, .cancelled, .completed, .error, .toolActivity:
                 break
             }
         }

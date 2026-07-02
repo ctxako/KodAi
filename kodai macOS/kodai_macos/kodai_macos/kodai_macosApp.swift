@@ -31,6 +31,22 @@ struct kodai_macosApp: App {
             ToolCall.self
         ])
 
+        // Unit tests run inside this app as their test host. Opening the real
+        // stores here would run staged migration against the user's data on
+        // every test run (and quarantine it when migration fails), and the
+        // CloudKit workspace configuration taints the process-wide entity
+        // metadata so the tests' own in-memory containers crash on save.
+        // Give the test host a throwaway in-memory container instead.
+        let environment = ProcessInfo.processInfo.environment
+        if environment["XCTestConfigurationFilePath"] != nil || environment["XCTestSessionIdentifier"] != nil {
+            do {
+                let configuration = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+                return try ModelContainer(for: fullSchema, configurations: [configuration])
+            } catch {
+                fatalError("Failed to create unit-test model container: \(error)")
+            }
+        }
+
         // ModelConfiguration has internal state that gets bound when added to a container.
         // Always create fresh instances — never share one config across two containers.
         func makeLocalConfig() -> ModelConfiguration {
