@@ -14,7 +14,7 @@ import KodaiCore
 @main
 struct kodai_macosApp: App {
     private let container: ModelContainer = {
-        let localSchema = Schema(versionedSchema: KodaiLocalStoreSchemaV4.self)
+        let localSchema = Schema(versionedSchema: KodaiLocalStoreSchemaV5.self)
 
         // The full schema is the union of workspace and local models.
         // SwiftData routes each type to the appropriate store via the configurations below.
@@ -28,7 +28,9 @@ struct kodai_macosApp: App {
             TurnRecord.self,
             ActivityEvent.self,
             ModelPerformanceMetric.self,
-            ToolCall.self
+            ToolCall.self,
+            KodaiCommitment.self,
+            BriefingRecord.self
         ])
 
         // Unit tests run inside this app as their test host. Opening the real
@@ -125,12 +127,21 @@ struct kodai_macosApp: App {
         }
     }()
 
+    @AppStorage(AccountabilitySettings.rhythmEnabledKey)
+    private var rhythmEnabled = false
+
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "main") {
             ContentView()
                 .background(.clear)
         }
         .windowStyle(.hiddenTitleBar)
         .modelContainer(container)
+
+        MenuBarExtra("Kodai", systemImage: "circle.hexagongrid.fill", isInserted: $rhythmEnabled) {
+            MenuBarGlanceView()
+                .modelContainer(container)
+        }
+        .menuBarExtraStyle(.window)
     }
 }

@@ -55,5 +55,6 @@ projects, tasks) plus the ledger models. The workspace container is local-only
 tool-execution vocabulary (`ToolResult`, `ConfirmDecision`, `ToolRouter`,
 `ToolActivity`) used by both this app and the iOS/consumer agents.
 
-See `AGENTIC_PLAN.md` at the repo root for the phased roadmap and
-`docs/design-doctrine.md` for the visual/UX doctrine.
+See `AGENTIC_PLAN.md` at the repo root for the tool-execution roadmap,
+`docs/jarvis-plan.md` for the Jarvis arc (accountability + ambient layer +
+hybrid brain), and `docs/design-doctrine.md` for the visual/UX doctrine.

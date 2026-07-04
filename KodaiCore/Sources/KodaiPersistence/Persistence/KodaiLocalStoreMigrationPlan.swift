@@ -108,7 +108,8 @@ public enum KodaiLocalStoreMigrationPlan: SchemaMigrationPlan {
             KodaiLocalStoreSchemaV1.self,
             KodaiLocalStoreSchemaV2.self,
             KodaiLocalStoreSchemaV3.self,
-            KodaiLocalStoreSchemaV4.self
+            KodaiLocalStoreSchemaV4.self,
+            KodaiLocalStoreSchemaV5.self
         ]
     }
 
@@ -145,6 +146,11 @@ public enum KodaiLocalStoreMigrationPlan: SchemaMigrationPlan {
             .lightweight(
                 fromVersion: KodaiLocalStoreSchemaV3.self,
                 toVersion: KodaiLocalStoreSchemaV4.self
+            ),
+            // V5 adds KodaiCommitment and BriefingRecord — additive only.
+            .lightweight(
+                fromVersion: KodaiLocalStoreSchemaV4.self,
+                toVersion: KodaiLocalStoreSchemaV5.self
             )
         ]
     }

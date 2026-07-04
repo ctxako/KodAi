@@ -52,6 +52,27 @@ public enum ActivityKind: String, Codable, CaseIterable, Sendable {
     case fetch = "fetch"
     case error = "error"
     case toolProposal = "toolProposal"
+    case briefingDelivered = "briefingDelivered"
+    case nudgeSent = "nudgeSent"
+    case commitmentChange = "commitmentChange"
+}
+
+public enum CommitmentStatus: String, Codable, CaseIterable, Sendable {
+    case open = "open"
+    case kept = "kept"
+    case slipped = "slipped"
+    case dropped = "dropped"
+}
+
+public enum CommitmentSource: String, Codable, CaseIterable, Sendable {
+    case chat = "chat"
+    case journal = "journal"
+    case manual = "manual"
+}
+
+public enum BriefingKind: String, Codable, CaseIterable, Sendable {
+    case morning = "morning"
+    case evening = "evening"
 }
 
 public enum ToolOutcome: String, Codable, CaseIterable, Sendable {

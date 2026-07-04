@@ -7,7 +7,7 @@ import SwiftUI
 import FoundationModels
 
 private enum SettingsTab: Hashable {
-    case general, diagnostics
+    case general, rhythm, diagnostics
 }
 
 struct KodaiSettingsView: View {
@@ -25,6 +25,7 @@ struct KodaiSettingsView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 4) {
                 settingsTabPill("General", tab: .general)
+                settingsTabPill("Rhythm", tab: .rhythm)
                 settingsTabPill("Diagnostics", tab: .diagnostics)
             }
             .padding(.horizontal, 16)
@@ -33,9 +34,12 @@ struct KodaiSettingsView: View {
 
             Divider().opacity(0.15)
 
-            if selectedTab == .general {
+            switch selectedTab {
+            case .general:
                 generalContent
-            } else {
+            case .rhythm:
+                RhythmSettingsTabView()
+            case .diagnostics:
                 DiagnosticsTabView(telemetryStore: telemetryStore)
             }
 

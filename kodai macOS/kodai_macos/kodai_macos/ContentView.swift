@@ -16,6 +16,7 @@ struct ContentView: View {
         case stream
         case studio
         case lifeHQ
+        case briefing
     }
 
     @Environment(\.modelContext) private var modelContext
@@ -43,6 +44,11 @@ struct ContentView: View {
     @State private var studioViewModel = StudioViewModel()
     @State private var sidebarOpen = true
     @State private var mainContentRoute: MainContentRoute = .chat
+    @State private var briefingEngine = BriefingEngine(
+        headlineComposer: BriefingEngine.foundationModelsHeadlineComposer()
+    )
+    @State private var briefingKind: BriefingKind = .morning
+    private let rhythmScheduler = RhythmScheduler.shared
 
     @FocusState private var composerFocused: Bool
 
@@ -126,6 +132,16 @@ struct ContentView: View {
                             }
                         }
                     )
+                case .briefing:
+                    BriefingView(
+                        engine: briefingEngine,
+                        onClose: {
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                mainContentRoute = .chat
+                            }
+                        },
+                        kind: $briefingKind
+                    )
                 }
             }
             .padding(.leading, contentLeadingPadding)
@@ -145,6 +161,15 @@ struct ContentView: View {
                 viewModel.createNewChat(context: modelContext)
             }
             viewModel.refreshContextEstimate()
+            rhythmScheduler.activate()
+        }
+        .onChange(of: rhythmScheduler.pendingBriefingKind) {
+            guard let kind = rhythmScheduler.pendingBriefingKind else { return }
+            briefingKind = kind
+            withAnimation(.easeInOut(duration: 0.18)) {
+                mainContentRoute = .briefing
+            }
+            rhythmScheduler.pendingBriefingKind = nil
         }
         .onChange(of: allChatSessions.map { $0.id }) {
             if viewModel.selectedChat == nil, let newest = allChatSessions.first {
@@ -318,6 +343,12 @@ struct ContentView: View {
             onOpenLifeHQ: {
                 withAnimation(.easeInOut(duration: 0.18)) {
                     mainContentRoute = .lifeHQ
+                }
+            },
+            onOpenBriefing: {
+                briefingKind = rhythmScheduler.naturalKind()
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    mainContentRoute = .briefing
                 }
             },
             onNewSession: { project in
