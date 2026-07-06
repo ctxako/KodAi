@@ -84,36 +84,37 @@ struct kodai_macosApp: App {
                 migrationPlan: KodaiLocalStoreMigrationPlan.self,
                 configurations: [makeLocalConfig()]
             )
+        } catch {
+            // EXPECTED on healthy stores: the final container stamps
+            // default.store with an unversioned union-schema checksum the
+            // migration plan does not recognize (134504 "unknown model
+            // version"). The final container is the arbiter of store health —
+            // a Stage-1 failure alone must never quarantine anything.
+            print("[PersistenceCheck] Staged migration skipped (final container decides): \(error)")
+        }
 
+        do {
             // Stage 2: final container with fresh config instances.
             return try makeFinalContainer()
         } catch {
-#if DEBUG
-            // Recovery: quarantine corrupt store files into a timestamped folder
-            // so a fresh container can be created without data loss going unnoticed.
-            // Production fatalErrors to avoid silently discarding user data.
-            print("[PersistenceCheck] Container creation failed: \(error)")
+            // Only a final-container failure counts as corruption. Quarantine
+            // the broken files (never delete), then prefer restoring the
+            // newest quarantined snapshot that still has chat rows over
+            // booting on empty stores.
+            print("[PersistenceCheck] Final container failed: \(error)")
 
-            let fm = FileManager.default
-            let timestamp = ISO8601DateFormatter().string(from: Date())
-                .replacingOccurrences(of: ":", with: "-")
-            let storeURLs = [makeLocalConfig().url, WorkspaceModelContainer.makeConfiguration().url]
-            let suffixes = ["", "-wal", "-shm"]
+            let localURL = makeLocalConfig().url
+            let workspaceURL = WorkspaceModelContainer.makeConfiguration().url
+            PersistenceRecovery.quarantine(storeURLs: [localURL, workspaceURL])
 
-            if let baseDir = storeURLs.first.map({ $0.deletingLastPathComponent() }) {
-                let corruptDir = baseDir.appendingPathComponent(
-                    "CorruptStores/\(timestamp)", isDirectory: true
-                )
-                try? fm.createDirectory(at: corruptDir, withIntermediateDirectories: true)
-                for storeURL in storeURLs {
-                    for suffix in suffixes {
-                        let src = URL(fileURLWithPath: storeURL.path + suffix)
-                        guard fm.fileExists(atPath: src.path) else { continue }
-                        let dst = corruptDir.appendingPathComponent(src.lastPathComponent)
-                        try? fm.moveItem(at: src, to: dst)
-                        print("[PersistenceCheck] Quarantined \(src.lastPathComponent) → CorruptStores/\(timestamp)/")
-                    }
+            if let snapshot = PersistenceRecovery.newestSnapshotWithChats(near: localURL),
+               PersistenceRecovery.restoreSnapshot(snapshot, to: localURL) {
+                if let restored = try? makeFinalContainer() {
+                    return restored
                 }
+                // The restored snapshot fails too — re-quarantine it and fall
+                // through to fresh stores.
+                PersistenceRecovery.quarantine(storeURLs: [localURL])
             }
 
             do {
@@ -121,9 +122,6 @@ struct kodai_macosApp: App {
             } catch let recoveryError {
                 fatalError("Model container creation failed even after quarantine recovery: \(recoveryError)")
             }
-#else
-            fatalError("Failed to create model container: \(error)")
-#endif
         }
     }()
 
