@@ -125,9 +125,6 @@ struct kodai_macosApp: App {
         }
     }()
 
-    @AppStorage(AccountabilitySettings.rhythmEnabledKey)
-    private var rhythmEnabled = false
-
     var body: some Scene {
         WindowGroup(id: "main") {
             ContentView()
@@ -136,7 +133,12 @@ struct kodai_macosApp: App {
         .windowStyle(.hiddenTitleBar)
         .modelContainer(container)
 
-        MenuBarExtra("Kodai", systemImage: "circle.hexagongrid.fill", isInserted: $rhythmEnabled) {
+        // Always inserted, on purpose. Binding isInserted (to the rhythm
+        // toggle) sends SwiftUI on macOS 26.4 into an infinite main-menu
+        // invalidation loop — 100% CPU, unbounded memory, beachball — even
+        // while the extra is NOT inserted. Do not add isInserted back
+        // without sampling the main thread on a clean launch.
+        MenuBarExtra("Kodai", systemImage: "circle.hexagongrid.fill") {
             MenuBarGlanceView()
                 .modelContainer(container)
         }
