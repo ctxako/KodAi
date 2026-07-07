@@ -23,6 +23,7 @@ Kodai is project- and task-aware. When project, task, or deadline context appear
 - If asked what to work on, prioritize overdue tasks first, then tasks due today, then upcoming project work.
 - Reference specific task titles and deadlines when they appear in context.
 - You can create tasks and projects with your tools (createTask, createProject). When the user asks you to track or plan work, call the tool — the user approves before anything is saved.
+- You can work with files in folders the user granted: file_glob and file_grep to find, file_read to read, file_write and file_edit to change (the user approves every write). Chain them: find → read → edit. Never guess file contents — read first.
 - A tool's returned JSON is the real outcome. If it reports ok, confirm what was created; if it reports an error or cancellation, say so plainly and never claim the action happened.
 - You cannot mark tasks complete. For that, direct the user to `/done <task name>`.
 """
@@ -38,7 +39,7 @@ final class ChatViewModel {
     var selectedMode: OutputMode = .chat {
         didSet {
             if selectedMode != oldValue {
-                backend.configure(instructions: buildInstructions(), chatID: selectedChat?.id)
+                configureEngines(instructions: buildInstructions(), chatID: selectedChat?.id)
             }
         }
     }
@@ -46,9 +47,38 @@ final class ChatViewModel {
     var turnRecords: [UUID: TurnRecord] = [:]
     var isSummarizing = false
 
+    /// Which brain answers the next turn. Persisted; the status pill and
+    /// per-turn badges always reflect what actually ran.
+    var selectedEngine: ChatEngine = ChatEngine(
+        rawValue: UserDefaults.standard.string(forKey: ChatEngine.storageKey) ?? ""
+    ) ?? .appleFM {
+        didSet {
+            guard selectedEngine != oldValue else { return }
+            UserDefaults.standard.set(selectedEngine.rawValue, forKey: ChatEngine.storageKey)
+            if selectedEngine == .ollama {
+                ollamaBackend.configure(instructions: buildInstructions(), chatID: selectedChat?.id)
+                engineHealth.startPolling { [weak self] in self?.ollamaBackend.model ?? "" }
+            } else {
+                engineHealth.stopPolling()
+            }
+        }
+    }
+    var fmAvailable = false
+
+    /// Ollama model selection, bound by the engine pill.
+    var ollamaModel: String {
+        get { ollamaBackend.model }
+        set { ollamaBackend.model = newValue }
+    }
+    var lastOllamaStats: OllamaTurnStats? { ollamaBackend.lastStats }
+
     let confirmBroker: ConfirmBroker
+    let folderGrants: FolderGrantStore
+    let engineHealth = EngineHealthMonitor()
     private let workspaceExecutor: WorkspaceToolExecutor
+    private let fileExecutor: FileToolExecutor
     private let backend: FoundationModelsBackend
+    private let ollamaBackend = OllamaBackend()
     private let summaryEngine = SummaryEngine()
     let telemetryStore = TelemetryStore()
     let ledgerRecorder = LedgerRecorder()
@@ -60,6 +90,9 @@ final class ChatViewModel {
     private var metricsTask: Task<Void, Never>?
 
     private var activeAssistantID: UUID?
+    private var activeEngineLabel: String?
+    private var activeBackendName = "FoundationModels"
+    private var activeModelName = "SystemLanguageModel.default"
     private var activeStartedAt: Date?
     private var activeFirstTokenAt: Date?
     private var activeLastTokenAt: Date?
@@ -69,13 +102,30 @@ final class ChatViewModel {
     init() {
         let broker = ConfirmBroker()
         let executor = WorkspaceToolExecutor(broker: broker)
+        let grants = FolderGrantStore()
+        let files = FileToolExecutor(grants: grants, broker: broker)
         confirmBroker = broker
         workspaceExecutor = executor
+        folderGrants = grants
+        fileExecutor = files
         backend = FoundationModelsBackend(tools: [
             CreateTaskTool(executor: executor),
             CreateProjectTool(executor: executor),
-            SearchKnowledgeBaseTool()
+            SearchKnowledgeBaseTool(),
+            ReadFileTool(executor: files),
+            GlobFilesTool(executor: files),
+            GrepFilesTool(executor: files),
+            WriteFileTool(executor: files),
+            EditFileTool(executor: files)
         ])
+
+        if selectedEngine == .ollama {
+            engineHealth.startPolling { [weak self] in self?.ollamaBackend.model ?? "" }
+        }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.fmAvailable = await self.backend.isAvailable
+        }
     }
 
     var lastAssistantMessage: String {
@@ -87,7 +137,7 @@ final class ChatViewModel {
     }
 
     var chatTelemetry: ChatTelemetry {
-        let activeTokens = Int(Double(estimatedContextPercent) / 100.0 * Double(FoundationModelsBackend.contextWindowTokenLimit))
+        let activeTokens = Int(Double(estimatedContextPercent) / 100.0 * Double(contextWindowTokens))
         let summaryAge = max(0, messages.count - 1)
 
         let allMetrics = messages.compactMap { $0.metrics }
@@ -114,7 +164,7 @@ final class ChatViewModel {
         return ChatTelemetry(
             contextPercent: estimatedContextPercent,
             activeTokens: activeTokens,
-            contextWindowSize: FoundationModelsBackend.contextWindowTokenLimit,
+            contextWindowSize: contextWindowTokens,
             messageCount: messages.count,
             summaryAge: summaryAge,
             failureCount: allMetrics.filter { $0.phase == "No response" }.count,
@@ -172,7 +222,7 @@ final class ChatViewModel {
         discardTransientSelectedChat()
         cleanupEmptySessions(context: context)
         confirmBroker.cancelPending()
-        backend.reset()
+        resetEngines()
 
         let session = KodaiChatSession(projectID: project?.id)
         selectedChat = session
@@ -182,7 +232,7 @@ final class ChatViewModel {
 
         inputText = ""
         selectedMode = .chat
-        backend.configure(instructions: buildInstructions(), chatID: session.id)
+        configureEngines(instructions: buildInstructions(), chatID: session.id)
         estimatedContextPercent = estimatedCurrentContextPercent()
 
         return session
@@ -200,7 +250,7 @@ final class ChatViewModel {
         messages = messagesForSession(session)
         turnRecords = [:]
         inputText = ""
-        backend.switchToChat(session.id, instructions: buildInstructions())
+        switchEnginesToChat(session.id, instructions: buildInstructions())
         estimatedContextPercent = estimatedCurrentContextPercent()
     }
 
@@ -218,7 +268,7 @@ final class ChatViewModel {
         guard !deletedSessionIDs.isEmpty else { return }
 
         for sessionID in deletedSessionIDs {
-            backend.evictSession(for: sessionID)
+            evictEngineSessions(for: sessionID)
         }
         saveModelContext(context)
     }
@@ -230,7 +280,7 @@ final class ChatViewModel {
             return
         }
 
-        backend.evictSession(for: selectedChat.id)
+        evictEngineSessions(for: selectedChat.id)
         selectedChat.projectID = nil
         selectedChat.stream = nil
         self.selectedChat = nil
@@ -271,7 +321,7 @@ final class ChatViewModel {
 
         let wasSelected = selectedChat?.id == session.id
 
-        backend.evictSession(for: session.id)
+        evictEngineSessions(for: session.id)
         context.delete(session)
         saveModelContext(context)
 
@@ -280,7 +330,7 @@ final class ChatViewModel {
                 selectChat(fallbackChat, context: context)
             } else {
                 selectedChat = nil
-                backend.reset()
+                resetEngines()
                 messages = []
                 inputText = ""
                 estimatedContextPercent = 0
@@ -312,12 +362,12 @@ final class ChatViewModel {
         } else {
             let wasSelectedInStream = stream.sessions.contains { $0.id == selectedChat?.id }
             for session in stream.sessions {
-                backend.evictSession(for: session.id)
+                evictEngineSessions(for: session.id)
                 context.delete(session)
             }
             if wasSelectedInStream {
                 selectedChat = nil
-                backend.reset()
+                resetEngines()
                 messages = []
                 inputText = ""
                 estimatedContextPercent = 0
@@ -391,14 +441,14 @@ final class ChatViewModel {
             summary.projectID = nil
         }
         for session in projectSessions {
-            backend.evictSession(for: session.id)
+            evictEngineSessions(for: session.id)
             context.delete(session)
         }
         context.delete(project)
         saveModelContext(context)
         if wasSelectedInProject {
             selectedChat = nil
-            backend.reset()
+            resetEngines()
             messages = []
             inputText = ""
             estimatedContextPercent = 0
@@ -584,7 +634,7 @@ final class ChatViewModel {
     }
 
     func resetSession() {
-        backend.configure(instructions: buildInstructions(), chatID: selectedChat?.id)
+        configureEngines(instructions: buildInstructions(), chatID: selectedChat?.id)
         estimatedContextPercent = estimatedCurrentContextPercent()
     }
 
@@ -595,6 +645,7 @@ final class ChatViewModel {
         responseTask?.cancel()
         responseTask = nil
         backend.cancel()
+        ollamaBackend.cancel()
         metricsTask?.cancel()
         metricsTask = nil
 
@@ -638,6 +689,23 @@ final class ChatViewModel {
         activeFirstTokenAt = nil
         activeLastTokenAt = startedAt
 
+        // Engine choice is locked per turn. If Ollama is selected but not
+        // reachable, fall back to FM with a truthful badge — never silently.
+        var turnEngine = selectedEngine
+        if turnEngine == .ollama {
+            let reachable = await ollamaBackend.isAvailable
+            if ollamaModel.isEmpty || !reachable {
+                turnEngine = .appleFM
+                activeEngineLabel = "Apple FM · fallback (Ollama offline)"
+            } else {
+                activeEngineLabel = ollamaModel
+            }
+        } else {
+            activeEngineLabel = "Apple FM"
+        }
+        activeBackendName = turnEngine == .ollama ? "Ollama" : "FoundationModels"
+        activeModelName = turnEngine == .ollama ? ollamaModel : "SystemLanguageModel.default"
+
         // Assemble context blocks + manifest before streaming.
         // History excluded here — LanguageModelSession owns conversational continuity.
         let (assembledInstructions, turnManifest) = assembleContext(userMessage: cleanInput, projects: projects)
@@ -657,7 +725,8 @@ final class ChatViewModel {
                 outputTokens: 0,
                 contextUsedPercent: estimatedContextPercent,
                 tokensPerSecond: 0,
-                totalLatency: 0
+                totalLatency: 0,
+                engineLabel: activeEngineLabel
             )
         )
         messages.append(assistantMessage)
@@ -683,14 +752,53 @@ final class ChatViewModel {
         var wasCancelled = false
         var completedResult: InferenceResult?
 
-        for await event in backend.stream(prompt: cleanInput, instructions: assembledInstructions) {
+        // Ollama turns run the multi-step agent loop (find → read → act with
+        // real tool results between steps); FM keeps its native session loop.
+        // The step budget scales with the loaded model's context window.
+        let eventStream: AsyncStream<InferenceEvent>
+        if turnEngine == .ollama {
+            let stepBudget = contextWindowTokens >= 16_384 ? 10
+                : (contextWindowTokens >= 8_192 ? 8 : 4)
+            let chatID = currentSession.id
+            eventStream = AgentRunner.stream(
+                config: AgentRunner.Configuration(
+                    model: ollamaModel,
+                    stepBudget: stepBudget,
+                    tools: agentToolSpecs()
+                ),
+                systemInstructions: assembledInstructions,
+                history: ollamaBackend.history(for: chatID),
+                userPrompt: cleanInput,
+                onCompletion: { [weak self] history, stats in
+                    guard let self else { return }
+                    self.ollamaBackend.setHistory(history, for: chatID)
+                    if let stats { self.ollamaBackend.noteStats(stats) }
+                }
+            )
+        } else {
+            eventStream = backend.stream(prompt: cleanInput, instructions: assembledInstructions)
+        }
+
+        for await event in eventStream {
             switch event {
-            case .phase(_), .warmup(_), .diagnostic(_), .done(_), .tokenDecision(_), .toolActivity(_):
+            case .phase(_), .warmup(_), .diagnostic(_), .done(_), .tokenDecision(_):
                 // .tokenDecision carries pre-sampling logit telemetry from the
                 // llama.cpp runtime; Foundation Models never emits it on macOS.
-                // Tool activity arrives via WorkspaceToolExecutor.onActivity,
-                // not through the event stream.
                 break
+
+            case .toolActivity(let activity):
+                // Agent-loop steps: live phase in the metrics line, and a
+                // step chip in the transcript once the call resolves.
+                updateMessageMetrics(
+                    assistantID: assistantID,
+                    phase: Self.toolActivityLabel(activity),
+                    startedAt: startedAt
+                )
+                if activity.phase == .succeeded || activity.phase == .failed,
+                   let detail = activity.detail,
+                   let index = messages.firstIndex(where: { $0.id == assistantID }) {
+                    messages[index].agentSteps.append(detail)
+                }
 
             case .token(let text, _):
                 let now = Date()
@@ -733,6 +841,7 @@ final class ChatViewModel {
         // context bindings so nothing can write through a stale ModelContext.
         confirmBroker.cancelPending()
         workspaceExecutor.clearTurnBindings()
+        fileExecutor.clearTurnBindings()
 
         if Task.isCancelled || wasCancelled {
             finishStoppedMessage(assistantID: assistantID, startedAt: startedAt)
@@ -795,6 +904,7 @@ final class ChatViewModel {
         isLoading = false
         responseTask = nil
         activeAssistantID = nil
+        activeEngineLabel = nil
         activeStartedAt = nil
         activeFirstTokenAt = nil
         activeLastTokenAt = nil
@@ -811,7 +921,7 @@ final class ChatViewModel {
 
         let session = KodaiChatSession()
         selectedChat = session
-        backend.bindChatID(session.id)
+        bindEngineChatID(session.id)
         return session
     }
 
@@ -902,7 +1012,8 @@ final class ChatViewModel {
             timeToFirstToken: ttft,
             decodeTime: decodeTime,
             tokensPerSecond: tokensPerSecond,
-            totalLatency: totalLatency
+            totalLatency: totalLatency,
+            engineLabel: activeEngineLabel ?? messages[index].metrics?.engineLabel
         )
     }
 
@@ -956,6 +1067,189 @@ final class ChatViewModel {
         }
     }
 
+    // MARK: – Agent tool bridge
+
+    /// The same executors that power the FM tools, in Ollama's native
+    /// tools format for the agent loop. One executor layer, two engines —
+    /// confirm gates and ledger logging apply identically.
+    private func agentToolSpecs() -> [AgentToolSpec] {
+        let files = fileExecutor
+        let workspace = workspaceExecutor
+        return [
+            AgentToolSpec(
+                spec: OllamaToolSpec(
+                    name: "file_read",
+                    description: "Read a text file from the user's granted folders. Returns up to 150 lines; pass start_line to continue a long file.",
+                    properties: [
+                        "path": ["type": "string", "description": "File path, e.g. '~/life/kb/kodai.md'"],
+                        "start_line": ["type": "integer", "description": "1-based line to start from; omit for the beginning"],
+                    ],
+                    required: ["path"]
+                ),
+                run: { args in
+                    files.readFile(
+                        path: args["path"] ?? "",
+                        startLine: Int(args["start_line"] ?? args["startLine"] ?? "") ?? 0
+                    )
+                }
+            ),
+            AgentToolSpec(
+                spec: OllamaToolSpec(
+                    name: "file_glob",
+                    description: "List files matching a glob pattern (e.g. '*.md') inside the user's granted folders, newest first.",
+                    properties: [
+                        "pattern": ["type": "string", "description": "Glob pattern, e.g. '*.md' or 'kb/*.md'"],
+                    ],
+                    required: ["pattern"]
+                ),
+                run: { args in
+                    files.globFiles(pattern: args["pattern"] ?? "")
+                }
+            ),
+            AgentToolSpec(
+                spec: OllamaToolSpec(
+                    name: "file_grep",
+                    description: "Search file contents in the user's granted folders (case-insensitive). Returns path:line matches — follow up with file_read.",
+                    properties: [
+                        "query": ["type": "string", "description": "Text to search for"],
+                        "file_pattern": ["type": "string", "description": "Optional glob to limit files, e.g. '*.md'"],
+                    ],
+                    required: ["query"]
+                ),
+                run: { args in
+                    files.grepFiles(
+                        query: args["query"] ?? "",
+                        filePattern: args["file_pattern"] ?? args["filePattern"] ?? ""
+                    )
+                }
+            ),
+            AgentToolSpec(
+                spec: OllamaToolSpec(
+                    name: "file_write",
+                    description: "Create or fully replace a text file in a write-granted folder. The user approves every write.",
+                    properties: [
+                        "path": ["type": "string", "description": "File path inside a write-granted folder"],
+                        "content": ["type": "string", "description": "The complete file content"],
+                    ],
+                    required: ["path", "content"]
+                ),
+                run: { args in
+                    await files.writeFile(path: args["path"] ?? "", content: args["content"] ?? "")
+                }
+            ),
+            AgentToolSpec(
+                spec: OllamaToolSpec(
+                    name: "file_edit",
+                    description: "Replace text inside an existing file. old_text must match the file verbatim exactly once — file_read first. The user approves every edit.",
+                    properties: [
+                        "path": ["type": "string", "description": "File path inside a write-granted folder"],
+                        "old_text": ["type": "string", "description": "Exact existing text to replace"],
+                        "new_text": ["type": "string", "description": "Replacement text"],
+                    ],
+                    required: ["path", "old_text", "new_text"]
+                ),
+                run: { args in
+                    await files.editFile(
+                        path: args["path"] ?? "",
+                        oldText: args["old_text"] ?? args["oldText"] ?? "",
+                        newText: args["new_text"] ?? args["newText"] ?? ""
+                    )
+                }
+            ),
+            AgentToolSpec(
+                spec: OllamaToolSpec(
+                    name: "kb_search",
+                    description: "Semantic search over the user's personal knowledge base (~/life/kb): projects, plans, decisions, notes. Read-only.",
+                    properties: [
+                        "query": ["type": "string", "description": "What to look for"],
+                    ],
+                    required: ["query"]
+                ),
+                run: { args in
+                    let query = (args["query"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !query.isEmpty else {
+                        return .failure(tool: "kb_search", error: "empty query")
+                    }
+                    let results = await LifeKnowledgeBase.search(query: query, limit: 4)
+                    return .ok(tool: "kb_search", result: ["results": results])
+                }
+            ),
+            AgentToolSpec(
+                spec: OllamaToolSpec(
+                    name: "task_create",
+                    description: "Create a task in the user's current project. The user approves before it is saved.",
+                    properties: [
+                        "title": ["type": "string", "description": "Task title"],
+                        "priority": ["type": "string", "description": "low, medium, or high"],
+                        "due_date": ["type": "string", "description": "Due date like 2026-07-10, or omit"],
+                    ],
+                    required: ["title"]
+                ),
+                run: { args in
+                    await workspace.createTask(
+                        title: args["title"] ?? "",
+                        priority: args["priority"] ?? "medium",
+                        dueDate: args["due_date"] ?? args["dueDate"] ?? ""
+                    )
+                }
+            ),
+            AgentToolSpec(
+                spec: OllamaToolSpec(
+                    name: "project_create",
+                    description: "Create a new project for the user. The user approves before it is saved.",
+                    properties: [
+                        "title": ["type": "string", "description": "Project name"],
+                    ],
+                    required: ["title"]
+                ),
+                run: { args in
+                    await workspace.createProject(title: args["title"] ?? "")
+                }
+            ),
+        ]
+    }
+
+    // MARK: – Engine plumbing
+
+    /// Both engines mirror session lifecycle so switching mid-app never
+    /// routes a chat at a stale or missing session.
+    private func configureEngines(instructions: String, chatID: UUID?) {
+        backend.configure(instructions: instructions, chatID: chatID)
+        ollamaBackend.configure(instructions: instructions, chatID: chatID)
+    }
+
+    private func switchEnginesToChat(_ chatID: UUID, instructions: String) {
+        backend.switchToChat(chatID, instructions: instructions)
+        ollamaBackend.switchToChat(chatID, instructions: instructions)
+    }
+
+    private func bindEngineChatID(_ chatID: UUID) {
+        backend.bindChatID(chatID)
+        ollamaBackend.bindChatID(chatID)
+    }
+
+    private func evictEngineSessions(for chatID: UUID) {
+        backend.evictSession(for: chatID)
+        ollamaBackend.evictSession(for: chatID)
+    }
+
+    private func resetEngines() {
+        backend.reset()
+        ollamaBackend.reset()
+    }
+
+    /// The active engine's context window — FM is fixed at 4096; Ollama
+    /// reports the real loaded context via /api/ps when known.
+    var contextWindowTokens: Int {
+        guard selectedEngine == .ollama else {
+            return FoundationModelsBackend.contextWindowTokenLimit
+        }
+        if case .ready(let running) = engineHealth.health, running.contextLength > 0 {
+            return running.contextLength
+        }
+        return OllamaBackend.assumedContextWindow
+    }
+
     private func buildInstructions() -> String {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "EEEE, MMMM d, yyyy 'at' h:mm a"
@@ -966,6 +1260,10 @@ final class ChatViewModel {
             "",
             "Current date and time: \(dateString)",
         ]
+
+        if let standing = KodaiProfileLoader.standingInstructions(grants: folderGrants) {
+            lines += ["", "User's standing instructions (KODAI.md):", standing]
+        }
 
         if let chat = selectedChat?.title {
             lines.append("Current conversation: \(chat)")
@@ -1068,6 +1366,17 @@ final class ChatViewModel {
                 priority: 5
             ),
         ]
+
+        // KODAI.md — the user's standing instructions, right after persona.
+        if let standing = KodaiProfileLoader.standingInstructions(grants: folderGrants) {
+            let content = "User's standing instructions (KODAI.md):\n\(standing)"
+            blocks.append(ContextBlock(
+                kind: "user_profile",
+                content: content,
+                tokenEstimate: TokenEstimator.estimate(content),
+                priority: 1
+            ))
+        }
 
         var metaLines: [String] = []
         if let chatTitle = selectedChat?.title { metaLines.append("Current conversation: \(chatTitle)") }
@@ -1180,8 +1489,8 @@ final class ChatViewModel {
             systemPrompt: systemPrompt,
             sessionID: sessionID,
             manifest: manifest,
-            backend: "FoundationModels",
-            modelName: "SystemLanguageModel.default",
+            backend: activeBackendName,
+            modelName: activeModelName,
             latencyMs: latencyMs,
             timeToFirstTokenMs: timeToFirstTokenMs,
             inputTokens: inputTokens,
@@ -1232,7 +1541,7 @@ final class ChatViewModel {
         }
 
         let contextTokens = estimatedTokenCount(contextText)
-        let percent = (Double(contextTokens) / Double(FoundationModelsBackend.contextWindowTokenLimit)) * 100.0
+        let percent = (Double(contextTokens) / Double(contextWindowTokens)) * 100.0
 
         return min(100, max(0, Int(percent.rounded())))
     }
@@ -1303,6 +1612,24 @@ final class ChatViewModel {
                 assistantID: assistantID,
                 phase: Self.toolActivityLabel(activity),
                 startedAt: startedAt
+            )
+        }
+
+        fileExecutor.onActivity = { [weak self] activity in
+            guard let self else { return }
+            self.updateMessageMetrics(
+                assistantID: assistantID,
+                phase: Self.toolActivityLabel(activity),
+                startedAt: startedAt
+            )
+        }
+
+        fileExecutor.recordToolRun = { [weak self] tool, summary in
+            guard let self else { return }
+            self.ledgerRecorder.recordActivity(
+                kind: .toolCall,
+                summary: "\(tool): \(summary)",
+                context: context
             )
         }
 

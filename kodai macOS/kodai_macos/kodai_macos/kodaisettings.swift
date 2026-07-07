@@ -7,7 +7,7 @@ import SwiftUI
 import FoundationModels
 
 private enum SettingsTab: Hashable {
-    case general, rhythm, diagnostics
+    case general, folders, rhythm, diagnostics
 }
 
 struct KodaiSettingsView: View {
@@ -16,6 +16,7 @@ struct KodaiSettingsView: View {
 
     @Binding var selectedMode: OutputMode
     let telemetryStore: TelemetryStore
+    let folderGrants: FolderGrantStore
     let onResetSession: () -> Void
 
     @State private var modelAvailable = false
@@ -25,6 +26,7 @@ struct KodaiSettingsView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 4) {
                 settingsTabPill("General", tab: .general)
+                settingsTabPill("Folders", tab: .folders)
                 settingsTabPill("Rhythm", tab: .rhythm)
                 settingsTabPill("Diagnostics", tab: .diagnostics)
             }
@@ -37,6 +39,8 @@ struct KodaiSettingsView: View {
             switch selectedTab {
             case .general:
                 generalContent
+            case .folders:
+                FoldersSettingsTabView(folderGrants: folderGrants)
             case .rhythm:
                 RhythmSettingsTabView()
             case .diagnostics:
@@ -167,5 +171,82 @@ struct KodaiSettingsView: View {
 
     private var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+    }
+}
+
+// MARK: - Folders tab
+
+/// Folder grants for the file tool ring. Each row is one security-scoped
+/// grant; the writes toggle re-scopes the bookmark. ~/life rides along from
+/// Life HQ's own grant (read-only) and is managed there, not here.
+struct FoldersSettingsTabView: View {
+    let folderGrants: FolderGrantStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if folderGrants.grants.isEmpty {
+                Text("No folders granted yet. Kodai's file tools (read, search, write) only work inside folders you grant here.")
+                    .font(.system(size: 12, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+            }
+
+            ForEach(folderGrants.grants) { grant in
+                HStack(spacing: 8) {
+                    Image(systemName: "folder")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+
+                    Text(grant.displayPath)
+                        .font(.system(size: 12, design: .monospaced))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+
+                    Spacer()
+
+                    Toggle("Writes", isOn: Binding(
+                        get: { grant.allowWrites },
+                        set: { folderGrants.setAllowWrites($0, for: grant) }
+                    ))
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .font(.system(size: 11, design: .rounded))
+
+                    Button {
+                        folderGrants.removeGrant(grant)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary.opacity(0.6))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Revoke access")
+                }
+                .padding(.horizontal, 16)
+                .frame(height: 34)
+            }
+
+            Divider()
+                .opacity(0.10)
+                .padding(.horizontal, 16)
+
+            Button {
+                folderGrants.requestGrant(allowWrites: true)
+            } label: {
+                Label("Grant a folder…", systemImage: "plus")
+                    .font(.system(size: 13, design: .rounded))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 16)
+            .frame(height: 38)
+
+            Text("Writes are always confirmed per file, even in write-enabled folders. Put a KODAI.md at a granted folder's root (or in ~/life) and Kodai loads it as your standing instructions every turn.")
+                .font(.system(size: 11, design: .rounded))
+                .foregroundStyle(.secondary.opacity(0.8))
+                .padding(.horizontal, 16)
+                .padding(.bottom, 10)
+        }
+        .padding(.vertical, 4)
     }
 }

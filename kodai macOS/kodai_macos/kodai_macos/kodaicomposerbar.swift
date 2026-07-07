@@ -21,6 +21,12 @@ struct KodaiComposerBar: View {
     let isSummarizing: Bool
     let telemetry: ChatTelemetry
 
+    @Binding var selectedEngine: ChatEngine
+    @Binding var ollamaModel: String
+    let engineHealth: EngineHealthMonitor
+    let fmAvailable: Bool
+    let lastOllamaStats: OllamaTurnStats?
+
     let onSend: () -> Void
     let onStop: () -> Void
 
@@ -106,6 +112,14 @@ struct KodaiComposerBar: View {
                 .frame(minHeight: Metrics.sendButtonSize)
 
                 HStack(spacing: 8) {
+                    EngineStatusPill(
+                        selectedEngine: $selectedEngine,
+                        ollamaModel: $ollamaModel,
+                        monitor: engineHealth,
+                        fmAvailable: fmAvailable,
+                        lastOllamaStats: lastOllamaStats
+                    )
+
                     Text(telemetry.composerBarText)
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundStyle(.white.opacity(0.46))

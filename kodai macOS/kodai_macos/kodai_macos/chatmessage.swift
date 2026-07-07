@@ -22,6 +22,9 @@ struct ResponseTelemetry: Equatable {
     var toolCallCount: Int = 0
     var toolTime: Double = 0
     var errorType: String?
+    /// Which engine produced this turn ("Apple FM", "qwen3:8b", …) — one
+    /// conversation can mix engines, so honesty lives per message.
+    var engineLabel: String?
 
     var totalTokens: Int { promptTokens + outputTokens }
 
@@ -47,6 +50,9 @@ struct ChatMessage: Identifiable, Equatable {
     let role: ChatRole
     var text: String
     var metrics: ResponseTelemetry?
+    /// Agent-loop step digests ("file_grep — 12 matches in 4 files"), shown
+    /// as chips above the answer so multi-step work is visible, not hidden.
+    var agentSteps: [String] = []
 
     init(
         id: UUID = UUID(),

@@ -71,7 +71,7 @@ See `docs/architecture.md` for full details.
 
 ## What NOT to do
 
-- Do not add network calls or external API keys — this app is fully on-device by design
+- Do not add network calls or external API keys — this app is fully on-device by design. The single exception is localhost Ollama (`127.0.0.1:11434`): kb_search embeddings and the optional Ollama chat engine talk to it, and nothing ever leaves the machine. Never add a remote host.
 - Do not add SPM packages without discussing first
 - Do not create Xcode navigator groups without immediately renaming them (unnamed groups create "New Group" folders on disk)
 - Do not change `MACOSX_DEPLOYMENT_TARGET` below 26.4

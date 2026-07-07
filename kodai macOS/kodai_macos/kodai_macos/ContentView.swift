@@ -249,6 +249,11 @@ struct ContentView: View {
                 isLoading: viewModel.isLoading,
                 isSummarizing: viewModel.isSummarizing,
                 telemetry: viewModel.chatTelemetry,
+                selectedEngine: $viewModel.selectedEngine,
+                ollamaModel: $viewModel.ollamaModel,
+                engineHealth: viewModel.engineHealth,
+                fmAvailable: viewModel.fmAvailable,
+                lastOllamaStats: viewModel.lastOllamaStats,
                 onSend: {
                     viewModel.send(context: modelContext, projects: projects)
                 },
@@ -315,6 +320,7 @@ struct ContentView: View {
             todaysTasks: todaysTasks,
             selectedChatID: viewModel.selectedChat?.id,
             telemetryStore: viewModel.telemetryStore,
+            folderGrants: viewModel.folderGrants,
             onRenameChat: { session, newTitle in
                 viewModel.renameChat(session, to: newTitle, context: modelContext)
             },

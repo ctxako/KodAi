@@ -29,6 +29,7 @@ struct KodaiSidebar: View {
     let todaysTasks: [KodaiTask]
     let selectedChatID: UUID?
     let telemetryStore: TelemetryStore
+    let folderGrants: FolderGrantStore
 
     @State private var editingChat: KodaiChatSession?
     @State private var draftChatTitle = ""
@@ -871,6 +872,7 @@ struct KodaiSidebar: View {
             KodaiSettingsView(
                 selectedMode: $selectedMode,
                 telemetryStore: telemetryStore,
+                folderGrants: folderGrants,
                 onResetSession: {
                     onResetSession()
                     showingSettings = false

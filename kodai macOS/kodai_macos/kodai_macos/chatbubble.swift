@@ -39,6 +39,31 @@ struct ChatBubble: View {
             }
 
             VStack(alignment: .leading, spacing: 0) {
+                if !isUser, !message.agentSteps.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(Array(message.agentSteps.enumerated()), id: \.offset) { index, step in
+                            HStack(alignment: .top, spacing: 6) {
+                                Image(systemName: "arrow.turn.down.right")
+                                    .font(.system(size: 9, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.35))
+                                    .padding(.top, 2)
+                                Text(step)
+                                    .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                                    .foregroundStyle(.white.opacity(0.5))
+                                    .lineLimit(2)
+                            }
+                            .accessibilityLabel("Agent step \(index + 1): \(step)")
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+
+                    Rectangle()
+                        .fill(.white.opacity(0.08))
+                        .frame(height: 1)
+                        .padding(.top, 10)
+                }
+
                 KodaiMarkdownText(
                     text: message.text,
                     bodyFont: bodyFont,
@@ -54,6 +79,17 @@ struct ChatBubble: View {
                         .frame(height: 1)
 
                     HStack(spacing: 8) {
+                        if let engine = message.metrics?.engineLabel {
+                            Text(engine)
+                                .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(.white.opacity(0.55))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(.white.opacity(0.07), in: Capsule())
+                                .lineLimit(1)
+                                .help("Engine that produced this turn")
+                        }
+
                         if let metrics = message.metrics {
                             Text(metrics.displayText)
                                 .font(.system(size: 11, weight: .medium, design: .monospaced))
