@@ -38,11 +38,7 @@ KodaiCore (shared Swift package)
 
 ## Building
 
-**macOS**: `kodai macOS/kodai_macos/KodAiMacOS.xcodeproj` — Xcode 26+, macOS 26+.
-
-**iOS observatory**: `kodai_ios/kodAI_chatbot_dev/kodAI_chatbot_dev.xcodeproj` — requires a bundled GGUF model.
-
-**kodai-consumer**: `kodai-consumer/kodai-consumer.xcodeproj` — iOS 26+, KodaiCore at `../KodaiCore`.
+The app targets (macOS, iOS, kodai-consumer) are in active development and not available for public use.
 
 **KodaiCore**: `swift build && swift test`
 
