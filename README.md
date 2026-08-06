@@ -2,7 +2,7 @@
 
 On-device LLM research lab for macOS and iOS.
 
-I built this to break down the world of LLMs into the most basic pieces. As a visual learner studying CS with a focus on AI, I needed an environment where the internals are exposed and manipulable — not hidden behind an API. This started as a study into how context assembly, token sampling, and tool-call parsing actually work, and evolved into proving that a 1.2B parameter model can be genuinely useful through techniques like grammar-constrained generation and structured tool routing. The idea was to clash LLMs and art — token flows rendered as rivers, probability spaces as globes — while keeping the whole thing within scope as a research and educational experiment. Everything runs on-device. No cloud, no API keys, no data leaves the machine.
+KodAi breaks LLMs down into their most basic pieces. It's a study environment where context assembly, token sampling, and tool-call parsing are exposed and manipulable instead of hidden behind an API. What started as a deep dive into how those systems actually work evolved into proving that a 1.2B parameter model can be genuinely useful through grammar-constrained generation and structured tool routing. Observatory views render token flows and probability distributions as visual instruments. Everything runs on-device. No cloud, no API keys, no data leaves the machine.
 
 ## Targets
 
@@ -50,6 +50,3 @@ KodaiCore (shared Swift package)
 
 <!-- TODO -->
 
----
-
-Built by ctxa.
