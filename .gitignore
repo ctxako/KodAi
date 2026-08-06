@@ -8,10 +8,8 @@ xcuserdata/
 .swiftpm/
 
 # macOS / Xcode / Swift build noise
-.DS_Store
 .build/
 DerivedData/
-*.xcuserstate
 xcuserdata/
 ModuleCache/
 Index.noindex/
@@ -28,15 +26,26 @@ Index.noindex/
 **/.sourcePackages/
 *.xcresult/
 *.xcactivitylog
-*.pcm
-*.o
-*.dia
-*.swiftmodule
-*.swiftdoc
-*.abi.json
-DerivedData/
-.build/
-xcuserdata/
-*.xcuserstate
-ModuleCache/
-Index.noindex/
+
+# Internal docs and planning (kept locally, not public)
+docs/
+memory/
+misc/
+research/
+designs/
+AGENTS.md
+CHANGELOG.md
+*.html
+
+# Claude Code / agent configs
+.claude/
+**/.claude/
+**/.agents/
+**/CLAUDE.md
+**/AGENTIC_PLAN.md
+**/ARCHITECTURE_OVERVIEW.md
+**/PROJECT_CHECKPOINT_DEBRIEF.md
+
+# Per-target internal docs
+kodai-consumer/docs/
+kodai-consumer/README.md
